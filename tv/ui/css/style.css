@@ -11,15 +11,36 @@ body {
     width: 1920px;
     height: 1080px;
     overflow: hidden;
+    position: relative;
+}
+
+#gradient {
+    display: none;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 1920px;
+    height: 1080px;
+    image-rendering: pixelated;
+}
+
+#gradient.visible {
+    display: block;
 }
 
 #app {
+    position: relative;
+    z-index: 1;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
     height: 100%;
     padding: 40px;
+}
+
+#app.debug-on {
+    background: transparent;
 }
 
 h1 {
@@ -58,6 +79,19 @@ h1 {
 
 .btn-stop:focus,
 .btn-stop.focused {
+    background-color: #e94560;
+}
+
+.btn-debug {
+    background-color: #2d6a4f;
+}
+
+.btn-debug.active {
+    background-color: #40916c;
+}
+
+.btn-debug:focus,
+.btn-debug.focused {
     background-color: #e94560;
 }
 

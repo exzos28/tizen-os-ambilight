@@ -1,18 +1,20 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=1920, initial-scale=1.0">
-    <title>MyProject2</title>
+    <title>Ambilight</title>
     <link rel="stylesheet" type="text/css" href="css/style.css"/>
     <script src="./main.js"></script>
 </head>
 <body>
+    <canvas id="gradient"></canvas>
     <div id="app">
         <h1>Service Controller</h1>
         <div id="controls">
             <button id="btnStart" class="btn">Start Service</button>
             <button id="btnStop" class="btn btn-stop">Stop Service</button>
+            <button id="btnDebug" class="btn btn-debug">Debug: OFF</button>
         </div>
         <div id="status">Status: <span id="statusText">Not running</span></div>
         <div id="log"></div>

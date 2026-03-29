@@ -14,14 +14,6 @@ namespace Service
     class App : ServiceApplication
     {
         private static readonly HttpClient _http = new HttpClient();
-        private const string SERVER_HOST = "192.168.50.184";
-        private const int HTTP_PORT = 9000;
-        private const int UDP_PORT = 9001;
-        private const string SERVER = "http://192.168.50.184:9000";
-        private const int DOWNSCALE = 10;
-        private const int EDGE_DIVISOR = 10;
-        private const int MAX_FPS = 60;
-        private const int STATS_EVERY = 100;
 
         private System.Threading.Timer _heartbeat;
         private volatile bool _stopping;
@@ -34,7 +26,7 @@ namespace Service
             {
                 var json = $"{{\"event\":\"{eventName}\",\"app\":\"Service\",\"timestamp\":\"{DateTime.UtcNow:o}\"" +
                            (extra != null ? $",\"data\":{Escape(extra)}" : "") + "}";
-                await _http.PostAsync(SERVER, new StringContent(json, Encoding.UTF8, "application/json"));
+                await _http.PostAsync($"http://{Config.ServerHost}:{Config.HttpPort}", new StringContent(json, Encoding.UTF8, "application/json"));
             }
             catch { }
         }
@@ -112,10 +104,19 @@ namespace Service
         private void RunCapture()
         {
             var (screenW, screenH) = GetScreenSize();
-            int captureW = screenW / DOWNSCALE;
-            int captureH = screenH / DOWNSCALE;
-            int hCount = captureW / EDGE_DIVISOR;
-            int vCount = captureH / EDGE_DIVISOR;
+            // Find largest divisor of screen size that gives capture >= TARGET
+            int captureW = Config.TargetCaptureW;
+            for (int d = screenW / Config.TargetCaptureW; d >= 1; d--)
+            {
+                if (screenW % d == 0) { captureW = screenW / d; break; }
+            }
+            int captureH = Config.TargetCaptureH;
+            for (int d = screenH / Config.TargetCaptureH; d >= 1; d--)
+            {
+                if (screenH % d == 0) { captureH = screenH / d; break; }
+            }
+            int hCount = captureW;
+            int vCount = captureH;
             int totalLeds = (hCount + vCount) * 2;
 
             SendLog("Config", $"screen={screenW}x{screenH}, capture={captureW}x{captureH}, edges={hCount}h+{vCount}v={totalLeds} leds");
@@ -145,31 +146,21 @@ namespace Service
             if (ssHandle == IntPtr.Zero) { SendLog("FATAL", "init failed"); return; }
 
             var udp = new UdpClient();
-            var endpoint = new IPEndPoint(IPAddress.Parse(SERVER_HOST), UDP_PORT);
+            var endpoint = new IPEndPoint(IPAddress.Parse(Config.ServerHost), Config.UdpPort);
+            var debugEndpoint = new IPEndPoint(IPAddress.Parse(Config.ServerHost), Config.DebugPort);
+
+            // Debug: full frame packet [2B width][2B height][RGB * w * h]
+            int debugPacketSize = 4 + captureW * captureH * 3;
+            byte[] debugPacket = new byte[debugPacketSize];
+            debugPacket[0] = (byte)(captureW >> 8);
+            debugPacket[1] = (byte)(captureW & 0xFF);
+            debugPacket[2] = (byte)(captureH >> 8);
+            debugPacket[3] = (byte)(captureH & 0xFF);
 
             int infoSize = 256;
             IntPtr infoPtr = Marshal.AllocHGlobal(infoSize);
 
-            // Pre-compute pixel offsets (byte offset into native BGRX buffer)
-            // Each edge pixel = one offset into the capture buffer
-            int[] offsets = new int[totalLeds];
-            int oi = 0;
-
-            // Top: left to right, y=0
-            for (int i = 0; i < hCount; i++)
-                offsets[oi++] = ((i * 2 + 1) * captureW / (hCount * 2)) * 4;
-
-            // Right: top to bottom, x=captureW-1
-            for (int i = 0; i < vCount; i++)
-                offsets[oi++] = ((i * 2 + 1) * captureH / (vCount * 2) * captureW + captureW - 1) * 4;
-
-            // Bottom: right to left, y=captureH-1
-            for (int i = hCount - 1; i >= 0; i--)
-                offsets[oi++] = (((captureH - 1) * captureW) + (i * 2 + 1) * captureW / (hCount * 2)) * 4;
-
-            // Left: bottom to top, x=0
-            for (int i = vCount - 1; i >= 0; i--)
-                offsets[oi++] = ((i * 2 + 1) * captureH / (vCount * 2) * captureW) * 4;
+            int[] offsets = null;
 
             // Pre-allocate packet: [1B hCount][1B vCount][RGB * totalLeds]
             int packetSize = 2 + totalLeds * 3;
@@ -183,9 +174,9 @@ namespace Service
             long statsCaptureMs = 0, statsProcessMs = 0, statsSendMs = 0;
             int statsFrames = 0;
             var totalSw = Stopwatch.StartNew();
-            long minFrameTimeMs = 1000 / MAX_FPS;
+            long minFrameTimeMs = 1000 / Config.MaxFps;
 
-            SendLog("CaptureLoop", $"UDP to {SERVER_HOST}:{UDP_PORT}, packet={packetSize}B, maxFps={MAX_FPS}");
+            SendLog("CaptureLoop", $"UDP to {Config.ServerHost}:{Config.UdpPort}, packet={packetSize}B, maxFps={Config.MaxFps}");
 
             while (!_stopping)
             {
@@ -202,6 +193,32 @@ namespace Service
 
                     IntPtr pixPtr = Marshal.ReadIntPtr(infoPtr, 24);
                     if (pixPtr == IntPtr.Zero) { unmapFn(surf); if (unrefFn != null) unrefFn(surf); continue; }
+                    int stride = Marshal.ReadInt32(infoPtr, 36);
+                    int stridePixels = stride / 4; // BGRX = 4 bytes per pixel
+
+                    if (offsets == null)
+                    {
+                        // Dump struct layout to find real stride
+                        var dump = new System.Text.StringBuilder("info dump:");
+                        for (int d = 0; d < 60; d += 4)
+                            dump.Append($" [{d}]={Marshal.ReadInt32(infoPtr, d)}");
+                        SendLog("InfoDump", dump.ToString());
+                        SendLog("Stride", $"stride={stride}B, stridePixels={stridePixels}, captureW={captureW}");
+                        offsets = new int[totalLeds];
+                        int oi = 0;
+                        // Top: left to right, y=0
+                        for (int i = 0; i < hCount; i++)
+                            offsets[oi++] = ((i * 2 + 1) * captureW / (hCount * 2)) * 4;
+                        // Right: top to bottom, x=captureW-1
+                        for (int i = 0; i < vCount; i++)
+                            offsets[oi++] = (i * 2 + 1) * captureH / (vCount * 2) * stride + (captureW - 1) * 4;
+                        // Bottom: right to left, y=captureH-1
+                        for (int i = hCount - 1; i >= 0; i--)
+                            offsets[oi++] = (captureH - 1) * stride + ((i * 2 + 1) * captureW / (hCount * 2)) * 4;
+                        // Left: bottom to top, x=0
+                        for (int i = vCount - 1; i >= 0; i--)
+                            offsets[oi++] = (i * 2 + 1) * captureH / (vCount * 2) * stride;
+                    }
 
                     // Read edge pixels WHILE surface is still mapped
                     int pi = 2;
@@ -213,6 +230,19 @@ namespace Service
                         packet[pi++] = Marshal.ReadByte(pixPtr, off);     // B
                     }
 
+                    // Debug: read full frame using stride (BGRX → RGB)
+                    int di = 4;
+                    for (int y = 0; y < captureH; y++)
+                    {
+                        for (int x = 0; x < captureW; x++)
+                        {
+                            int off = y * stride + x * 4;
+                            debugPacket[di++] = Marshal.ReadByte(pixPtr, off + 2); // R
+                            debugPacket[di++] = Marshal.ReadByte(pixPtr, off + 1); // G
+                            debugPacket[di++] = Marshal.ReadByte(pixPtr, off);     // B
+                        }
+                    }
+
                     unmapFn(surf);
                     if (unrefFn != null) unrefFn(surf);
                     long captureMs = sw.ElapsedMilliseconds;
@@ -221,6 +251,7 @@ namespace Service
                     // --- Send UDP ---
                     sw.Restart();
                     udp.Send(packet, packetSize, endpoint);
+                    udp.Send(debugPacket, debugPacketSize, debugEndpoint);
                     long sendMs = sw.ElapsedMilliseconds;
 
                     frameNum++;
@@ -229,7 +260,7 @@ namespace Service
                     statsProcessMs += processMs;
                     statsSendMs += sendMs;
 
-                    if (statsFrames >= STATS_EVERY)
+                    if (statsFrames >= Config.StatsEvery)
                     {
                         double avgCapture = (double)statsCaptureMs / statsFrames;
                         double avgProcess = (double)statsProcessMs / statsFrames;
