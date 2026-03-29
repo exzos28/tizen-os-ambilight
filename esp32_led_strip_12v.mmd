@@ -1,12 +1,3 @@
-# Tizen OS Ambilight
-
-> **⚠️ Work in Progress** — this project is under active development and is not functional yet.
-
-Ambilight system for Samsung TVs running Tizen OS. Captures edge pixels from the screen and sends color data to an external server via UDP to control LED backlighting.
-
-## Hardware Schematic (ESP32 + 12V LED Strip)
-
-```mermaid
 flowchart TB
     subgraph PSU_Block["Block 1: PSU"]
         AC220[AC 220V]
@@ -43,16 +34,3 @@ flowchart TB
 
     %% Controller to LED
     JST_OUT ==>|"+12V / GND / DATA"| LED
-```
-
-## Disclaimer
-
-> This project was created solely for **educational purposes** through reverse engineering.
->
-> The author assumes **no responsibility** for any use of this code, including but not limited to violation of third-party software terms of service, damage to equipment, or any other consequences.
->
-> Use at your own risk.
-
-## License
-
-MIT License. See [LICENSE](LICENSE).
