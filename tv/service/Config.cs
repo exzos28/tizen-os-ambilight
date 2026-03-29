@@ -2,9 +2,6 @@ namespace Service
 {
     static class Config
     {
-        // Server IP address where the UDP/HTTP receiver is running
-        public const string ServerHost = "192.168.50.184";
-
         // HTTP port for logging events (heartbeat, stats, errors)
         public const int HttpPort = 9000;
 
@@ -13,6 +10,18 @@ namespace Service
 
         // UDP port for sending full debug frame (raw RGB image)
         public const int DebugPort = 9002;
+
+        // UDP port used for broadcast discovery of the server
+        public const int DiscoveryPort = 9003;
+
+        // Magic string sent/expected during discovery handshake
+        public const string DiscoveryMagic = "AMBILIGHT_DISCOVER";
+
+        // How long to wait for a discovery response before retrying (ms)
+        public const int DiscoveryTimeoutMs = 2000;
+
+        // How many discovery attempts before giving up
+        public const int DiscoveryMaxRetries = 30;
 
         // Desired capture width in pixels. The actual value will be rounded up
         // to the nearest exact divisor of the screen width to avoid black edges.

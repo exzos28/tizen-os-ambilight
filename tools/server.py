@@ -14,6 +14,8 @@ from tkinter import scrolledtext
 HTTP_PORT = 9000
 UDP_PORT = 9001
 DEBUG_PORT = 9002
+DISCOVERY_PORT = 9003
+DISCOVERY_MAGIC = "AMBILIGHT_DISCOVER"
 
 # Shared state
 latest_edges = None    # (hCount, vCount, rgb_bytes)
@@ -284,6 +286,40 @@ class Handler(BaseHTTPRequestHandler):
         pass
 
 
+def get_local_ip():
+    """Get this machine's LAN IP by connecting to a broadcast address."""
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("255.255.255.255", 1))
+        ip = s.getsockname()[0]
+        s.close()
+        return ip
+    except Exception:
+        return "127.0.0.1"
+
+
+def discovery_listener():
+    """Respond to UDP broadcast discovery probes from TV service."""
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    sock.bind(("0.0.0.0", DISCOVERY_PORT))
+    local_ip = get_local_ip()
+    reply = f"{DISCOVERY_MAGIC}:{local_ip}".encode()
+    print(f"Discovery listener on port {DISCOVERY_PORT} (advertising {local_ip})")
+
+    while True:
+        try:
+            data, addr = sock.recvfrom(1024)
+            if data == DISCOVERY_MAGIC.encode():
+                sock.sendto(reply, addr)
+                msg = f"Discovery: {addr[0]} found us"
+                print(msg)
+                if gui_ref:
+                    gui_ref.add_log(msg)
+        except Exception as e:
+            print(f"Discovery error: {e}")
+
+
 def start_http():
     server = HTTPServer(("0.0.0.0", HTTP_PORT), Handler)
     print(f"HTTP server on port {HTTP_PORT}")
@@ -297,6 +333,9 @@ if __name__ == "__main__":
     threading.Thread(target=start_http, daemon=True).start()
     threading.Thread(target=udp_listener, daemon=True).start()
     threading.Thread(target=debug_udp_listener, daemon=True).start()
+    threading.Thread(target=discovery_listener, daemon=True).start()
 
-    gui.add_log(f"HTTP:{HTTP_PORT}  UDP:{UDP_PORT}  DEBUG:{DEBUG_PORT}")
+    local_ip = get_local_ip()
+    gui.add_log(f"HTTP:{HTTP_PORT}  UDP:{UDP_PORT}  DEBUG:{DEBUG_PORT}  DISCOVERY:{DISCOVERY_PORT}")
+    gui.add_log(f"Local IP: {local_ip} (advertised to TV)")
     gui.run()

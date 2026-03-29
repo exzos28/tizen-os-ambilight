@@ -17,16 +17,18 @@ namespace Service
 
         private System.Threading.Timer _heartbeat;
         private volatile bool _stopping;
+        private string _serverHost;
 
         #region Logging
 
         private async void SendLog(string eventName, string extra = null)
         {
+            if (_serverHost == null) return;
             try
             {
                 var json = $"{{\"event\":\"{eventName}\",\"app\":\"Service\",\"timestamp\":\"{DateTime.UtcNow:o}\"" +
                            (extra != null ? $",\"data\":{Escape(extra)}" : "") + "}";
-                await _http.PostAsync($"http://{Config.ServerHost}:{Config.HttpPort}", new StringContent(json, Encoding.UTF8, "application/json"));
+                await _http.PostAsync($"http://{_serverHost}:{Config.HttpPort}", new StringContent(json, Encoding.UTF8, "application/json"));
             }
             catch { }
         }
@@ -34,6 +36,46 @@ namespace Service
         private static string Escape(string s)
         {
             return "\"" + s.Replace("\\", "\\\\").Replace("\"", "\\\"").Replace("\n", "\\n").Replace("\r", "\\r") + "\"";
+        }
+
+        #endregion
+
+        #region Discovery
+
+        private string DiscoverServer()
+        {
+            var magic = Encoding.UTF8.GetBytes(Config.DiscoveryMagic);
+
+            using (var udp = new UdpClient())
+            {
+                udp.EnableBroadcast = true;
+                var broadcast = new IPEndPoint(IPAddress.Broadcast, Config.DiscoveryPort);
+
+                for (int attempt = 1; attempt <= Config.DiscoveryMaxRetries && !_stopping; attempt++)
+                {
+                    try
+                    {
+                        udp.Send(magic, magic.Length, broadcast);
+                        udp.Client.ReceiveTimeout = Config.DiscoveryTimeoutMs;
+
+                        var remote = new IPEndPoint(IPAddress.Any, 0);
+                        byte[] resp = udp.Receive(ref remote);
+                        string reply = Encoding.UTF8.GetString(resp);
+
+                        if (reply.StartsWith(Config.DiscoveryMagic + ":"))
+                        {
+                            string host = reply.Substring(Config.DiscoveryMagic.Length + 1);
+                            return host;
+                        }
+                    }
+                    catch (SocketException)
+                    {
+                        // Timeout — retry
+                    }
+                }
+            }
+
+            return null;
         }
 
         #endregion
@@ -146,8 +188,8 @@ namespace Service
             if (ssHandle == IntPtr.Zero) { SendLog("FATAL", "init failed"); return; }
 
             var udp = new UdpClient();
-            var endpoint = new IPEndPoint(IPAddress.Parse(Config.ServerHost), Config.UdpPort);
-            var debugEndpoint = new IPEndPoint(IPAddress.Parse(Config.ServerHost), Config.DebugPort);
+            var endpoint = new IPEndPoint(IPAddress.Parse(_serverHost), Config.UdpPort);
+            var debugEndpoint = new IPEndPoint(IPAddress.Parse(_serverHost), Config.DebugPort);
 
             // Debug: full frame packet [2B width][2B height][RGB * w * h]
             int debugPacketSize = 4 + captureW * captureH * 3;
@@ -176,7 +218,7 @@ namespace Service
             var totalSw = Stopwatch.StartNew();
             long minFrameTimeMs = 1000 / Config.MaxFps;
 
-            SendLog("CaptureLoop", $"UDP to {Config.ServerHost}:{Config.UdpPort}, packet={packetSize}B, maxFps={Config.MaxFps}");
+            SendLog("CaptureLoop", $"UDP to {_serverHost}:{Config.UdpPort}, packet={packetSize}B, maxFps={Config.MaxFps}");
 
             while (!_stopping)
             {
@@ -301,9 +343,15 @@ namespace Service
         protected override void OnCreate()
         {
             base.OnCreate();
-            SendLog("OnCreate");
-            _heartbeat = new System.Threading.Timer(_ => SendLog("heartbeat"), null, 15000, 15000);
-            Task.Run(async () => { await Task.Delay(2000); RunCapture(); });
+            Task.Run(async () =>
+            {
+                await Task.Delay(2000);
+                _serverHost = DiscoverServer();
+                if (_serverHost == null || _stopping) return;
+                SendLog("OnCreate", $"server={_serverHost}");
+                _heartbeat = new System.Threading.Timer(_ => SendLog("heartbeat"), null, 15000, 15000);
+                RunCapture();
+            });
         }
 
         protected override void OnAppControlReceived(AppControlReceivedEventArgs e)
