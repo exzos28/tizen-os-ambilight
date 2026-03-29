@@ -1,0 +1,92 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    background-color: #1a1a2e;
+    color: #e0e0e0;
+    font-family: 'Segoe UI', Arial, sans-serif;
+    width: 1920px;
+    height: 1080px;
+    overflow: hidden;
+}
+
+#app {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    padding: 40px;
+}
+
+h1 {
+    font-size: 48px;
+    margin-bottom: 60px;
+    color: #e94560;
+}
+
+#controls {
+    display: flex;
+    gap: 40px;
+    margin-bottom: 40px;
+}
+
+.btn {
+    padding: 20px 60px;
+    font-size: 28px;
+    border: none;
+    border-radius: 12px;
+    cursor: pointer;
+    background-color: #0f3460;
+    color: #e0e0e0;
+    transition: background-color 0.2s;
+}
+
+.btn:focus,
+.btn.focused {
+    background-color: #e94560;
+    outline: 3px solid #fff;
+    color: #fff;
+}
+
+.btn-stop {
+    background-color: #533483;
+}
+
+.btn-stop:focus,
+.btn-stop.focused {
+    background-color: #e94560;
+}
+
+#status {
+    font-size: 32px;
+    margin-bottom: 30px;
+}
+
+#statusText {
+    font-weight: bold;
+    color: #e94560;
+}
+
+#statusText.running {
+    color: #4ecca3;
+}
+
+#log {
+    width: 80%;
+    max-height: 300px;
+    overflow-y: auto;
+    background-color: #16213e;
+    border-radius: 8px;
+    padding: 20px;
+    font-size: 20px;
+    font-family: monospace;
+    color: #a0a0a0;
+}
+
+.log-entry {
+    margin-bottom: 4px;
+}

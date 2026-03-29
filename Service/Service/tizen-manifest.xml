@@ -1,0 +1,17 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns="http://tizen.org/ns/packages" api-version="9.0" package="org.tizen.example.Service" version="1.0.0">
+  <profile name="common" />
+  <service-application appid="org.tizen.example.Service"
+					exec="Service.dll"
+					type="dotnet"
+					multiple="false"
+					taskmanage="false"
+					nodisplay="true"
+                    api-version="12">
+    <label>Service</label>
+    <icon>Service.png</icon>
+  </service-application>
+  <privileges>
+    <privilege>http://tizen.org/privilege/internet</privilege>
+  </privileges>
+</manifest>

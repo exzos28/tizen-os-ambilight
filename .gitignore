@@ -1,0 +1,56 @@
+# === IDE / Editor ===
+.idea/
+.vscode/
+.project
+.tproject
+*.code-workspace
+
+# === Build outputs ===
+Debug/
+Build/
+.gn
+
+# === .NET build artifacts ===
+bin/
+obj/
+*.dll
+*.pdb
+*.tpk
+*.deps.json
+*.runtimeconfig.json
+build.info
+
+# === Tizen build ===
+*.wgt
+*.stamp
+.ninja_deps
+.ninja_log
+build.ninja
+build.ninja.d
+build.tz
+build.tz.d
+toolchain.ninja
+args.gn
+project_info.yaml
+.exportmap
+dotnet_build/
+web_build/
+
+# === Tizen signing ===
+author-signature.xml
+signature1.xml
+
+# === Python ===
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+dist/
+*.egg
+.venv/
+venv/
+env/
+
+# === OS files ===
+.DS_Store
+Thumbs.db
