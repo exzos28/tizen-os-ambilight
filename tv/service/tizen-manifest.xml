@@ -7,11 +7,13 @@
 					multiple="false"
 					taskmanage="false"
 					nodisplay="true"
+					on-boot="true"
                     api-version="12">
     <label>Service</label>
     <icon>Service.png</icon>
   </service-application>
   <privileges>
     <privilege>http://tizen.org/privilege/internet</privilege>
+    <privilege>http://developer.samsung.com/privilege/contentanalysis</privilege>
   </privileges>
 </manifest>

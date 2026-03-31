@@ -130,7 +130,7 @@ function launchService() {
             appControl,
             SERVICE_APP_ID,
             function() {
-                log('Service launched successfully');
+                log('Service launched');
                 setStatus('Running', true);
             },
             function(err) {
@@ -156,7 +156,7 @@ function stopService() {
             appControl,
             SERVICE_APP_ID,
             function() {
-                log('Stop command sent to service');
+                log('Stop command sent');
                 setStatus('Not running', false);
             },
             function(err) {
@@ -195,7 +195,6 @@ document.addEventListener('DOMContentLoaded', function() {
     ];
     setFocus(0);
 
-    // Restore debug state from storage
     try {
         if (localStorage.getItem('debugEnabled') === '1') {
             setDebug(true);

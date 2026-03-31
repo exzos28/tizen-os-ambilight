@@ -3,7 +3,6 @@
 
 import json
 import socket
-import struct
 import threading
 import time
 import tkinter as tk
@@ -13,13 +12,11 @@ from tkinter import scrolledtext
 
 HTTP_PORT = 9000
 UDP_PORT = 9001
-DEBUG_PORT = 9002
 DISCOVERY_PORT = 9003
 DISCOVERY_MAGIC = "AMBILIGHT_DISCOVER"
 
 # Shared state
 latest_edges = None    # (hCount, vCount, rgb_bytes)
-latest_debug_frame = None  # (width, height, rgb_bytes)
 frame_count = 0
 frame_times = []
 server_fps = 0.0
@@ -59,9 +56,6 @@ class Gui:
         self.log.configure(state=tk.DISABLED)
 
         self._last_frame_id = 0
-        self._debug_win = None
-        self._debug_canvas = None
-        self._debug_photo = None
         self._check_updates()
 
     def _check_updates(self):
@@ -70,13 +64,10 @@ class Gui:
             fps = server_fps
             stats = device_stats
             fc = frame_count
-            debug = latest_debug_frame
 
         if edges and fc != self._last_frame_id:
             self._last_frame_id = fc
             self._draw_edges(edges)
-        if debug:
-            self._draw_debug_frame(debug)
 
         self.fps_label.config(text=f"FPS: {fps:.1f}")
         if stats:
@@ -97,38 +88,36 @@ class Gui:
 
         self.canvas.delete("all")
 
-        # Strip thickness
         s = max(6, min(cw, ch) // 20)
 
-        # TV rect = inner area after strips
         tv_x0, tv_y0 = s, s
         tv_x1, tv_y1 = cw - s, ch - s
         self.canvas.create_rectangle(tv_x0, tv_y0, tv_x1, tv_y1, fill="#222", outline="#333")
 
         idx = 0
 
-        # Top: hc segments across full width, corners included
+        # Top: L→R
         for i in range(hc):
             r, g, b = rgb[idx], rgb[idx+1], rgb[idx+2]; idx += 3
             x0 = i * cw // hc
             x1 = (i + 1) * cw // hc
             self.canvas.create_rectangle(x0, 0, x1, s, fill=f"#{r:02x}{g:02x}{b:02x}", outline="")
 
-        # Right: vc segments, between top and bottom strips
+        # Right: T→B
         for i in range(vc):
             r, g, b = rgb[idx], rgb[idx+1], rgb[idx+2]; idx += 3
             y0 = s + i * (ch - 2 * s) // vc
             y1 = s + (i + 1) * (ch - 2 * s) // vc
             self.canvas.create_rectangle(cw - s, y0, cw, y1, fill=f"#{r:02x}{g:02x}{b:02x}", outline="")
 
-        # Bottom: hc segments R→L, corners included
+        # Bottom: R→L
         for i in range(hc):
             r, g, b = rgb[idx], rgb[idx+1], rgb[idx+2]; idx += 3
             x0 = (hc - 1 - i) * cw // hc
             x1 = (hc - i) * cw // hc
             self.canvas.create_rectangle(x0, ch - s, x1, ch, fill=f"#{r:02x}{g:02x}{b:02x}", outline="")
 
-        # Left: vc segments B→T, between top and bottom strips
+        # Left: B→T
         for i in range(vc):
             r, g, b = rgb[idx], rgb[idx+1], rgb[idx+2]; idx += 3
             y0 = s + (vc - 1 - i) * (ch - 2 * s) // vc
@@ -136,36 +125,6 @@ class Gui:
             self.canvas.create_rectangle(0, y0, s, y1, fill=f"#{r:02x}{g:02x}{b:02x}", outline="")
 
         self.info_label.config(text=f"Frame #{frame_count}  {hc}h+{vc}v = {total} LEDs")
-
-    def _draw_debug_frame(self, frame):
-        w, h, rgb = frame
-        scale = 8
-        dw, dh = w * scale, h * scale
-
-        if self._debug_win is None or not self._debug_win.winfo_exists():
-            self._debug_win = tk.Toplevel(self.root)
-            self._debug_win.title("Debug Frame")
-            self._debug_win.geometry(f"{dw}x{dh}")
-            self._debug_canvas = tk.Canvas(self._debug_win, width=dw, height=dh,
-                                           bg="#000", highlightthickness=0)
-            self._debug_canvas.pack()
-
-        photo = tk.PhotoImage(width=dw, height=dh)
-        # Build PPM-style row data for PhotoImage
-        for y in range(h):
-            row = []
-            for x in range(w):
-                idx = (y * w + x) * 3
-                r, g, b = rgb[idx], rgb[idx+1], rgb[idx+2]
-                color = f"#{r:02x}{g:02x}{b:02x}"
-                row.extend([color] * scale)
-            row_str = " ".join(row)
-            for sy in range(scale):
-                photo.put(f"{{{row_str}}}", to=(0, y * scale + sy))
-
-        self._debug_photo = photo
-        self._debug_canvas.delete("all")
-        self._debug_canvas.create_image(0, 0, anchor=tk.NW, image=photo)
 
     def add_log(self, text):
         self.root.after(0, self._append_log, text)
@@ -224,30 +183,6 @@ def udp_listener():
             print(f"UDP error: {e}")
 
 
-def debug_udp_listener():
-    """Receive full frame: [2B width][2B height][RGB * w * h]."""
-    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    sock.bind(("0.0.0.0", DEBUG_PORT))
-    sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 256 * 1024)
-    print(f"Debug UDP listener on port {DEBUG_PORT}")
-
-    while True:
-        try:
-            data, addr = sock.recvfrom(65535)
-            if len(data) < 5:
-                continue
-            w = (data[0] << 8) | data[1]
-            h = (data[2] << 8) | data[3]
-            rgb = data[4:]
-            if len(rgb) < w * h * 3:
-                continue
-            global latest_debug_frame
-            with lock:
-                latest_debug_frame = (w, h, rgb[:w * h * 3])
-        except Exception as e:
-            print(f"Debug UDP error: {e}")
-
-
 class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         length = int(self.headers.get("Content-Length", 0))
@@ -287,7 +222,6 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def get_local_ip():
-    """Get this machine's LAN IP by connecting to a broadcast address."""
     try:
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         s.connect(("255.255.255.255", 1))
@@ -332,10 +266,9 @@ if __name__ == "__main__":
 
     threading.Thread(target=start_http, daemon=True).start()
     threading.Thread(target=udp_listener, daemon=True).start()
-    threading.Thread(target=debug_udp_listener, daemon=True).start()
     threading.Thread(target=discovery_listener, daemon=True).start()
 
     local_ip = get_local_ip()
-    gui.add_log(f"HTTP:{HTTP_PORT}  UDP:{UDP_PORT}  DEBUG:{DEBUG_PORT}  DISCOVERY:{DISCOVERY_PORT}")
+    gui.add_log(f"HTTP:{HTTP_PORT}  UDP:{UDP_PORT}  DISCOVERY:{DISCOVERY_PORT}")
     gui.add_log(f"Local IP: {local_ip} (advertised to TV)")
     gui.run()
