@@ -1,8 +1,23 @@
 # Tizen OS Ambilight
 
-> **⚠️ Work in Progress** — this project is under active development and is not functional yet.
+DIY ambilight for Samsung Tizen TVs — captures edge colors directly from the TV's video processor, no external hardware needed for capture.
 
-Ambilight system for Samsung TVs running Tizen OS. Captures edge pixels from the screen and sends color data to an external server via UDP to control LED backlighting.
+## Components
+
+### TV Service (`tv/`)
+
+.NET Tizen service that captures screen edge colors via the TV's hardware PPI and sends them over UDP. See [tv/README.md](tv/README.md) for details.
+
+### Desktop Server (`tools/server.py`)
+
+Python + tkinter GUI:
+- Responds to TV discovery broadcasts
+- Receives and visualizes edge colors around a rectangle
+- Receives HTTP log events from the TV service
+
+### LED Controller (TODO)
+
+Forward edge colors to an LED strip controller (ESP32 + WS2811).
 
 ## Hardware Schematic (ESP32 + 12V LED Strip)
 
@@ -23,14 +38,11 @@ flowchart TB
         Resistor[330 Ohm 1/4W]
         JST_OUT[JST-SM 3pin connector]
 
-        %% 12V through capacitor to DC-DC and JST
         Cap_In -->|"+12V / GND"| DC_DC
         Cap_In -->|"+12V / GND"| JST_OUT
 
-        %% DC-DC through capacitor to ESP32
         DC_DC -->|"+5V / GND"| Cap_DC -->|"+5V / GND"| ESP32
 
-        %% DATA line
         ESP32 -->|"DATA"| Resistor -->|"DATA"| JST_OUT
     end
 
@@ -38,12 +50,44 @@ flowchart TB
         LED[12V WS2811 Strip]
     end
 
-    %% PSU to Controller
     PSU ==>|"DC barrel jack 5.5x2.1<br/>+12V / GND"| Cap_In
 
-    %% Controller to LED
     JST_OUT ==>|"+12V / GND / DATA"| LED
 ```
+
+## Setup
+
+### Prerequisites
+
+- Samsung Tizen TV (tested on Tizen 9.0, SDP platform)
+- [Tizen Studio](https://developer.tizen.org/development/tizen-studio/download) or VS Code Tizen extension
+- Samsung partner certificate (for the `contentanalysis` privilege)
+- .NET 6.0 SDK with Tizen workload
+- Python 3 with tkinter
+
+### Build & Deploy
+
+```bash
+# Build the TV service
+cd tv/service
+dotnet build -c Release
+
+# Package and install via Tizen tools or sdb
+# The .tpk is in bin/Release/net6.0-tizen9.0/
+
+# Start the desktop server
+python3 tools/server.py
+```
+
+### Network
+
+TV discovers the server automatically via UDP broadcast. Both devices must be on the same LAN.
+
+| Port | Protocol | Direction    | Purpose          |
+|------|----------|--------------|------------------|
+| 9000 | HTTP     | TV -> Server | Log events       |
+| 9001 | UDP      | TV -> Server | Edge color data  |
+| 9003 | UDP      | Broadcast    | Server discovery |
 
 ## Disclaimer
 
