@@ -1,5 +1,9 @@
 # Tizen OS Ambilight
 
+> **Disclaimer:** This project was created solely for **educational purposes** through reverse engineering. The author assumes **no responsibility** for any use of this code, including but not limited to violation of third-party software terms of service, damage to equipment, or any other consequences. Use at your own risk.
+
+> **Work in progress.** The TV capture service works. ESP32 LED controller is not yet implemented.
+
 DIY ambilight for Samsung Tizen TVs — captures edge colors directly from the TV's video processor, no external hardware needed for capture.
 
 ## Components
@@ -88,14 +92,6 @@ TV discovers the server automatically via UDP broadcast. Both devices must be on
 | 9000 | HTTP     | TV -> Server | Log events       |
 | 9001 | UDP      | TV -> Server | Edge color data  |
 | 9003 | UDP      | Broadcast    | Server discovery |
-
-## Disclaimer
-
-> This project was created solely for **educational purposes** through reverse engineering.
->
-> The author assumes **no responsibility** for any use of this code, including but not limited to violation of third-party software terms of service, damage to equipment, or any other consequences.
->
-> Use at your own risk.
 
 ## License
 
