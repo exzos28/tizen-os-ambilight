@@ -15,6 +15,9 @@ bin/
 obj/
 *.dll
 *.pdb
+
+# Keep decompiled reference DLLs
+!decompile/*.dll
 *.tpk
 *.deps.json
 *.runtimeconfig.json
