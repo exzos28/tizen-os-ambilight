@@ -23,6 +23,8 @@ private:
 
     // Max packet: 2 header + (255+255)*2*3 body = 3062 bytes — cap to 512 for ESP32 safety
     static constexpr uint16_t BUF_SIZE = 512;
+    // TV service uses TargetCaptureW/H points (currently 4/3). Cap at 32 to reject garbage.
+    static constexpr uint8_t  MAX_SIDE_COUNT = 32;
     uint8_t  _buf[BUF_SIZE];
     uint32_t _lastLogMs = 0;
 };

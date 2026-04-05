@@ -47,6 +47,12 @@ void UDPReceiver::handle() {
     uint8_t hCount = _buf[0];
     uint8_t vCount = _buf[1];
 
+    if (hCount > MAX_SIDE_COUNT || vCount > MAX_SIDE_COUNT) {
+        Log.printf("[UDP] Packet from %s rejected: h=%d v=%d exceeds max=%d\n",
+                   remote.toString().c_str(), hCount, vCount, MAX_SIDE_COUNT);
+        return;
+    }
+
     // Validate expected payload length.
     int expected = 2 + (hCount + vCount) * 2 * 3;
     if (n < expected) {
