@@ -9,7 +9,7 @@ api_version: "10.0"
 build_type: Debug
 
 # Output name for application
-output_name: MyProject2
+output_name: Ambilight
 
 # Output path for build
 output_path: ""

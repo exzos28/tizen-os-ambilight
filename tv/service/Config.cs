@@ -10,8 +10,8 @@ namespace Service
         public const int DiscoveryMaxRetries = 30;
 
         // Edge sample points: h per top/bottom, v per left/right
-        public const int TargetCaptureW = 6;
-        public const int TargetCaptureH = 4;
+        public const int TargetCaptureW = 4;
+        public const int TargetCaptureH = 3;
 
         // Delay (ms) between set_position and get_pixel.
         // HW reports 20ms. Lower values = faster but may glitch.
