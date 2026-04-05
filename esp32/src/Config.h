@@ -34,6 +34,12 @@ public:
     // Mode: 0=plain (static color), 1=dynamic (ambilight UDP)
     uint8_t  ledMode;
 
+    // Advanced color settings
+    float    gamma;          // 0.5 - 3.0, default 2.2
+    float    saturation;     // 0.0 - 2.0, default 1.0
+    uint8_t  whiteBalanceR;  // 0 - 255
+    uint8_t  whiteBalanceG;  // 0 - 255
+    uint8_t  whiteBalanceB;  // 0 - 255
 
 private:
     Config() = default;

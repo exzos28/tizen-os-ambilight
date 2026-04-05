@@ -36,6 +36,13 @@ export default function App() {
   const [startCorner, setStartCorner] = useState(0)
   const [clockwise,   setClockwise]   = useState(true)
 
+  // Color correction
+  const [gamma,      setGamma]      = useState(2.2)
+  const [saturation, setSaturation] = useState(1.0)
+  const [wbR,        setWbR]        = useState(255)
+  const [wbG,        setWbG]        = useState(255)
+  const [wbB,        setWbB]        = useState(255)
+
   useEffect(() => {
     getConfig()
       .then((cfg: ConfigResponse) => {
@@ -52,6 +59,11 @@ export default function App() {
         setLedLeft(cfg.led_left ?? 6)
         setStartCorner(cfg.start_corner ?? 0)
         setClockwise(cfg.clockwise ?? true)
+        setGamma(cfg.gamma ?? 2.2)
+        setSaturation(cfg.saturation ?? 1.0)
+        setWbR(cfg.wb_r ?? 255)
+        setWbG(cfg.wb_g ?? 255)
+        setWbB(cfg.wb_b ?? 255)
       })
       .catch(console.error)
   }, [])
@@ -108,6 +120,11 @@ export default function App() {
           ledLeft={ledLeft}       setLedLeft={setLedLeft}
           startCorner={startCorner} setStartCorner={setStartCorner}
           clockwise={clockwise}   setClockwise={setClockwise}
+          gamma={gamma}           setGamma={setGamma}
+          saturation={saturation} setSaturation={setSaturation}
+          wbR={wbR}               setWbR={setWbR}
+          wbG={wbG}               setWbG={setWbG}
+          wbB={wbB}               setWbB={setWbB}
         />
       )}
     </div>

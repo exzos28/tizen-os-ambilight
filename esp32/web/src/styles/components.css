@@ -109,6 +109,17 @@ input[type='range'] {
   margin-top: 6px;
 }
 
+.wb-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.accent-red   { accent-color: #ef4444 !important; }
+.accent-green { accent-color: #22c55e !important; }
+.accent-blue  { accent-color: #3b82f6 !important; }
+
 /* ── Color picker ────────────────────────────────────────────────────── */
 
 .color-row {
