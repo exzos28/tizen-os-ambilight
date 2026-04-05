@@ -3,6 +3,7 @@ using System.Net;
 using System.Net.Http;
 using System.Net.Sockets;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using Tizen.Applications;
 
@@ -13,6 +14,7 @@ namespace Service
         private static readonly HttpClient _http = new HttpClient();
         private volatile bool _stopping;
         private string _serverHost;
+        private CancellationTokenSource _cts;
 
         #region Logging
 
@@ -69,16 +71,25 @@ namespace Service
         protected override void OnCreate()
         {
             base.OnCreate();
+            _cts?.Cancel();
+            _cts = new CancellationTokenSource();
+            var token = _cts.Token;
+
+            Capture.Stop();
             Task.Run(async () =>
             {
                 await Task.Delay(2000);
+                if (token.IsCancellationRequested || _stopping) return;
+
                 _serverHost = DiscoverServer();
-                if (_serverHost == null || _stopping) return;
+                if (_serverHost == null || _stopping || token.IsCancellationRequested) return;
                 SendLog("OnCreate", $"server={_serverHost}");
 
                 SendLog("CaptureInit", "starting HW RGB capture...");
 
                 await Task.Delay(500);
+                if (token.IsCancellationRequested || _stopping) return;
+
                 Capture.Run(_serverHost, (evt, data) => SendLog(evt, data));
             });
         }
@@ -94,6 +105,7 @@ namespace Service
         protected override void OnTerminate()
         {
             _stopping = true;
+            _cts?.Cancel();
             Capture.Stop();
             base.OnTerminate();
         }
