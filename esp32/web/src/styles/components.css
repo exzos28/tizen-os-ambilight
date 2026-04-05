@@ -1,0 +1,244 @@
+/* ── Card ────────────────────────────────────────────────────────────── */
+
+.card {
+  background: #1e293b;
+  border-radius: 14px;
+  padding: 20px 22px;
+  margin-bottom: 14px;
+}
+
+.card h2 {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: #f97316;
+  margin-bottom: 14px;
+}
+
+/* ── Stats grid ──────────────────────────────────────────────────────── */
+
+.grid2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.stat {
+  background: #0f172a;
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+
+.stat-val {
+  font-size: 0.95rem;
+  font-weight: 600;
+  font-family: monospace;
+  word-break: break-all;
+}
+
+.stat-key {
+  font-size: 0.68rem;
+  color: #64748b;
+  margin-top: 3px;
+}
+
+/* ── Form fields ─────────────────────────────────────────────────────── */
+
+.field {
+  margin-top: 14px;
+}
+
+.field:first-child {
+  margin-top: 0;
+}
+
+label {
+  display: block;
+  font-size: 0.78rem;
+  color: #94a3b8;
+  margin-bottom: 6px;
+}
+
+label strong {
+  color: #f1f5f9;
+}
+
+input[type='number'] {
+  width: 100%;
+  padding: 10px 13px;
+  background: #0f172a;
+  border: 1.5px solid #334155;
+  border-radius: 9px;
+  color: #f1f5f9;
+  font-size: 0.9rem;
+  outline: none;
+  transition: border-color 0.15s;
+  -moz-appearance: textfield;
+}
+
+input[type='number']::-webkit-outer-spin-button,
+input[type='number']::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+}
+
+input[type='number']:focus { border-color: #f97316; }
+
+input[type='text'],
+input[type='password'] {
+  width: 100%;
+  padding: 10px 13px;
+  background: #0f172a;
+  border: 1.5px solid #334155;
+  border-radius: 9px;
+  color: #f1f5f9;
+  font-size: 0.9rem;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+input[type='text']:focus,
+input[type='password']:focus {
+  border-color: #f97316;
+}
+
+input[type='range'] {
+  width: 100%;
+  accent-color: #f97316;
+  cursor: pointer;
+  margin-top: 6px;
+}
+
+/* ── Color picker ────────────────────────────────────────────────────── */
+
+.color-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+input[type='color'] {
+  width: 48px;
+  height: 38px;
+  border: 1.5px solid #334155;
+  background: #0f172a;
+  border-radius: 9px;
+  cursor: pointer;
+  padding: 3px;
+}
+
+.color-preview {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  border: 1.5px solid #334155;
+  flex-shrink: 0;
+}
+
+code {
+  font-size: 0.85rem;
+  color: #94a3b8;
+}
+
+/* ── Buttons ─────────────────────────────────────────────────────────── */
+
+button {
+  width: 100%;
+  padding: 13px;
+  background: #f97316;
+  color: #fff;
+  border: none;
+  border-radius: 11px;
+  font-size: 0.95rem;
+  font-weight: 700;
+  cursor: pointer;
+  margin-top: 6px;
+  transition: background 0.15s, opacity 0.15s;
+}
+
+button:hover:not(:disabled) { background: #ea6c0b; }
+button:disabled              { opacity: 0.55; cursor: not-allowed; }
+
+.btn-apply { background: #0ea5e9; }
+.btn-apply:hover:not(:disabled) { background: #0284c7; }
+
+/* ── Tabs ────────────────────────────────────────────────────────────── */
+
+.tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 20px;
+  background: #1e293b;
+  padding: 5px;
+  border-radius: 13px;
+}
+
+.tab-btn {
+  flex: 1;
+  padding: 9px 0;
+  background: transparent;
+  color: #64748b;
+  border: none;
+  border-radius: 9px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  margin-top: 0;
+  width: auto;
+  transition: background 0.15s, color 0.15s;
+}
+
+.tab-btn:hover:not(:disabled) { background: #0f172a; color: #94a3b8; }
+
+.tab-btn.active {
+  background: #0f172a;
+  color: #f1f5f9;
+}
+
+/* ── Toast ───────────────────────────────────────────────────────────── */
+
+.toast {
+  margin-top: 16px;
+  padding: 11px 18px;
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 10px;
+  font-size: 0.85rem;
+  text-align: center;
+  color: #cbd5e1;
+}
+
+/* ── Mode segmented control ──────────────────────────────────────────── */
+
+.seg {
+  display: flex;
+  gap: 4px;
+  background: #1e293b;
+  padding: 5px;
+  border-radius: 13px;
+  margin-bottom: 16px;
+}
+
+.seg-btn {
+  flex: 1;
+  padding: 9px 0;
+  background: transparent;
+  color: #64748b;
+  border: none;
+  border-radius: 9px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  margin-top: 0;
+  width: auto;
+  transition: background 0.15s, color 0.15s;
+}
+
+.seg-btn:hover:not(:disabled) { background: #0f172a; color: #94a3b8; }
+
+.seg-btn.active {
+  background: #0f172a;
+  color: #f1f5f9;
+}
+
+.seg-btn.active.dynamic { color: #22c55e; }

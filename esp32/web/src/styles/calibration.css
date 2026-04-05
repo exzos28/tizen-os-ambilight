@@ -1,0 +1,89 @@
+/* ── Calibration diagram ─────────────────────────────────────────────── */
+
+.calib-diagram {
+  margin-bottom: 4px;
+}
+
+.calib-diagram svg {
+  display: block;
+  margin: 0 auto 16px;
+}
+
+.calib-counts {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.calib-count-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.calib-side-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  width: 52px;
+  flex-shrink: 0;
+}
+
+.calib-count-val {
+  font-size: 0.9rem;
+  font-family: monospace;
+  color: #f1f5f9;
+  cursor: pointer;
+  border-bottom: 1px dashed #334155;
+  padding-bottom: 1px;
+  transition: border-color 0.15s;
+}
+
+.calib-count-val:hover {
+  border-color: #f97316;
+}
+
+.calib-edit-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.calib-input {
+  width: 72px;
+  padding: 6px 10px;
+  background: #0f172a;
+  border: 1.5px solid #f97316;
+  border-radius: 8px;
+  color: #f1f5f9;
+  font-size: 0.9rem;
+  outline: none;
+  -moz-appearance: textfield;
+}
+
+.calib-input::-webkit-outer-spin-button,
+.calib-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+}
+
+.calib-ok {
+  width: auto;
+  padding: 6px 12px;
+  margin-top: 0;
+  font-size: 0.8rem;
+  border-radius: 8px;
+  background: #f97316;
+}
+
+.calib-hint {
+  font-size: 0.72rem;
+  color: #475569;
+  text-align: center;
+  line-height: 1.6;
+}
+
+.calib-hint strong {
+  color: #64748b;
+}

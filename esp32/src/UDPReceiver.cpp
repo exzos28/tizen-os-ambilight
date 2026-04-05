@@ -23,8 +23,8 @@ void UDPReceiver::handle() {
     int size = _udp.parsePacket();
     if (size <= 0) return;
 
-    // Only apply frames in dynamic mode.
-    if (Config::instance().ledMode != 1) {
+    // Only apply frames in dynamic mode, and not while a calibration preview is active.
+    if (Config::instance().ledMode != 1 || LEDController::instance().previewActive()) {
         _udp.flush();
         return;
     }
