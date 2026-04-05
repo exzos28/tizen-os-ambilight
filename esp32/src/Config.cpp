@@ -22,7 +22,7 @@ void Config::begin() {
     ledLeft      = _prefs.getUChar ("led_left",    6);
     startCorner  = _prefs.getUChar ("start_corner", 0);
     clockwise    = _prefs.getBool  ("clockwise",   true);
-    ledMode      = _prefs.getUChar ("led_mode",    0);
+    ledMode      = _prefs.getUChar ("led_mode",    1);
 }
 
 void Config::reset() {

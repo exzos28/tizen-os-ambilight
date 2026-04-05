@@ -2,6 +2,7 @@
 #include "Config.h"
 
 CRGB LEDController::_leds[MAX_LEDS];
+CRGB LEDController::_target[MAX_LEDS];
 
 LEDController& LEDController::instance() {
     static LEDController inst;
@@ -52,18 +53,29 @@ void LEDController::interpolateSide(const uint8_t* src, uint8_t srcCount,
                                     CRGB* dst, uint8_t dstCount) {
     if (dstCount == 0 || srcCount == 0) return;
     if (srcCount == 1) {
-        CRGB c(src[0], src[1], src[2]);
-        for (uint8_t i = 0; i < dstCount; i++) dst[i] = c;
+        dst[0] = CRGB(src[0], src[1], src[2]);
+        for (uint8_t i = 1; i < dstCount; i++) dst[i] = dst[0];
         return;
     }
     for (uint8_t i = 0; i < dstCount; i++) {
-        float t    = (float)i / (dstCount - 1) * (srcCount - 1);
-        uint8_t lo = (uint8_t)t;
-        uint8_t hi = (lo + 1 < srcCount) ? lo + 1 : lo;
-        float frac = t - lo;
-        dst[i].r = (uint8_t)(src[lo*3+0] + frac * ((int)src[hi*3+0] - src[lo*3+0]));
-        dst[i].g = (uint8_t)(src[lo*3+1] + frac * ((int)src[hi*3+1] - src[lo*3+1]));
-        dst[i].b = (uint8_t)(src[lo*3+2] + frac * ((int)src[hi*3+2] - src[lo*3+2]));
+        float   t    = (float)i / (dstCount - 1) * (srcCount - 1);
+        uint8_t lo   = (uint8_t)t;
+        uint8_t hi   = (lo + 1 < srcCount) ? lo + 1 : lo;
+        uint8_t frac = (uint8_t)((t - lo) * 255.0f);
+
+        CHSV hsv_lo = rgb2hsv_approximate(CRGB(src[lo*3], src[lo*3+1], src[lo*3+2]));
+        CHSV hsv_hi = rgb2hsv_approximate(CRGB(src[hi*3], src[hi*3+1], src[hi*3+2]));
+
+        // Shortest-path hue interpolation to avoid spinning around the colour wheel.
+        int16_t dh = (int16_t)hsv_hi.h - (int16_t)hsv_lo.h;
+        if (dh >  128) dh -= 256;
+        if (dh < -128) dh += 256;
+
+        CHSV result;
+        result.h = (uint8_t)((int16_t)hsv_lo.h + (int16_t)(dh * frac / 255));
+        result.s = lerp8by8(hsv_lo.s, hsv_hi.s, frac);
+        result.v = lerp8by8(hsv_lo.v, hsv_hi.v, frac);
+        hsv2rgb_rainbow(result, dst[i]);
     }
 }
 
@@ -83,7 +95,8 @@ void LEDController::interpolateSide(const uint8_t* src, uint8_t srcCount,
 //
 // Counter-clockwise traversal: same side rotation but each side reversed.
 //   TL(0) CCW: LEFT, BOTTOM, RIGHT, TOP  (each reversed)
-void LEDController::fillStrip(const CRGB* topC,    const CRGB* rightC,
+void LEDController::fillStrip(CRGB* dst,
+                               const CRGB* topC,    const CRGB* rightC,
                                const CRGB* bottomC, const CRGB* leftC,
                                uint8_t startCorner, bool clockwise,
                                uint8_t ledTop, uint8_t ledRight,
@@ -98,7 +111,7 @@ void LEDController::fillStrip(const CRGB* topC,    const CRGB* rightC,
             int si = (startCorner + s) % 4;
             for (uint8_t i = 0; i < cnt[si]; i++) {
                 if (idx >= _numLeds) return;
-                _leds[idx++] = sides[si][i];
+                dst[idx++] = sides[si][i];
             }
         }
     } else {
@@ -108,7 +121,7 @@ void LEDController::fillStrip(const CRGB* topC,    const CRGB* rightC,
             int si = (startCorner + 3 - s) % 4;
             for (int i = cnt[si] - 1; i >= 0; i--) {
                 if (idx >= _numLeds) return;
-                _leds[idx++] = sides[si][i];
+                dst[idx++] = sides[si][i];
             }
         }
     }
@@ -138,9 +151,14 @@ void LEDController::applyAmbilight(const uint8_t* data, uint8_t hCount, uint8_t 
     interpolateSide(bottomSrc, hCount, bottomC, cfg.ledBottom);
     interpolateSide(leftSrc,   vCount, leftC,   cfg.ledLeft);
 
-    fillStrip(topC, rightC, bottomC, leftC,
+    fillStrip(_target, topC, rightC, bottomC, leftC,
               cfg.startCorner, cfg.clockwise,
               cfg.ledTop, cfg.ledRight, cfg.ledBottom, cfg.ledLeft);
+
+    // Blend displayed state towards the new target for smooth scene transitions.
+    for (uint16_t i = 0; i < _numLeds; i++) {
+        _leds[i] = blend(_leds[i], _target[i], SMOOTH_ALPHA);
+    }
     FastLED.show();
 }
 
@@ -179,7 +197,7 @@ void LEDController::showCalibrationPreview(uint8_t startCorner, bool clockwise,
     _numLeds = min(static_cast<uint16_t>(total), static_cast<uint16_t>(MAX_LEDS));
     FastLED[0].setLeds(_leds, _numLeds);
 
-    fillStrip(topC, rightC, bottomC, leftC,
+    fillStrip(_leds, topC, rightC, bottomC, leftC,
               startCorner, clockwise,
               ledTop, ledRight, ledBottom, ledLeft);
 
