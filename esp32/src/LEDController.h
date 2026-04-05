@@ -41,16 +41,22 @@ private:
     static void interpolateSide(const uint8_t* src, uint8_t srcCount,
                                 CRGB* dst, uint8_t dstCount);
 
-    // Fill _leds[] from per-side CRGB arrays using startCorner + clockwise mapping.
+    // Fill dst[] from per-side CRGB arrays using startCorner + clockwise mapping.
     // Side natural directions: TOP[0]=top-left, RIGHT[0]=top-right,
     //                          BOTTOM[0]=bottom-right, LEFT[0]=bottom-left.
-    void fillStrip(const CRGB* topC,    const CRGB* rightC,
+    void fillStrip(CRGB* dst,
+                   const CRGB* topC,    const CRGB* rightC,
                    const CRGB* bottomC, const CRGB* leftC,
                    uint8_t startCorner, bool clockwise,
                    uint8_t ledTop, uint8_t ledRight,
                    uint8_t ledBottom, uint8_t ledLeft);
 
-    static CRGB _leds[MAX_LEDS];
+    // Fraction (0-255) of the target blended in per ambilight frame.
+    // 64 ≈ 25 % per frame → ~90 % reached in ~8 frames (~133 ms at 60 fps).
+    static constexpr uint8_t SMOOTH_ALPHA = 64;
+
+    static CRGB _leds[MAX_LEDS];    // displayed (blended)
+    static CRGB _target[MAX_LEDS];  // latest decoded frame
     uint16_t    _numLeds      = 0;
     uint8_t     _brightness   = 100;
     uint32_t    _previewUntil = 0;
