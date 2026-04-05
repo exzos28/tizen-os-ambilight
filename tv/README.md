@@ -42,7 +42,7 @@ The bottleneck is the hardware measurement delay. After setting a position, the 
 |-------|--------|--------|------------|-----|
 | 20ms  | 50     | 25     | 500ms      | ~2  |
 
-Tune `CaptureDelayMs`, `TargetCaptureW`, `TargetCaptureH`, and `TargetFps` in `Config.cs`.
+Tune `CaptureDelayMs`, `TargetCaptureW`, and `TargetCaptureH` in `Config.cs`.
 
 ### Measured HW parameters (Samsung 4K TV, Tizen 9.0, SDP)
 

@@ -19,8 +19,5 @@ namespace Service
         // HW needs exactly 20ms to measure. Confirmed by diagnostics:
         // <20ms returns garbage, 20ms+ returns correct values.
         public const int CaptureDelayMs = 20;
-
-        // Target FPS limit (0 = unlimited)
-        public const int TargetFps = 60;
     }
 }

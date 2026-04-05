@@ -135,10 +135,9 @@ namespace Service
                 }
 
                 int numBatches = (totalPoints + blocksPerCycle - 1) / blocksPerCycle;
-                long minFrameTimeMs = Config.TargetFps > 0 ? 1000L / Config.TargetFps : 0;
 
                 log("CaptureReady", $"points={totalPoints} h={hCount} v={vCount} " +
-                    $"batches={numBatches} blocksPerCycle={blocksPerCycle} delay={delay}ms targetFps={Config.TargetFps}");
+                    $"batches={numBatches} blocksPerCycle={blocksPerCycle} delay={delay}ms");
 
                 using var udp = new UdpClient();
                 var target = new IPEndPoint(IPAddress.Parse(serverHost), Config.UdpPort);
@@ -201,12 +200,6 @@ namespace Service
                         udpFailures++;
                         if (udpFailures % 30 == 1)
                             log("UdpSendError", $"failures={udpFailures} err={ex.Message}");
-                    }
-
-                    long elapsed = sw.ElapsedMilliseconds - frameStart;
-                    if (minFrameTimeMs > 0 && elapsed < minFrameTimeMs)
-                    {
-                        Thread.Sleep((int)(minFrameTimeMs - elapsed));
                     }
 
                     if (frameCount % 200 == 1)
