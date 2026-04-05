@@ -59,7 +59,8 @@ namespace Service
         static volatile bool _running;
         static readonly object _runLock = new object();
 
-        public static void Run(string serverHost, Action<string, string> log)
+        // Returns true on clean stop (_running set to false), false on failure.
+        public static bool Run(string serverHost, Action<string, string> log)
         {
             lock (_runLock)
             {
@@ -71,7 +72,7 @@ namespace Service
                 {
                     string err = Marshal.PtrToStringAnsi(dlerror()) ?? "unknown";
                     log("CaptureError", $"dlopen failed: {err}");
-                    return;
+                    return false;
                 }
 
                 var getCondition = GetFunc<GetConditionFunc>(lib, "ppi_ve_get_rgb_measure_condition")
@@ -84,7 +85,7 @@ namespace Service
                 if (getCondition == null || setPosition == null || getPixel == null)
                 {
                     log("CaptureError", "missing symbols");
-                    return;
+                    return false;
                 }
 
                 int ret = getCondition(out VEPPIRgbMeasureInfo hw);
@@ -95,7 +96,7 @@ namespace Service
                 if (ret != 0 || hw.measureBlockCnt < 1 || hw.measureFullWidth < 1)
                 {
                     log("CaptureError", "invalid HW condition");
-                    return;
+                    return false;
                 }
 
                 int fullW = hw.measureFullWidth;
@@ -146,6 +147,7 @@ namespace Service
                 packet[0] = (byte)hCount;
                 packet[1] = (byte)vCount;
                 int frameCount = 0;
+                int udpFailures = 0;
                 var sw = System.Diagnostics.Stopwatch.StartNew();
 
                 // Prime: set first batch positions
@@ -193,7 +195,13 @@ namespace Service
 
                     frameCount++;
                     Buffer.BlockCopy(colors, 0, packet, 2, totalPoints * 3);
-                    try { udp.Send(packet, packet.Length, target); } catch { }
+                    try { udp.Send(packet, packet.Length, target); }
+                    catch (Exception ex)
+                    {
+                        udpFailures++;
+                        if (udpFailures % 30 == 1)
+                            log("UdpSendError", $"failures={udpFailures} err={ex.Message}");
+                    }
 
                     long elapsed = sw.ElapsedMilliseconds - frameStart;
                     if (minFrameTimeMs > 0 && elapsed < minFrameTimeMs)
@@ -214,6 +222,8 @@ namespace Service
                             $"left[0]=({colors[leftOff]},{colors[leftOff+1]},{colors[leftOff+2]})");
                     }
                 }
+
+                return true; // clean stop via Stop()
             }
         }
 
