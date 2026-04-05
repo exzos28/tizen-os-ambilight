@@ -177,7 +177,6 @@ output so you can monitor the device without USB.
 | `TargetCaptureW` | 6 | Sample points per horizontal edge |
 | `TargetCaptureH` | 4 | Sample points per vertical edge |
 | `CaptureDelayMs` | 20 | ms between set_position and get_pixel |
-| `TargetFps` | 60 | Frame rate cap (actual FPS is HW-limited) |
 
 **ESP32 side** (`esp32/src/Config.h`) — persisted in NVS, editable via web UI:
 
