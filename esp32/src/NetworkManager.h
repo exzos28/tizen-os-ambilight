@@ -3,6 +3,11 @@
 #include <WiFi.h>
 #include <DNSServer.h>
 
+// Preferred last octet for the static IP (e.g. 192.168.x.245).
+// The first three octets are learned from the router via DHCP.
+// Set to 0 to disable and always use DHCP.
+constexpr uint8_t PREFERRED_IP_LAST_OCTET = 245;
+
 class NetworkManager {
 public:
     static NetworkManager& instance();

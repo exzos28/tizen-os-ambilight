@@ -34,6 +34,7 @@ public:
     // Mode: 0=plain (static color), 1=dynamic (ambilight UDP)
     uint8_t  ledMode;
 
+
 private:
     Config() = default;
     Preferences _prefs;

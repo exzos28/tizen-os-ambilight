@@ -83,7 +83,9 @@ void WebPortal::handleStatus() {
     json += "\"mode\":\""    + jsonEscape(net.mode())      + "\",";
     json += "\"ssid\":\""    + jsonEscape(WiFi.SSID())     + "\",";
     json += "\"rssi\":"      + String(WiFi.RSSI())         + ",";
-    json += "\"connected\":" + String(net.isConnected() ? "true" : "false");
+    json += "\"connected\":"         + String(net.isConnected() ? "true" : "false") + ",";
+    json += "\"gateway\":\""         + jsonEscape(WiFi.gatewayIP().toString())      + "\",";
+    json += "\"preferred_last_oct\":" + String(PREFERRED_IP_LAST_OCTET);
     json += "}";
     _server.send(200, "application/json", json);
 }
@@ -109,6 +111,7 @@ void WebPortal::handleConfig() {
     json += "\"led_left\":"      + String(cfg.ledLeft)         + ",";
     json += "\"start_corner\":"  + String(cfg.startCorner)     + ",";
     json += "\"clockwise\":"     + String(cfg.clockwise ? "true" : "false");
+
     json += "}";
     _server.send(200, "application/json", json);
 }

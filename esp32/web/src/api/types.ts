@@ -4,6 +4,8 @@ export interface StatusResponse {
   ssid: string
   rssi: number
   connected: boolean
+  gateway: string
+  preferred_last_oct: number  // 0 = disabled, otherwise the desired last IP octet
 }
 
 export interface ConfigResponse {

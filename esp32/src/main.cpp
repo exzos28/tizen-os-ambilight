@@ -8,35 +8,36 @@
 #include "UDPReceiver.h"
 
 // GPIO 0 — BOOT button (active LOW, internal pull-up).
-// Hold for FACTORY_RESET_HOLD_MS at boot to wipe all saved config.
+// Hold for FACTORY_RESET_HOLD_MS at any time to wipe all saved config.
 constexpr uint8_t  FACTORY_RESET_PIN     = 0;
 constexpr uint32_t FACTORY_RESET_HOLD_MS = 3000;
 
-static void checkFactoryReset() {
-    pinMode(FACTORY_RESET_PIN, INPUT_PULLUP);
-    if (digitalRead(FACTORY_RESET_PIN) == HIGH) return;   // not pressed
+static uint32_t _bootPressStart = 0;
 
-    Serial.println("[Boot] BOOT held — hold 3 s for factory reset...");
-    uint32_t start = millis();
-    while (digitalRead(FACTORY_RESET_PIN) == LOW) {
-        if (millis() - start >= FACTORY_RESET_HOLD_MS) {
-            Serial.println("[Boot] Factory reset! Wiping config...");
-            Config::instance().reset();
-            Serial.println("[Boot] Done — restarting.");
-            delay(500);
-            ESP.restart();
-        }
-        delay(50);
+static void checkFactoryReset() {
+    if (digitalRead(FACTORY_RESET_PIN) == HIGH) {
+        _bootPressStart = 0;
+        return;
     }
-    Serial.println("[Boot] Released early — skipping reset.");
+    if (_bootPressStart == 0) {
+        _bootPressStart = millis();
+        Serial.println("[Boot] BOOT held — hold 3 s for factory reset...");
+        return;
+    }
+    if (millis() - _bootPressStart >= FACTORY_RESET_HOLD_MS) {
+        Serial.println("[Boot] Factory reset! Wiping config...");
+        Config::instance().reset();
+        Serial.println("[Boot] Done — restarting.");
+        delay(500);
+        ESP.restart();
+    }
 }
 
 void setup() {
     Serial.begin(115200);
     Log.println("[Boot] Starting...");
 
-    // 0. Factory reset check (hold BOOT button for 3 s).
-    checkFactoryReset();
+    pinMode(FACTORY_RESET_PIN, INPUT_PULLUP);
 
     // 1. Load persistent config from NVS.
     auto& cfg = Config::instance();
@@ -73,6 +74,7 @@ void setup() {
 }
 
 void loop() {
+    checkFactoryReset();
     NetworkManager::instance().handle();   // processes DNS in AP/captive-portal mode
     OTAManager::instance().handle();
     RemoteLogger::instance().handle();
