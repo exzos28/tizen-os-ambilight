@@ -36,15 +36,11 @@ send all colors via UDP
 
 ### Performance
 
-The bottleneck is the hardware measurement delay. After setting a position, the video processor needs time to average the 16x16 pixel block. The HW reports 20ms, but lower values may work.
+The bottleneck is the hardware measurement delay. After setting a position, the video processor needs time to average the 16x16 pixel block. The HW requires **20ms** — this is the minimum reliable delay we use.
 
-| Delay | Points | Cycles | Frame time | FPS  |
-|-------|--------|--------|------------|------|
-| 20ms  | 50     | 25     | 500ms      | ~2   |
-| 10ms  | 50     | 25     | 250ms      | ~4   |
-| 5ms   | 50     | 25     | 125ms      | ~8   |
-| 10ms  | 20     | 10     | 100ms      | ~10  |
-| 5ms   | 10     | 5      | 25ms       | ~40  |
+| Delay | Points | Cycles | Frame time | FPS |
+|-------|--------|--------|------------|-----|
+| 20ms  | 50     | 25     | 500ms      | ~2  |
 
 Tune `CaptureDelayMs`, `TargetCaptureW`, `TargetCaptureH`, and `TargetFps` in `Config.cs`.
 
