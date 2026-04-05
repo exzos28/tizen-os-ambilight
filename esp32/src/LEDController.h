@@ -35,6 +35,7 @@ public:
 
 private:
     static constexpr uint32_t PREVIEW_HOLD_MS = 2000;
+    static constexpr uint32_t AUTO_OFF_TIMEOUT_MS = 5000;
     LEDController() = default;
 
     // Interpolate srcCount RGB samples → dstCount CRGB entries (linear).
@@ -51,13 +52,15 @@ private:
                    uint8_t ledTop, uint8_t ledRight,
                    uint8_t ledBottom, uint8_t ledLeft);
 
-    // Fraction (0-255) of the target blended in per ambilight frame.
-    // 64 ≈ 25 % per frame → ~90 % reached in ~8 frames (~133 ms at 60 fps).
-    static constexpr uint8_t SMOOTH_ALPHA = 64;
+    // Fraction (0-255) of the target blended in per update step.
+    // Since update() runs very fast, we use a smaller value for smooth transitions.
+    static constexpr uint8_t SMOOTH_ALPHA = 32;
 
     static CRGB _leds[MAX_LEDS];    // displayed (blended)
     static CRGB _target[MAX_LEDS];  // latest decoded frame
     uint16_t    _numLeds      = 0;
     uint8_t     _brightness   = 100;
     uint32_t    _previewUntil = 0;
+    uint32_t    _lastFrameMs  = 0;
+    uint32_t    _lastUpdateMs = 0;
 };

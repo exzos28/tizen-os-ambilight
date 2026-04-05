@@ -155,11 +155,7 @@ void LEDController::applyAmbilight(const uint8_t* data, uint8_t hCount, uint8_t 
               cfg.startCorner, cfg.clockwise,
               cfg.ledTop, cfg.ledRight, cfg.ledBottom, cfg.ledLeft);
 
-    // Blend displayed state towards the new target for smooth scene transitions.
-    for (uint16_t i = 0; i < _numLeds; i++) {
-        _leds[i] = blend(_leds[i], _target[i], SMOOTH_ALPHA);
-    }
-    FastLED.show();
+    _lastFrameMs = millis();
 }
 
 // ---------------------------------------------------------------------------
@@ -214,5 +210,31 @@ void LEDController::showCalibrationPreview(uint8_t startCorner, bool clockwise,
 }
 
 void LEDController::update() {
-    // Placeholder for future animation / UDP-driven updates.
+    auto& cfg = Config::instance();
+
+    // Limit update rate to ~60 FPS (16ms) to keep transitions consistent.
+    uint32_t now = millis();
+    if (now - _lastUpdateMs < 16) return;
+    _lastUpdateMs = now;
+
+    // In Ambilight mode, handle timeout (Auto-Off) and smooth blending.
+    if (cfg.ledMode == 1 && !previewActive()) {
+        // If no frames received for a long time, fade the target to black.
+        if (now - _lastFrameMs > AUTO_OFF_TIMEOUT_MS) {
+            fill_solid(_target, _numLeds, CRGB::Black);
+        }
+
+        // Smoothly blend current LED state toward the target.
+        bool changed = false;
+        for (uint16_t i = 0; i < _numLeds; i++) {
+            if (_leds[i] != _target[i]) {
+                _leds[i] = blend(_leds[i], _target[i], SMOOTH_ALPHA);
+                changed = true;
+            }
+        }
+
+        if (changed) {
+            FastLED.show();
+        }
+    }
 }
