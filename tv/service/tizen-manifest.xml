@@ -1,7 +1,7 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns="http://tizen.org/ns/packages" api-version="9.0" package="org.tizen.example.Service" version="1.0.0">
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns="http://tizen.org/ns/packages" api-version="9.0" package="fCAYP0k0uD" version="1.0.0">
   <profile name="common" />
-  <service-application appid="org.tizen.example.Service"
+  <service-application appid="fCAYP0k0uD.Service"
 					exec="Service.dll"
 					type="dotnet"
 					multiple="false"

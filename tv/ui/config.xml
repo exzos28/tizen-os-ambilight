@@ -1,12 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<widget xmlns="http://www.w3.org/ns/widgets" xmlns:tizen="http://tizen.org/ns/widgets" id="http://yourdomain/MyProject2" version="0.2.1" viewmodes="maximized">
-   <name>MyProject2</name>
+<widget xmlns="http://www.w3.org/ns/widgets" xmlns:tizen="http://tizen.org/ns/widgets" id="http://ambilight.tv/app" version="0.2.1" viewmodes="maximized">
+   <name>Ambilight</name>
    <icon src="icon.png"></icon>
    <content src="index.html"></content>
    <feature name="http://tizen.org/feature/screen.size.normal.1080.1920"></feature>
    <tizen:setting screen-orientation="landscape" context-menu="enable" background-support="disable" encryption="disable" install-location="auto" hwkey-event="enable"></tizen:setting>
-   <tizen:application id="fCAYP0k0uD.MyProject2" package="fCAYP0k0uD" required_version="2.3"></tizen:application>
+   <tizen:application id="fCAYP0k0uD.ui" package="fCAYP0k0uD" required_version="2.3"></tizen:application>
    <tizen:privilege name="http://tizen.org/privilege/application.launch"></tizen:privilege>
+   <tizen:privilege name="http://developer.samsung.com/privilege/contentanalysis"></tizen:privilege>
+   <tizen:privilege name="http://tizen.org/privilege/internet"></tizen:privilege>
    <tizen:metadata key="http://samsung.com/tv/metadata/prelaunch.support" value="true"></tizen:metadata>
    <tizen:metadata key="http://tizen.org/metadata/app_ui_type/base_screen_resolution" value="extensive"></tizen:metadata>
    <tizen:profile name="tv-samsung"></tizen:profile>
