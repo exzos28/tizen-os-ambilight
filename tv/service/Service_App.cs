@@ -27,12 +27,21 @@ namespace Service
                            (extra != null ? $",\"data\":{Escape(extra)}" : "") + "}";
                 await _http.PostAsync($"http://{_serverHost}:{Config.HttpPort}", new StringContent(json, Encoding.UTF8, "application/json"));
             }
-            catch { }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"[SendLog] {eventName}: {ex.Message}");
+            }
         }
 
         private static string Escape(string s)
         {
-            return "\"" + s.Replace("\\", "\\\\").Replace("\"", "\\\"").Replace("\n", "\\n").Replace("\r", "\\r") + "\"";
+            return "\"" + s
+                .Replace("\\", "\\\\")
+                .Replace("\"", "\\\"")
+                .Replace("\n", "\\n")
+                .Replace("\r", "\\r")
+                .Replace("\t", "\\t")
+                + "\"";
         }
 
         #endregion
@@ -90,7 +99,18 @@ namespace Service
                 await Task.Delay(500);
                 if (token.IsCancellationRequested || _stopping) return;
 
-                Capture.Run(_serverHost, (evt, data) => SendLog(evt, data));
+                int[] backoffMs = { 5_000, 10_000, 30_000 };
+                int attempt = 0;
+                while (!token.IsCancellationRequested && !_stopping)
+                {
+                    bool cleanStop = Capture.Run(_serverHost, (evt, data) => SendLog(evt, data));
+                    if (cleanStop || token.IsCancellationRequested || _stopping) break;
+
+                    int delay = backoffMs[Math.Min(attempt, backoffMs.Length - 1)];
+                    attempt++;
+                    SendLog("CaptureRetry", $"attempt={attempt} retryIn={delay}ms");
+                    try { await Task.Delay(delay, token); } catch (OperationCanceledException) { break; }
+                }
             });
         }
 
