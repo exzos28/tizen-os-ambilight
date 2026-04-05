@@ -151,6 +151,8 @@ void LEDController::applyAmbilight(const uint8_t* data, uint8_t hCount, uint8_t 
 void LEDController::showCalibrationPreview(uint8_t startCorner, bool clockwise,
                                             uint8_t ledTop, uint8_t ledRight,
                                             uint8_t ledBottom, uint8_t ledLeft) {
+    _previewUntil = millis() + PREVIEW_HOLD_MS;
+
     // Each side gets a distinct color.
     // Using project's orange/green/blue/purple palette.
     const CRGB sideColors[4] = {

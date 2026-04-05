@@ -31,8 +31,10 @@ public:
 
     uint16_t numLeds()    const { return _numLeds; }
     uint8_t  brightness() const { return _brightness; }
+    bool     previewActive() const { return millis() < _previewUntil; }
 
 private:
+    static constexpr uint32_t PREVIEW_HOLD_MS = 2000;
     LEDController() = default;
 
     // Interpolate srcCount RGB samples → dstCount CRGB entries (linear).
@@ -49,6 +51,7 @@ private:
                    uint8_t ledBottom, uint8_t ledLeft);
 
     static CRGB _leds[MAX_LEDS];
-    uint16_t    _numLeds    = 0;
-    uint8_t     _brightness = 100;
+    uint16_t    _numLeds      = 0;
+    uint8_t     _brightness   = 100;
+    uint32_t    _previewUntil = 0;
 };

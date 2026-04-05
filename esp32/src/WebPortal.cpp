@@ -157,12 +157,13 @@ void WebPortal::handleSaveNetwork() {
 void WebPortal::handleSaveLeds() {
     auto& cfg  = Config::instance();
     auto& leds = LEDController::instance();
+    bool  plain = (cfg.ledMode == 0);
 
     if (_server.hasArg("num_leds")) {
         uint16_t n = static_cast<uint16_t>(_server.arg("num_leds").toInt());
         if (n > 0) {
             cfg.numLeds = n;
-            leds.setNumLeds(n);
+            if (plain) leds.setNumLeds(n);
         }
     }
 
@@ -178,7 +179,7 @@ void WebPortal::handleSaveLeds() {
         cfg.colorR = (val >> 16) & 0xFF;
         cfg.colorG = (val >>  8) & 0xFF;
         cfg.colorB =  val        & 0xFF;
-        leds.setColor(cfg.colorR, cfg.colorG, cfg.colorB);
+        if (plain) leds.setColor(cfg.colorR, cfg.colorG, cfg.colorB);
     }
 
     cfg.save();
