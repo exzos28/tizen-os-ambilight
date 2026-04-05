@@ -120,7 +120,7 @@ namespace Service
                 for (int i = 0; i < vCount; i++)
                 {
                     int y = (i * fullH / vCount) + (fullH / vCount / 2) - captH / 2;
-                    positions[idx++] = (fullW - captW, Clamp(y, 0, fullH - captH));
+                    positions[idx++] = (fullW - captW * 2, Clamp(y, 0, fullH - captH));
                 }
                 for (int i = 0; i < hCount; i++)
                 {
@@ -130,7 +130,7 @@ namespace Service
                 for (int i = 0; i < vCount; i++)
                 {
                     int y = ((vCount - 1 - i) * fullH / vCount) + (fullH / vCount / 2) - captH / 2;
-                    positions[idx++] = (0, Clamp(y, 0, fullH - captH));
+                    positions[idx++] = (captW, Clamp(y, 0, fullH - captH));
                 }
 
                 int numBatches = (totalPoints + blocksPerCycle - 1) / blocksPerCycle;
@@ -173,9 +173,10 @@ namespace Service
                             int ci = (curStart + i) * 3;
                             if (ret == 0)
                             {
-                                colors[ci]     = (byte)Clamp(rgb.mean_R, 0, 255);
-                                colors[ci + 1] = (byte)Clamp(rgb.mean_G, 0, 255);
-                                colors[ci + 2] = (byte)Clamp(rgb.mean_B, 0, 255);
+                                // HW API returns 10-bit values (0–1023), scale to 8-bit
+                                colors[ci]     = (byte)(Clamp(rgb.mean_R, 0, 1023) >> 2);
+                                colors[ci + 1] = (byte)(Clamp(rgb.mean_G, 0, 1023) >> 2);
+                                colors[ci + 2] = (byte)(Clamp(rgb.mean_B, 0, 1023) >> 2);
                             }
                         }
 
@@ -205,6 +206,12 @@ namespace Service
                         long actualMs = sw.ElapsedMilliseconds - frameStart;
                         log("Frame", $"#{frameCount} {(actualMs > 0 ? 1000 / actualMs : 999)}fps " +
                             $"p0=({colors[0]},{colors[1]},{colors[2]})");
+
+                        int rightOff = hCount * 3;
+                        int leftOff  = (2 * hCount + vCount) * 3;
+                        log("SideColors",
+                            $"right[0]=({colors[rightOff]},{colors[rightOff+1]},{colors[rightOff+2]}) " +
+                            $"left[0]=({colors[leftOff]},{colors[leftOff+1]},{colors[leftOff+2]})");
                     }
                 }
             }
