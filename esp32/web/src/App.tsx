@@ -17,10 +17,10 @@ export default function App() {
   const [savingMode, setSavingMode] = useState(false)
 
   // Network settings
-  const [wifiSSID, setWifiSSID] = useState('')
-  const [wifiPass, setWifiPass] = useState('')
-  const [otaHost,  setOtaHost]  = useState('ambilight')
-  const [otaPass,  setOtaPass]  = useState('')
+  const [wifiSSID,  setWifiSSID]  = useState('')
+  const [wifiPass,  setWifiPass]  = useState('')
+  const [otaHost,   setOtaHost]   = useState('ambilight')
+  const [otaPass,   setOtaPass]   = useState('')
 
   // LED settings
   const [numLeds,    setNumLeds]    = useState(300)
@@ -88,10 +88,11 @@ export default function App() {
 
       {tab === 'wifi' && (
         <WiFiTab
-          wifiSSID={wifiSSID} setWifiSSID={setWifiSSID}
-          wifiPass={wifiPass} setWifiPass={setWifiPass}
-          otaHost={otaHost}   setOtaHost={setOtaHost}
-          otaPass={otaPass}   setOtaPass={setOtaPass}
+          wifiSSID={wifiSSID}   setWifiSSID={setWifiSSID}
+          wifiPass={wifiPass}   setWifiPass={setWifiPass}
+          otaHost={otaHost}     setOtaHost={setOtaHost}
+          otaPass={otaPass}     setOtaPass={setOtaPass}
+          preferredLastOct={status?.preferred_last_oct ?? 0}
         />
       )}
 

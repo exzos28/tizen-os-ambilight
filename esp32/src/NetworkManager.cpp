@@ -13,11 +13,21 @@ bool NetworkManager::connectSTA(const String& ssid, const String& password,
     WiFi.setAutoReconnect(true);
     WiFi.persistent(true);
     WiFi.setSleep(false);
+
     WiFi.begin(ssid.c_str(), password.c_str());
 
     uint32_t start = millis();
     while (WiFi.status() != WL_CONNECTED && millis() - start < timeoutMs) {
         delay(200);
+    }
+
+    if (WiFi.status() == WL_CONNECTED && PREFERRED_IP_LAST_OCTET != 0) {
+        // Build preferred IP from router's gateway prefix + our desired last octet.
+        // e.g. gateway 192.168.1.1 → preferred IP 192.168.1.245
+        IPAddress gw = WiFi.gatewayIP();
+        IPAddress sn = WiFi.subnetMask();
+        IPAddress preferred(gw[0], gw[1], gw[2], PREFERRED_IP_LAST_OCTET);
+        WiFi.config(preferred, gw, sn);
     }
 
     _apMode = (WiFi.status() != WL_CONNECTED);

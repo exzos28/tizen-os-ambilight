@@ -7,6 +7,7 @@ interface WiFiTabProps {
   wifiPass: string; setWifiPass: (v: string) => void
   otaHost:  string; setOtaHost:  (v: string) => void
   otaPass:  string; setOtaPass:  (v: string) => void
+  preferredLastOct: number  // from firmware constant, 0 = disabled
 }
 
 export function WiFiTab({
@@ -14,6 +15,7 @@ export function WiFiTab({
   wifiPass, setWifiPass,
   otaHost,  setOtaHost,
   otaPass,  setOtaPass,
+  preferredLastOct,
 }: WiFiTabProps) {
   const [saving,  setSaving]  = useState(false)
   const [message, setMessage] = useState<string | null>(null)
@@ -43,6 +45,11 @@ export function WiFiTab({
         <h2>WiFi</h2>
         <Field label="SSID"     type="text"     value={wifiSSID} onChange={setWifiSSID} placeholder="Network name"                />
         <Field label="Password" type="password" value={wifiPass} onChange={setWifiPass} placeholder="Leave empty to keep current" />
+        {preferredLastOct > 0 && (
+          <p style={{ fontSize: '0.85em', opacity: 0.65, marginTop: '0.5rem' }}>
+            After connecting, device will request IP ending in <strong>.{preferredLastOct}</strong>
+          </p>
+        )}
       </section>
 
       <section className="card">
