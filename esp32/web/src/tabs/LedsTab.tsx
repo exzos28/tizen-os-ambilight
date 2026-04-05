@@ -23,6 +23,12 @@ interface LedsTabProps {
   ledLeft:     number;   setLedLeft:     (v: number) => void
   startCorner: number;   setStartCorner: (v: number) => void
   clockwise:   boolean;  setClockwise:   (fn: (prev: boolean) => boolean) => void
+  // Color correction
+  gamma:      number;  setGamma:      (v: number) => void
+  saturation: number;  setSaturation: (v: number) => void
+  wbR:        number;  setWbR:        (v: number) => void
+  wbG:        number;  setWbG:        (v: number) => void
+  wbB:        number;  setWbB:        (v: number) => void
 }
 
 export function LedsTab({
@@ -36,6 +42,11 @@ export function LedsTab({
   ledLeft,     setLedLeft,
   startCorner, setStartCorner,
   clockwise,   setClockwise,
+  gamma,       setGamma,
+  saturation,  setSaturation,
+  wbR,         setWbR,
+  wbG,         setWbG,
+  wbB,         setWbB,
 }: LedsTabProps) {
   const ledsTimer  = useRef<ReturnType<typeof setTimeout> | null>(null)
   const calibTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -62,8 +73,14 @@ export function LedsTab({
     return { led_top: top, led_right: right, led_bottom: bottom, led_left: left, start_corner: corner, clockwise: cw ? 1 : 0 }
   }
 
-  function ledsParams(b = brightness, c = color, n = numLeds): LedSaveRequest {
-    return { num_leds: n, brightness: b, color: c }
+  function ledsParams(
+    b = brightness, c = color, n = numLeds,
+    g = gamma, s = saturation, r = wbR, gr = wbG, bl = wbB
+  ): LedSaveRequest {
+    return {
+      num_leds: n, brightness: b, color: c,
+      gamma: g, saturation: s, wb_r: r, wb_g: gr, wb_b: bl
+    }
   }
 
   const isDynamic = ledMode === 1
@@ -106,6 +123,68 @@ export function LedsTab({
                   debouncedSaveLeds(ledsParams(v))
                 }}
               />
+            </div>
+          </section>
+
+          <section className="card">
+            <h2>Color Correction</h2>
+            <div className="field">
+              <label>Gamma — <strong>{gamma.toFixed(1)}</strong></label>
+              <input
+                type="range"
+                min={0.5} max={3.0} step={0.1}
+                value={gamma}
+                onChange={(e) => {
+                  const v = Number(e.target.value)
+                  setGamma(v)
+                  debouncedSaveLeds(ledsParams(brightness, color, numLeds, v))
+                }}
+              />
+            </div>
+            <div className="field">
+              <label>Saturation Boost — <strong>{saturation.toFixed(1)}x</strong></label>
+              <input
+                type="range"
+                min={0.0} max={2.0} step={0.1}
+                value={saturation}
+                onChange={(e) => {
+                  const v = Number(e.target.value)
+                  setSaturation(v)
+                  debouncedSaveLeds(ledsParams(brightness, color, numLeds, gamma, v))
+                }}
+              />
+            </div>
+            <div className="field">
+              <label>White Balance (R/G/B)</label>
+              <div className="wb-controls">
+                <input
+                  type="range" className="accent-red"
+                  min={0} max={255} value={wbR}
+                  onChange={(e) => {
+                    const v = Number(e.target.value)
+                    setWbR(v)
+                    debouncedSaveLeds(ledsParams(brightness, color, numLeds, gamma, saturation, v))
+                  }}
+                />
+                <input
+                  type="range" className="accent-green"
+                  min={0} max={255} value={wbG}
+                  onChange={(e) => {
+                    const v = Number(e.target.value)
+                    setWbG(v)
+                    debouncedSaveLeds(ledsParams(brightness, color, numLeds, gamma, saturation, wbR, v))
+                  }}
+                />
+                <input
+                  type="range" className="accent-blue"
+                  min={0} max={255} value={wbB}
+                  onChange={(e) => {
+                    const v = Number(e.target.value)
+                    setWbB(v)
+                    debouncedSaveLeds(ledsParams(brightness, color, numLeds, gamma, saturation, wbR, wbG, v))
+                  }}
+                />
+              </div>
             </div>
           </section>
 

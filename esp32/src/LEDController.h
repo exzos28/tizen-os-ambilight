@@ -38,6 +38,11 @@ private:
     static constexpr uint32_t AUTO_OFF_TIMEOUT_MS = 5000;
     LEDController() = default;
 
+    void updateGammaTable(float gamma);
+
+    // Apply saturation, white balance and gamma to a range of pixels.
+    void processColors(CRGB* leds, uint16_t count);
+
     // Interpolate srcCount RGB samples → dstCount CRGB entries (linear).
     static void interpolateSide(const uint8_t* src, uint8_t srcCount,
                                 CRGB* dst, uint8_t dstCount);
@@ -63,4 +68,6 @@ private:
     uint32_t    _previewUntil = 0;
     uint32_t    _lastFrameMs  = 0;
     uint32_t    _lastUpdateMs = 0;
+    uint8_t     _gammaTable[256];
+    float       _lastGamma    = -1.0f;
 };

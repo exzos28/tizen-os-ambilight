@@ -22,6 +22,11 @@ export interface ConfigResponse {
   led_left: number
   start_corner: number
   clockwise: boolean
+  gamma: number
+  saturation: number
+  wb_r: number
+  wb_g: number
+  wb_b: number
 }
 
 export interface CalibrationRequest {
@@ -44,6 +49,11 @@ export interface LedSaveRequest {
   num_leds?: number
   brightness?: number
   color?: string
+  gamma?: number
+  saturation?: number
+  wb_r?: number
+  wb_g?: number
+  wb_b?: number
 }
 
 export interface MetricsResponse {

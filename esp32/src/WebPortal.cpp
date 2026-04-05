@@ -105,6 +105,11 @@ void WebPortal::handleConfig() {
     doc["led_left"]     = cfg.ledLeft;
     doc["start_corner"] = cfg.startCorner;
     doc["clockwise"]    = cfg.clockwise;
+    doc["gamma"]        = cfg.gamma;
+    doc["saturation"]   = cfg.saturation;
+    doc["wb_r"]         = cfg.whiteBalanceR;
+    doc["wb_g"]         = cfg.whiteBalanceG;
+    doc["wb_b"]         = cfg.whiteBalanceB;
     sendJson(_server, doc);
 }
 
@@ -169,6 +174,21 @@ void WebPortal::handleSaveLeds() {
         cfg.colorB =  val        & 0xFF;
         if (plain) leds.setColor(cfg.colorR, cfg.colorG, cfg.colorB);
     }
+
+    if (_server.hasArg("gamma"))
+        cfg.gamma = _server.arg("gamma").toFloat();
+
+    if (_server.hasArg("saturation"))
+        cfg.saturation = _server.arg("saturation").toFloat();
+
+    if (_server.hasArg("wb_r"))
+        cfg.whiteBalanceR = static_cast<uint8_t>(_server.arg("wb_r").toInt());
+
+    if (_server.hasArg("wb_g"))
+        cfg.whiteBalanceG = static_cast<uint8_t>(_server.arg("wb_g").toInt());
+
+    if (_server.hasArg("wb_b"))
+        cfg.whiteBalanceB = static_cast<uint8_t>(_server.arg("wb_b").toInt());
 
     cfg.save();
     Log.println("[Web] LED config applied.");

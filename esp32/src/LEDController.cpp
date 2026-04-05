@@ -16,6 +16,8 @@ void LEDController::begin(uint16_t numLeds, uint8_t brightness) {
     FastLED.addLeds<WS2812B, LED_PIN, GRB>(_leds, _numLeds);
     FastLED.setBrightness(_brightness);
     FastLED.clear(true);
+
+    updateGammaTable(Config::instance().gamma);
 }
 
 void LEDController::setNumLeds(uint16_t numLeds) {
@@ -131,6 +133,41 @@ void LEDController::fillStrip(CRGB* dst,
 // Ambilight
 // ---------------------------------------------------------------------------
 
+void LEDController::updateGammaTable(float gamma) {
+    if (gamma == _lastGamma) return;
+    _lastGamma = gamma;
+    for (int i = 0; i < 256; i++) {
+        _gammaTable[i] = (uint8_t)(pow((float)i / 255.0, gamma) * 255.0 + 0.5);
+    }
+}
+
+void LEDController::processColors(CRGB* leds, uint16_t count) {
+    auto& cfg = Config::instance();
+    updateGammaTable(cfg.gamma);
+
+    for (uint16_t i = 0; i < count; i++) {
+        CRGB& c = leds[i];
+
+        // 1. Saturation Boost (HSV)
+        if (cfg.saturation != 1.0f) {
+            CHSV hsv = rgb2hsv_approximate(c);
+            uint16_t s = (uint16_t)(hsv.s * cfg.saturation);
+            hsv.s = (uint8_t)(s > 255 ? 255 : s);
+            hsv2rgb_rainbow(hsv, c);
+        }
+
+        // 2. White Balance
+        if (cfg.whiteBalanceR != 255) c.r = (uint8_t)((uint16_t)c.r * cfg.whiteBalanceR / 255);
+        if (cfg.whiteBalanceG != 255) c.g = (uint8_t)((uint16_t)c.g * cfg.whiteBalanceG / 255);
+        if (cfg.whiteBalanceB != 255) c.b = (uint8_t)((uint16_t)c.b * cfg.whiteBalanceB / 255);
+
+        // 3. Gamma Correction
+        c.r = _gammaTable[c.r];
+        c.g = _gammaTable[c.g];
+        c.b = _gammaTable[c.b];
+    }
+}
+
 void LEDController::applyAmbilight(const uint8_t* data, uint8_t hCount, uint8_t vCount) {
     auto& cfg = Config::instance();
 
@@ -150,6 +187,12 @@ void LEDController::applyAmbilight(const uint8_t* data, uint8_t hCount, uint8_t 
     interpolateSide(rightSrc,  vCount, rightC,  cfg.ledRight);
     interpolateSide(bottomSrc, hCount, bottomC, cfg.ledBottom);
     interpolateSide(leftSrc,   vCount, leftC,   cfg.ledLeft);
+
+    // Apply color corrections
+    processColors(topC,    cfg.ledTop);
+    processColors(rightC,  cfg.ledRight);
+    processColors(bottomC, cfg.ledBottom);
+    processColors(leftC,   cfg.ledLeft);
 
     fillStrip(_target, topC, rightC, bottomC, leftC,
               cfg.startCorner, cfg.clockwise,
