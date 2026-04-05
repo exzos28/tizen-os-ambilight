@@ -1,4 +1,4 @@
-var SERVICE_APP_ID = 'org.tizen.example.Service';
+var SERVICE_APP_ID = 'fCAYP0k0uD.Service';
 var buttons = [];
 var focusIndex = 0;
 var debugEnabled = false;
