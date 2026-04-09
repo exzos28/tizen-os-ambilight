@@ -60,12 +60,13 @@ namespace Service
         static readonly object _runLock = new object();
 
         // Returns true on clean stop (_running set to false), false on failure.
-        public static bool Run(string serverHost, Action<string, string> log)
+        // Sends each captured frame to all hosts in serverHosts simultaneously.
+        public static bool Run(string[] serverHosts, Action<string, string> log)
         {
             lock (_runLock)
             {
                 _running = true;
-                log("CaptureStart", "loading libvideoenhance.so");
+                log("CaptureStart", $"targets={string.Join(",", serverHosts)} loading libvideoenhance.so");
 
                 var lib = dlopen("libvideoenhance.so", RTLD_NOW);
                 if (lib == IntPtr.Zero)
@@ -140,7 +141,9 @@ namespace Service
                     $"batches={numBatches} blocksPerCycle={blocksPerCycle} delay={delay}ms");
 
                 using var udp = new UdpClient();
-                var target = new IPEndPoint(IPAddress.Parse(serverHost), Config.UdpPort);
+                var targets = new IPEndPoint[serverHosts.Length];
+                for (int i = 0; i < serverHosts.Length; i++)
+                    targets[i] = new IPEndPoint(IPAddress.Parse(serverHosts[i]), Config.UdpPort);
                 byte[] colors = new byte[totalPoints * 3];
                 byte[] packet = new byte[2 + totalPoints * 3];
                 packet[0] = (byte)hCount;
@@ -194,12 +197,15 @@ namespace Service
 
                     frameCount++;
                     Buffer.BlockCopy(colors, 0, packet, 2, totalPoints * 3);
-                    try { udp.Send(packet, packet.Length, target); }
-                    catch (Exception ex)
+                    foreach (var target in targets)
                     {
-                        udpFailures++;
-                        if (udpFailures % 30 == 1)
-                            log("UdpSendError", $"failures={udpFailures} err={ex.Message}");
+                        try { udp.Send(packet, packet.Length, target); }
+                        catch (Exception ex)
+                        {
+                            udpFailures++;
+                            if (udpFailures % 30 == 1)
+                                log("UdpSendError", $"target={target.Address} failures={udpFailures} err={ex.Message}");
+                        }
                     }
 
                     if (frameCount % 200 == 1)
