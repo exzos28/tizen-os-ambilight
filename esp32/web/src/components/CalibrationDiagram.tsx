@@ -7,7 +7,7 @@ const CORNER_CY = [50, 50, 170, 170]
 const CW_ARROWS  = ['→', '↓', '←', '↑']
 const CCW_ARROWS = ['←', '↑', '→', '↓']
 
-const SIDE_COLORS = ['#f97316', '#22c55e', '#0ea5e9', '#a855f7'] // TOP, RIGHT, BOTTOM, LEFT
+const SIDE_COLORS = ['#ff0000', '#00ff00', '#ffff00', '#0000ff'] // TOP, RIGHT, BOTTOM, LEFT
 
 const SIDES = ['top', 'right', 'bottom', 'left'] as const
 type Side = typeof SIDES[number]

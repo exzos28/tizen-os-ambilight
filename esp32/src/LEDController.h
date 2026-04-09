@@ -34,11 +34,14 @@ public:
     bool     previewActive() const { return millis() < _previewUntil; }
 
 private:
-    static constexpr uint32_t PREVIEW_HOLD_MS = 2000;
+    static constexpr uint32_t PREVIEW_HOLD_MS = 10000;
     static constexpr uint32_t AUTO_OFF_TIMEOUT_MS = 5000;
     LEDController() = default;
 
     void updateGammaTable(float gamma);
+
+    // Log the first `n` and last `n` pixels of `buf` (length `count`).
+    static void logLedDump(const char* tag, const CRGB* buf, uint16_t count, uint8_t n = 4);
 
     // Apply saturation, white balance and gamma to a range of pixels.
     void processColors(CRGB* leds, uint16_t count);

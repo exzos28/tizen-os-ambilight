@@ -152,6 +152,11 @@ void WebPortal::handleSaveLeds() {
     auto& leds = LEDController::instance();
     bool  plain = (cfg.ledMode == 0);
 
+    Log.printf("[Web] saveLeds: mode=%s num_leds=%s brightness=%s\n",
+               plain ? "plain" : "dynamic",
+               _server.hasArg("num_leds") ? _server.arg("num_leds").c_str() : "(none)",
+               _server.hasArg("brightness") ? _server.arg("brightness").c_str() : "(none)");
+
     if (_server.hasArg("num_leds")) {
         uint16_t n = static_cast<uint16_t>(_server.arg("num_leds").toInt());
         if (n > 0) {

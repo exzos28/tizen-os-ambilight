@@ -1,5 +1,6 @@
 #include "LEDController.h"
 #include "Config.h"
+#include "RemoteLogger.h"
 
 CRGB LEDController::_leds[MAX_LEDS];
 CRGB LEDController::_target[MAX_LEDS];
@@ -13,21 +14,35 @@ void LEDController::begin(uint16_t numLeds, uint8_t brightness) {
     _numLeds    = min(numLeds, static_cast<uint16_t>(MAX_LEDS));
     _brightness = brightness;
 
-    FastLED.addLeds<WS2812B, LED_PIN, GRB>(_leds, _numLeds);
+    FastLED.addLeds<WS2811, LED_PIN, BRG>(_leds, _numLeds);
     FastLED.setBrightness(_brightness);
     FastLED.clear(true);
 
     updateGammaTable(Config::instance().gamma);
+//     Log.printf("[LED] begin: driving %d LEDs at brightness %d\n", _numLeds, _brightness);
 }
 
 void LEDController::setNumLeds(uint16_t numLeds) {
-    // Clear all currently active LEDs before resizing so old ones go dark.
-    fill_solid(_leds, _numLeds, CRGB::Black);
+    uint16_t newCount = min(numLeds, static_cast<uint16_t>(MAX_LEDS));
+
+    // Clear at least the full calibrated strip length, not just _numLeds.
+    // showCalibrationPreview() temporarily drives more LEDs than _numLeds
+    // and then restores _numLeds without sending a blank frame, so those
+    // extra LEDs stay physically lit. Using the config total guarantees they go dark.
+    auto& cfg = Config::instance();
+    uint16_t calTotal = (uint16_t)(cfg.ledTop + cfg.ledRight + cfg.ledBottom + cfg.ledLeft);
+    uint16_t clearCount = max({_numLeds, calTotal, newCount});
+    clearCount = min(clearCount, static_cast<uint16_t>(MAX_LEDS));
+
+    Log.printf("[LED] setNumLeds: %d -> %d (clearing %d)\n", _numLeds, newCount, clearCount);
+    fill_solid(_leds, clearCount, CRGB::Black);
+    FastLED[0].setLeds(_leds, clearCount);
     FastLED.show();
 
-    _numLeds = min(numLeds, static_cast<uint16_t>(MAX_LEDS));
+    _numLeds = newCount;
     FastLED[0].setLeds(_leds, _numLeds);
     FastLED.show();
+    Log.printf("[LED] setNumLeds done: driving %d LEDs\n", _numLeds);
 }
 
 void LEDController::setBrightness(uint8_t brightness) {
@@ -37,7 +52,9 @@ void LEDController::setBrightness(uint8_t brightness) {
 }
 
 void LEDController::setColor(uint8_t r, uint8_t g, uint8_t b) {
+    Log.printf("[LED] setColor: rgb(%d,%d,%d) x %d LEDs\n", r, g, b, _numLeds);
     fill_solid(_leds, _numLeds, CRGB(r, g, b));
+    // logLedDump("setColor→strip", _leds, _numLeds);
     FastLED.show();
 }
 
@@ -50,6 +67,12 @@ void LEDController::setColors(const CRGB* colors, uint16_t count) {
 // ---------------------------------------------------------------------------
 // Private helpers
 // ---------------------------------------------------------------------------
+
+void LEDController::logLedDump(const char* tag, const CRGB* buf, uint16_t count, uint8_t /*n*/) {
+    Log.printf("[LED] %s count=%d:\n", tag, count);
+    for (uint16_t i = 0; i < count; i++)
+        Log.printf("  [%3d] rgb(%3d,%3d,%3d)\n", i, buf[i].r, buf[i].g, buf[i].b);
+}
 
 void LEDController::interpolateSide(const uint8_t* src, uint8_t srcCount,
                                     CRGB* dst, uint8_t dstCount) {
@@ -198,7 +221,15 @@ void LEDController::applyAmbilight(const uint8_t* data, uint8_t hCount, uint8_t 
               cfg.startCorner, cfg.clockwise,
               cfg.ledTop, cfg.ledRight, cfg.ledBottom, cfg.ledLeft);
 
-    _lastFrameMs = millis();
+    uint32_t now = millis();
+    static uint32_t _lastAmbilightLogMs = 0;
+    if (now - _lastAmbilightLogMs >= 1000) {
+        _lastAmbilightLogMs = now;
+        uint16_t total = cfg.ledTop + cfg.ledRight + cfg.ledBottom + cfg.ledLeft;
+        // logLedDump("target→strip", _target, total);
+    }
+
+    _lastFrameMs = now;
 }
 
 // ---------------------------------------------------------------------------
@@ -210,14 +241,20 @@ void LEDController::showCalibrationPreview(uint8_t startCorner, bool clockwise,
                                             uint8_t ledBottom, uint8_t ledLeft) {
     _previewUntil = millis() + PREVIEW_HOLD_MS;
 
+    const char* cornerNames[] = { "TL", "TR", "BR", "BL" };
+    Log.printf("[Calib] corner=%s(%d) dir=%s top=%d right=%d bottom=%d left=%d\n",
+               cornerNames[startCorner], startCorner,
+               clockwise ? "CW" : "CCW",
+               ledTop, ledRight, ledBottom, ledLeft);
+
     // Each side gets a distinct color.
-    // Using project's orange/green/blue/purple palette.
     const CRGB sideColors[4] = {
-        CRGB(249, 115,  22),   // TOP    — orange
-        CRGB( 34, 197,  94),   // RIGHT  — green
-        CRGB( 14, 165, 233),   // BOTTOM — blue
-        CRGB(168,  85, 247),   // LEFT   — purple
+        CRGB(255,   0,   0),   // TOP    — red
+        CRGB(  0, 255,   0),   // RIGHT  — green
+        CRGB(255, 255,   0),   // BOTTOM — yellow
+        CRGB(  0,   0, 255),   // LEFT   — blue
     };
+    const char* sideNames[]  = { "TOP(red)", "RIGHT(green)", "BOTTOM(yellow)", "LEFT(blue)" };
 
     static CRGB topC   [MAX_LEDS / 4 + 1];
     static CRGB rightC [MAX_LEDS / 4 + 1];
@@ -240,7 +277,29 @@ void LEDController::showCalibrationPreview(uint8_t startCorner, bool clockwise,
               startCorner, clockwise,
               ledTop, ledRight, ledBottom, ledLeft);
 
-    // Mark the very first strip LED white so the user can locate the start.
+    // Log the resulting strip layout: which LEDs got which side's color.
+    const CRGB* sideArrays[4] = { topC, rightC, bottomC, leftC };
+    uint8_t     sideCounts[4] = { ledTop, ledRight, ledBottom, ledLeft };
+    uint16_t pos = 0;
+    if (clockwise) {
+        for (int s = 0; s < 4; s++) {
+            int si = (startCorner + s) % 4;
+            if (sideCounts[si] > 0)
+                Log.printf("[Calib]   LED %3d..%3d → %s\n",
+                           pos, pos + sideCounts[si] - 1, sideNames[si]);
+            pos += sideCounts[si];
+        }
+    } else {
+        for (int s = 0; s < 4; s++) {
+            int si = (startCorner + 3 - s) % 4;
+            if (sideCounts[si] > 0)
+                Log.printf("[Calib]   LED %3d..%3d → %s (reversed)\n",
+                           pos, pos + sideCounts[si] - 1, sideNames[si]);
+            pos += sideCounts[si];
+        }
+    }
+
+    // LED #0 = white, helps locate the physical start of the strip.
     _leds[0] = CRGB::White;
 
     FastLED.show();
