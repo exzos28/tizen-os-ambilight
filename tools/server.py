@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """HTTP + UDP server with tkinter GUI — shows edge LED pixels around a rectangle."""
 
+import argparse
 import json
 import socket
 import threading
@@ -10,10 +11,13 @@ from datetime import datetime, timezone
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from tkinter import scrolledtext
 
-HTTP_PORT = 9000
-UDP_PORT = 9001
-DISCOVERY_PORT = 9003
+HTTP_PORT       = 9000
+UDP_PORT        = 9001
+RELAY_PORT      = 9002
+DISCOVERY_PORT  = 9003
 DISCOVERY_MAGIC = "AMBILIGHT_DISCOVER"
+
+RELAY_INTERVAL  = 20   # seconds between subscription renewals
 
 # Shared state
 latest_edges = None    # (hCount, vCount, rgb_bytes)
@@ -152,35 +156,61 @@ def update_fps():
         server_fps = 0
 
 
-def udp_listener():
-    """Receive edge packets: [1B hCount][1B vCount][RGB * (h+v)*2]."""
+def udp_listener(relay_host=None):
+    """Receive edge packets: [1B hCount][1B vCount][RGB * (h+v)*2].
+
+    If relay_host is set, subscribe to the ESP32 relay port and receive
+    forwarded frames from it instead of (or in addition to) direct TV frames.
+    """
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     sock.bind(("0.0.0.0", UDP_PORT))
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 64 * 1024)
+    sock.settimeout(1.0)
     print(f"UDP listener on port {UDP_PORT}")
 
+    last_sub = 0.0
+
+    if relay_host:
+        print(f"Relay mode: subscribing to {relay_host}:{RELAY_PORT} "
+              f"(renewing every {RELAY_INTERVAL}s)")
+
     while True:
+        # Periodically renew relay subscription (sends from our UDP_PORT so ESP32
+        # relays back to this same port and the listener below receives it).
+        if relay_host:
+            now = time.monotonic()
+            if now - last_sub >= RELAY_INTERVAL:
+                try:
+                    sock.sendto(b'\x01', (relay_host, RELAY_PORT))
+                    last_sub = now
+                except Exception as e:
+                    print(f"Relay subscribe error: {e}")
+
         try:
             data, addr = sock.recvfrom(65535)
-            if len(data) < 3:
-                continue
-
-            hc = data[0]
-            vc = data[1]
-            total = (hc + vc) * 2
-            rgb = data[2:]
-
-            if len(rgb) < total * 3:
-                continue
-
-            global latest_edges, frame_count
-            with lock:
-                frame_count += 1
-                latest_edges = (hc, vc, rgb[:total * 3])
-                update_fps()
-
+        except socket.timeout:
+            continue
         except Exception as e:
             print(f"UDP error: {e}")
+            continue
+
+        if len(data) < 3:
+            continue
+
+        hc = data[0]
+        vc = data[1]
+        total = (hc + vc) * 2
+        rgb = data[2:]
+
+        if len(rgb) < total * 3:
+            continue
+
+        global latest_edges, frame_count
+        with lock:
+            frame_count += 1
+            latest_edges = (hc, vc, rgb[:total * 3])
+            update_fps()
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -261,14 +291,28 @@ def start_http():
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="TV Capture Server")
+    parser.add_argument(
+        "--relay-host",
+        default=None,
+        metavar="ESP32_IP",
+        help=(
+            f"Subscribe to ESP32 relay (port {RELAY_PORT}) and receive forwarded "
+            "ambilight frames. Example: --relay-host 192.168.1.42"
+        ),
+    )
+    args = parser.parse_args()
+
     gui = Gui()
     gui_ref = gui
 
     threading.Thread(target=start_http, daemon=True).start()
-    threading.Thread(target=udp_listener, daemon=True).start()
+    threading.Thread(target=udp_listener, args=(args.relay_host,), daemon=True).start()
     threading.Thread(target=discovery_listener, daemon=True).start()
 
     local_ip = get_local_ip()
     gui.add_log(f"HTTP:{HTTP_PORT}  UDP:{UDP_PORT}  DISCOVERY:{DISCOVERY_PORT}")
     gui.add_log(f"Local IP: {local_ip} (advertised to TV)")
+    if args.relay_host:
+        gui.add_log(f"Relay: subscribing to {args.relay_host}:{RELAY_PORT}")
     gui.run()
