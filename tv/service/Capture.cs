@@ -114,25 +114,31 @@ namespace Service
                 var positions = new (int x, int y)[totalPoints];
                 int idx = 0;
 
+                int inset = Config.EdgeInsetPx;
+
+                // Top: L→R (inset from top edge)
                 for (int i = 0; i < hCount; i++)
                 {
                     int x = (i * fullW / hCount) + (fullW / hCount / 2) - captW / 2;
-                    positions[idx++] = (Clamp(x, 0, fullW - captW), 0);
+                    positions[idx++] = (Clamp(x, 0, fullW - captW), Clamp(inset, 0, fullH - captH));
                 }
+                // Right: T→B (inset from right edge)
                 for (int i = 0; i < vCount; i++)
                 {
                     int y = (i * fullH / vCount) + (fullH / vCount / 2) - captH / 2;
-                    positions[idx++] = (fullW - captW * 2, Clamp(y, 0, fullH - captH));
+                    positions[idx++] = (Clamp(fullW - captW - inset, 0, fullW - captW), Clamp(y, 0, fullH - captH));
                 }
+                // Bottom: R→L (inset from bottom edge)
                 for (int i = 0; i < hCount; i++)
                 {
                     int x = ((hCount - 1 - i) * fullW / hCount) + (fullW / hCount / 2) - captW / 2;
-                    positions[idx++] = (Clamp(x, 0, fullW - captW), fullH - captH);
+                    positions[idx++] = (Clamp(x, 0, fullW - captW), Clamp(fullH - captH - inset, 0, fullH - captH));
                 }
+                // Left: B→T (inset from left edge)
                 for (int i = 0; i < vCount; i++)
                 {
                     int y = ((vCount - 1 - i) * fullH / vCount) + (fullH / vCount / 2) - captH / 2;
-                    positions[idx++] = (captW, Clamp(y, 0, fullH - captH));
+                    positions[idx++] = (Clamp(inset, 0, fullW - captW), Clamp(y, 0, fullH - captH));
                 }
 
                 int numBatches = (totalPoints + blocksPerCycle - 1) / blocksPerCycle;

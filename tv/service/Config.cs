@@ -13,6 +13,10 @@ namespace Service
         public const int TargetCaptureW = 4;
         public const int TargetCaptureH = 3;
 
+        // How many pixels to inset from each screen edge when placing sample points.
+        // 0 = sample right at the edge; 250 = sample 250 px inward from each side.
+        public const int EdgeInsetPx = 250;
+
         // Delay (ms) between set_position and get_pixel.
         // HW reports 20ms. Lower values = faster but may glitch.
         // Set to -1 to use HW-reported delay.
