@@ -9,6 +9,7 @@ DIY ambilight for Samsung Tizen TVs — captures edge colors directly from the T
 | TV Model | Tizen Version | Status |
 |----------|--------------|--------|
 | Samsung QN90D | Tizen 9.0 (SDP) | ✅ Confirmed working |
+| Samsung Q60D | Tizen 9.0 (SDP) | ✅ Confirmed working |
 
 Don't see your TV? Open a PR adding your model to this table — see [Contributing](docs/CONTRIBUTING.md).
 
