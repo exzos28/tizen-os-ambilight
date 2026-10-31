@@ -24,7 +24,7 @@ The TV finds the ESP32 automatically via UDP broadcast — no IP configuration n
 
 - No extra hardware on the video path: no HDMI splitter, no camera
 - Works with DRM-protected content in built-in apps
-- Web UI on the ESP32: LED layout calibration, brightness, gamma, saturation, white balance
+- Web UI on the ESP32: LED layout calibration, brightness, gamma, saturation, white balance, optional power limit
 - Wi-Fi setup through a captive portal, OTA firmware updates, Telnet log
 - Plain color mode when ambilight is off
 - One TV can drive several ESP32 controllers at once (give each a different IP — see [Installation](docs/INSTALL.md#2-connect-to-wi-fi))

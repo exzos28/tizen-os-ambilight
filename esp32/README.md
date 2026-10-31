@@ -15,17 +15,21 @@ src/
   NetworkManager.*        Wi-Fi STA, AP + captive-portal fallback, preferred IP
   UDPReceiver.*           Color frames on UDP 9001
   DiscoveryResponder.*    Answers TV discovery on UDP 9003
-  LEDController.*         Interpolation, color correction, strip mapping, smoothing
+  LEDController.*         Interpolation, color correction, strip mapping, smoothing, power limit
+  StripLayout.h           Strip traversal + interpolation math (no Arduino deps, unit-tested)
+  PowerLimit.h            Power estimate + brightness scaling (no Arduino deps, unit-tested)
   WebPortal.*             HTTP server: web UI and JSON API
   OTAManager.*            Arduino OTA
   RemoteLogger.*          Log to Serial + Telnet (port 2323)
 web/                      React + Vite web UI (built into a single HTML file)
+test/                     Host unit tests (pio test -e native)
 ```
 
 ## Commands
 
 ```sh
 pio run                   # build (also builds the web UI; needs npm install in web/ once)
+pio test -e native        # host unit tests (src/StripLayout.h, src/PowerLimit.h)
 pio run -t upload         # flash over USB
 pio run -e ota -t upload  # flash over Wi-Fi (ambilight.local, see [env:ota] in platformio.ini)
 pio device monitor        # serial log, 115200 baud
@@ -43,5 +47,4 @@ nc <esp32-ip> 2323        # remote log over Telnet
 |----------|------|-----|
 | `LED_PIN`, `MAX_LEDS` | `src/LEDController.h` | [HARDWARE.md](../docs/HARDWARE.md#notes) |
 | Color order (`addLeds<WS2811, LED_PIN, BRG>`) | `src/LEDController.cpp` | [HARDWARE.md](../docs/HARDWARE.md#led-color-order) |
-| `PREFERRED_IP_LAST_OCTET` | `src/NetworkManager.h` | [INSTALL.md](../docs/INSTALL.md#2-connect-to-wi-fi) |
 | `UDP_PORT` | `src/UDPReceiver.h` | [NETWORKING.md](../docs/NETWORKING.md#ports) |

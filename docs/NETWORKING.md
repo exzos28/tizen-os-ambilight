@@ -107,12 +107,12 @@ All `POST` endpoints take `application/x-www-form-urlencoded` bodies and return 
 | GET | `/` | — | Web UI (single HTML file, served gzipped from flash) |
 | GET | `/status` | — | `ip`, `mode` (`STA`/`AP`), `ssid`, `rssi`, `connected`, `gateway`, `preferred_last_oct` |
 | GET | `/config` | — | Every setting from the table in [ARCHITECTURE.md](ARCHITECTURE.md#esp32-settings-nvs) (passwords excluded) plus `max_leds` |
-| GET | `/metrics` | — | `heap_free`, `heap_total`, `heap_min`, `uptime_s`, `cpu_mhz` |
-| POST | `/save/leds` | `num_leds` (1–1500), `brightness` (0–255), `color` (`#rrggbb`), `gamma` (0.5–3), `saturation` (0–2), `wb_r`, `wb_g`, `wb_b` (0–255) | Saved. `brightness` applies immediately; `num_leds` and `color` are shown right away only in plain mode; gamma, saturation and white balance apply to the next TV frame |
+| GET | `/metrics` | — | `heap_free`, `heap_total`, `heap_min`, `uptime_s`, `cpu_mhz`, `power_w` (estimated LED power of the last frame), `power_limited` |
+| POST | `/save/leds` | `num_leds` (1–1500), `brightness` (0–255), `color` (`#rrggbb`), `gamma` (0.5–3), `saturation` (0–2), `wb_r`, `wb_g`, `wb_b` (0–255), `power_limit_w` (0–2000, 0 = off), `pixel_watts` (0.05–5) | Saved. `brightness` applies immediately; `num_leds` and `color` are shown right away only in plain mode; gamma, saturation and white balance apply to the next TV frame |
 | POST | `/save/calibration` | `led_top`, `led_right`, `led_bottom`, `led_left` (0–255), `start_corner` (0–3), `clockwise` (0/1) | Saves the layout, sets `num_leds` to the sum of the sides, shows the 10 s preview (then the strip returns to the current mode) |
 | POST | `/preview/calibration` | Same as above | Shows the preview without saving |
 | POST | `/save/mode` | `led_mode` (0 = plain, 1 = dynamic) | Switches mode |
-| POST | `/save/network` | `wifi_ssid`, `wifi_pass`, `ota_host`, `ota_pass` (empty passwords keep the current ones) | Saves and **restarts** the ESP32 |
+| POST | `/save/network` | `wifi_ssid`, `wifi_pass`, `ota_host`, `ota_pass` (empty passwords keep the current ones), `ip_octet` (0 = DHCP, 2–254) | Saves and **restarts** the ESP32 |
 
 The API has no authentication — anyone on the LAN can change settings, including Wi-Fi credentials.
 

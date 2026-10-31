@@ -161,9 +161,9 @@ driven in `loop()`.
 ### Networking (`NetworkManager`)
 
 - **STA mode**: connects via DHCP, then switches to a static IP with the last octet
-  `PREFERRED_IP_LAST_OCTET` (245) in the gateway's subnet, reusing the gateway and mask.
-  This makes the address predictable without a DHCP reservation, but nothing checks that
-  the address is free. Set the constant to `0` to keep the DHCP address.
+  `preferredLastOctet` (setting, default 245) in the gateway's subnet, reusing the gateway
+  and mask. This makes the address predictable without a DHCP reservation, but nothing
+  checks that the address is free. `0` keeps the DHCP address.
 - **AP mode**: opens the open network `ambilight-setup` and a captive-portal DNS that
   resolves every name to 192.168.4.1. If Wi-Fi credentials are saved (the AP is only a
   fallback, e.g. the router was still booting), it runs in `WIFI_AP_STA` mode and retries
@@ -260,3 +260,6 @@ Stored in the `ambilight` NVS namespace, editable in the web UI (`esp32/src/Conf
 | `gamma` | `gamma` | 2.2 | Gamma correction (UI range 0.5–3.0) |
 | `saturation` | `saturation` | 1.0 | Saturation multiplier (UI range 0–2) |
 | `whiteBalanceR/G/B` | `wb_r` / `wb_g` / `wb_b` | 255 | Per-channel scale |
+| `preferredLastOctet` | `ip_octet` | 245 | Static IP last octet in the router's subnet; 0 = DHCP; valid 0, 2–254 |
+| `powerLimitW` | `power_limit_w` | 0 | Max estimated strip power in W; 0 = no limit (0–2000) |
+| `pixelWatts` | `pixel_watts` | 0.72 | Power of one LED pixel at full white, W (0.05–5) |

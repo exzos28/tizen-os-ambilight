@@ -81,9 +81,9 @@ pio run -e ota -t upload
 2. Connect a phone or laptop to it. The captive portal opens automatically; if it doesn't, open `http://192.168.4.1`.
 3. On the *WiFi* tab enter your network's SSID and password and save. The ESP32 restarts and joins your network.
 
-**Finding the device IP.** After connecting, the ESP32 switches to the address `<your subnet>.245` (e.g. `192.168.1.245`) so it stays predictable without a DHCP reservation. This address is set statically, without checking whether another device already uses it:
-- if `.245` is taken on your network, change `PREFERRED_IP_LAST_OCTET` in `esp32/src/NetworkManager.h`, or set it to `0` to keep the DHCP address;
-- **with several ESP32 controllers**, give each one a different value (or `0`) before flashing — otherwise they all take the same address.
+**Finding the device IP.** After connecting, the ESP32 switches to the address `<your subnet>.245` (e.g. `192.168.1.245`) so it stays predictable without a DHCP reservation. This address is set statically, without checking whether another device already uses it. Change it on the *WiFi* tab (*Static IP — last number*):
+- if `.245` is taken on your network, pick another number (2–254), or `0` to keep the address the router assigns (DHCP);
+- **with several ESP32 controllers**, give each one its own number (or `0`) — otherwise they all take the same address.
 
 The current IP is also printed in the serial log and in the Telnet log (port 2323).
 
@@ -107,6 +107,7 @@ The tab has two modes, switched at the top: **Dynamic** (follows the TV) and **P
 Each change lights a 10-second preview on the strip: **top red, right green, bottom yellow, left blue**, and the first LED **white**. If a side shows the wrong color, the corner or direction is wrong.
 
 4. **Color correction** (optional): gamma (default 2.2), saturation boost, per-channel white balance. They affect the colors coming from the TV and persist across reboots.
+5. **Power limit** (optional, both modes): set *Max power* to what your PSU can deliver (with some headroom) and *Power per LED pixel* from your strip's datasheet — watts per meter ÷ pixels per meter, e.g. 14.4 W/m ÷ 20 = 0.72 W for a 12 V WS2811 strip with 60 LEDs/m. When a frame would exceed the limit, the brightness is lowered for that frame. The *Status* tab shows the estimated power. It is an estimate, not a measurement — keep a fuse anyway (see [HARDWARE.md](HARDWARE.md#power)).
 
 In **Plain** mode the tab shows the LED count, brightness and the color picker; the strip shows that color. In **Dynamic** mode the strip stays dark until frames arrive and fades to black 5 s after the last one.
 
