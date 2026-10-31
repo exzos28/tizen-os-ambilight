@@ -59,11 +59,6 @@ export function saveCalibration(data: CalibrationRequest): Promise<SaveResponse>
   return request<SaveResponse>('/save/calibration', { ...POST_FORM, body: toFormBody(data) })
 }
 
-/** Temporarily lights the strip to visualise the current calibration. Does not save. */
-export function previewCalibration(data: CalibrationRequest): Promise<SaveResponse> {
-  return request<SaveResponse>('/preview/calibration', { ...POST_FORM, body: toFormBody(data) })
-}
-
 /** Switches between plain (0) and dynamic (1) mode. */
 export function saveMode(ledMode: number): Promise<SaveResponse> {
   return request<SaveResponse>('/save/mode', { ...POST_FORM, body: toFormBody({ led_mode: ledMode }) })
