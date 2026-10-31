@@ -28,6 +28,7 @@ The TV finds the ESP32 automatically via UDP broadcast — no IP configuration n
 - Wi-Fi setup through a captive portal, OTA firmware updates, Telnet log
 - Plain color mode when ambilight is off
 - One TV can drive several ESP32 controllers at once (give each a different IP — see [Installation](docs/INSTALL.md#2-connect-to-wi-fi))
+- Optional output to a [HyperHDR](docs/HYPERHDR.md) server, to drive WLED, Hyperk, Hue and other devices HyperHDR supports — **untested on a TV yet**
 
 ## Supported TVs
 
@@ -60,6 +61,7 @@ Support depends on the TV's video processor, not only on the Tizen version. Trie
 | [Hardware](docs/HARDWARE.md) | Wiring schematic, component list, photos |
 | [Architecture](docs/ARCHITECTURE.md) | Components, data flow, configuration reference |
 | [Networking](docs/NETWORKING.md) | Ports, UDP frame format, discovery, ESP32 HTTP API |
+| [HyperHDR](docs/HYPERHDR.md) | Streaming to a HyperHDR server instead of / besides the ESP32 (untested on a TV) |
 | [Research](docs/RESEARCH.md) | How the capture API was found, rejected approaches |
 | [TV service](tv/README.md) | Capture loop and tuning on the TV side |
 | [Tools](tools/README.md) | Desktop frame viewer and LED test pattern generator |

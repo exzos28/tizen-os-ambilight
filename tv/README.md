@@ -2,7 +2,7 @@
 
 | Path | What |
 |------|------|
-| `service/` | .NET Tizen service that captures screen edge colors and streams them to the ESP32 over UDP |
+| `service/` | .NET Tizen service that captures screen edge colors and streams them to ESP32 controllers (UDP) and, optionally, a HyperHDR server (TCP) |
 | `ui/` | Launcher web app with *Start* / *Stop* / *Debug* buttons |
 
 Both apps ship as one hybrid package — building `ui/` also builds `service/`. Build, signing and installation: [docs/INSTALL.md § TV apps](../docs/INSTALL.md#4-tv-apps).
@@ -35,7 +35,7 @@ loop:
         read_pixel(0..N-1) -> RGB         -- results for the current batch
         set_position(0..N-1, next batch)  -- start measuring the next one
         sleep(delay)                      -- wait for HW to measure
-    send all colors via UDP to every discovered ESP32
+    hand the frame to the outputs (ESP32 UDP, HyperHDR)
 ```
 
 ### Performance
@@ -66,9 +66,17 @@ Sample point counts, edge inset and capture delay are compile-time constants in 
 
 ```
 service/
-  Service_App.cs      App lifecycle, discovery (re-run on Start), capture retries, HTTP event log
-  Capture.cs          HW PPI capture loop via libvideoenhance.so
-  Config.cs           Ports, discovery settings, sample points, edge inset, delay
+  Service_App.cs      App lifecycle, outputs, capture retries, HTTP event log
+  Capture.cs          HW PPI capture loop via libvideoenhance.so → EdgeFrame
+  Discovery.cs        Background UDP discovery of ESP32s / tools/server.py
+  Esp32Output.cs      UDP frames to discovered ESP32s
+  HyperHdrOutput.cs   HyperHDR FlatBuffers client (untested on a TV, see docs/HYPERHDR.md)
+  HyperHdrProtocol.cs FlatBuffers messages, written by hand against HyperHDR's schema
+  EdgeImage.cs        Edge samples → small RGB image for HyperHDR
+  OutputConfig.cs     Parses res/ambilight.json
+  EdgeFrame.cs        One frame of edge samples
+  Config.cs           Ports, discovery timing, sample points, edge inset, delay
+  res/ambilight.json  Output settings — edit before building
   tizen-manifest.xml  Manifest: on-boot service, contentanalysis privilege
 
 ui/
