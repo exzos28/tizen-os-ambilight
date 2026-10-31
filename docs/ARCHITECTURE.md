@@ -263,6 +263,6 @@ Stored in the `ambilight` NVS namespace, editable in the web UI (`esp32/src/Conf
 | `gamma` | `gamma` | 2.2 | Gamma correction (UI range 0.5–3.0) |
 | `saturation` | `saturation` | 1.0 | Saturation multiplier (UI range 0–2) |
 | `whiteBalanceR/G/B` | `wb_r` / `wb_g` / `wb_b` | 255 | Per-channel scale |
-| `preferredLastOctet` | `ip_octet` | 245 | Static IP last octet in the router's subnet; 0 = DHCP; valid 0, 2–254 |
+| `preferredLastOctet` | `ip_octet` | 245 | Static IP last octet in the router's subnet; 0 = DHCP; valid 0–254 (checked against the real gateway/mask at connect) |
 | `powerLimitW` | `power_limit_w` | 0 | Max estimated strip power in W; 0 = no limit (0–2000) |
 | `pixelWatts` | `pixel_watts` | 0.72 | Power of one LED pixel at full white, W (0.05–5) |

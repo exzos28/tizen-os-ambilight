@@ -82,7 +82,7 @@ pio run -e ota -t upload
 3. On the *WiFi* tab enter your network's SSID and password and save. The ESP32 restarts and joins your network.
 
 **Finding the device IP.** After connecting, the ESP32 switches to the address `<your subnet>.245` (e.g. `192.168.1.245`) so it stays predictable without a DHCP reservation. If that address doesn't fit the router's network (e.g. it is the router's own address or outside a small subnet), the ESP32 keeps the DHCP address and logs why. It does not check whether another device already uses the address. Change the number on the *WiFi* tab (*Static IP — last number*):
-- if `.245` is taken on your network, pick another number (2–254), or `0` to keep the address the router assigns (DHCP);
+- if `.245` is taken on your network, pick another number (1–254), or `0` to keep the address the router assigns (DHCP);
 - **with several ESP32 controllers**, give each one its own number (or `0`) — otherwise they all take the same address.
 
 The current IP is also printed in the serial log and in the Telnet log (port 2323).
