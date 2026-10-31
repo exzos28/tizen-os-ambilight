@@ -8,10 +8,31 @@ namespace Service
     {
         #region Native interop
 
-        // NativeLibrary instead of raw dlopen/dlerror: dlerror() can come back empty when
-        // the runtime itself touches the loader in between, which used to turn every load
-        // failure into "unknown". NativeLibrary.Load throws with the real loader message.
+        // Loaded with dlopen(RTLD_NOW) so unresolved dependencies fail here, at load time,
+        // instead of aborting the process on the first call (NativeLibrary.Load uses
+        // RTLD_LAZY). If it fails, NativeLibrary.Load is used only to get a reliable error
+        // message — dlerror() can come back empty when the runtime touches the loader in
+        // between, which used to turn every failure into "unknown".
+        [DllImport("libdl.so.2")] static extern IntPtr dlopen(string filename, int flags);
+        [DllImport("libdl.so.2")] static extern IntPtr dlerror();
+        const int RTLD_NOW = 2;
         const string LibraryName = "libvideoenhance.so";
+
+        static IntPtr LoadLibrary(out string error)
+        {
+            error = null;
+            IntPtr lib = dlopen(LibraryName, RTLD_NOW);
+            if (lib != IntPtr.Zero) return lib;
+
+            error = Marshal.PtrToStringAnsi(dlerror());
+            try
+            {
+                NativeLibrary.Free(NativeLibrary.Load(LibraryName));
+                error ??= "dlopen(RTLD_NOW) failed — unresolved symbols in a dependency?";
+            }
+            catch (Exception ex) { error = ex.Message; }
+            return IntPtr.Zero;
+        }
 
         // Returns the first export found among the given names (firmware versions differ:
         // ppi_ve_* vs ve_*), or null.
@@ -70,11 +91,10 @@ namespace Service
                 _running = true;
                 log("CaptureStart", $"loading {LibraryName}");
 
-                IntPtr lib;
-                try { lib = NativeLibrary.Load(LibraryName); }
-                catch (Exception ex)
+                IntPtr lib = LoadLibrary(out string loadError);
+                if (lib == IntPtr.Zero)
                 {
-                    log("CaptureError", $"loading {LibraryName} failed: {ex.Message}");
+                    log("CaptureError", $"loading {LibraryName} failed: {loadError}");
                     return false;
                 }
 
