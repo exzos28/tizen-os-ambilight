@@ -105,7 +105,7 @@ All `POST` endpoints take `application/x-www-form-urlencoded` bodies and return 
 | Method | Path | Fields | Effect |
 |--------|------|--------|--------|
 | GET | `/` | — | Web UI (single HTML file, served gzipped from flash) |
-| GET | `/status` | — | `ip`, `mode` (`STA`/`AP`), `ssid`, `rssi`, `connected`, `gateway` |
+| GET | `/status` | — | `version` (firmware), `ip`, `mode` (`STA`/`AP`), `ssid`, `rssi`, `connected`, `gateway` |
 | GET | `/config` | — | Every setting from the table in [ARCHITECTURE.md](ARCHITECTURE.md#esp32-settings-nvs) (passwords excluded) plus `max_leds` |
 | GET | `/metrics` | — | `heap_free`, `heap_total`, `heap_min`, `uptime_s`, `cpu_mhz`, `power_w` (estimated LED power of the last frame), `power_limited` |
 | POST | `/save/leds` | `num_leds` (1–1500), `brightness` (0–255), `color` (`#rrggbb`), `gamma` (0.5–3), `saturation` (0–2), `wb_r`, `wb_g`, `wb_b` (0–255), `power_limit_w` (0–2000, 0 = off), `pixel_watts` (0.05–5) | Saved. `brightness`, `power_limit_w` and `pixel_watts` apply immediately (the strip is redrawn in both modes); `num_leds` and `color` are shown right away only in plain mode; gamma, saturation and white balance apply to the next TV frame |
