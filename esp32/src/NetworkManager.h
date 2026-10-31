@@ -17,7 +17,11 @@ public:
                     uint32_t timeoutMs = 12000);
 
     // Starts an open access point + captive-portal DNS.
-    void startAP(const String& ssid);
+    // retryStation: saved Wi-Fi credentials exist, so the AP is only a fallback
+    // (e.g. the router was still booting after a power cut). The device then
+    // restarts to retry the station connection once no client has been connected
+    // to the AP for AP_RETRY_MS.
+    void startAP(const String& ssid, bool retryStation);
 
     // Must be called every loop() iteration when in AP mode.
     void handle();
@@ -27,7 +31,11 @@ public:
     String mode()        const;   // "STA" | "AP"
 
 private:
+    static constexpr uint32_t AP_RETRY_MS = 120000;
+
     NetworkManager() = default;
-    bool      _apMode = false;
+    bool      _apMode       = false;
+    bool      _retryStation = false;
+    uint32_t  _apIdleSince  = 0;   // last time the AP had a client (or AP start)
     DNSServer _dns;
 };

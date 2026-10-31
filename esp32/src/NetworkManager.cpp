@@ -1,4 +1,5 @@
 #include "NetworkManager.h"
+#include "RemoteLogger.h"
 
 NetworkManager& NetworkManager::instance() {
     static NetworkManager inst;
@@ -34,7 +35,7 @@ bool NetworkManager::connectSTA(const String& ssid, const String& password,
     return !_apMode;
 }
 
-void NetworkManager::startAP(const String& ssid) {
+void NetworkManager::startAP(const String& ssid, bool retryStation) {
     WiFi.mode(WIFI_AP);
     WiFi.softAP(ssid.c_str());
 
@@ -42,11 +43,26 @@ void NetworkManager::startAP(const String& ssid) {
     // popup on Android, iOS, Windows, and macOS automatically.
     _dns.start(53, "*", WiFi.softAPIP());
 
-    _apMode = true;
+    _apMode       = true;
+    _retryStation = retryStation;
+    _apIdleSince  = millis();
 }
 
 void NetworkManager::handle() {
-    if (_apMode) _dns.processNextRequest();
+    if (!_apMode) return;
+    _dns.processNextRequest();
+
+    if (!_retryStation) return;
+    uint32_t now = millis();
+    if (WiFi.softAPgetStationNum() > 0) {
+        _apIdleSince = now;   // someone is configuring the device — don't interrupt
+        return;
+    }
+    if (now - _apIdleSince >= AP_RETRY_MS) {
+        Log.println("[WiFi] AP idle — restarting to retry the saved network");
+        delay(100);
+        ESP.restart();
+    }
 }
 
 bool NetworkManager::isConnected() const {
