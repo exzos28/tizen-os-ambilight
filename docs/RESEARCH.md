@@ -31,7 +31,7 @@ int ppi_ve_set_rgb_measure_position(int idx, int x, int y);
 
 // 3. Read average RGB at position
 int ppi_ve_get_rgb_measure_pixel(int idx, VEPPIRgbMeasure_t *rgb);
-// Returns: mean_R, mean_G, mean_B (0-255)
+// Returns: mean_R, mean_G, mean_B — 10-bit (0-1023)
 ```
 
 Alternative symbol names: `ve_get_rgb_measure_condition`, `ve_set_rgb_measure_position`, `ve_get_rgb_measure_pixel`.
@@ -49,12 +49,12 @@ struct VEPPIRgbMeasureInfo_t {
 };
 
 struct VEPPIRgbMeasure_t {
-    int mean_R, mean_G, mean_B; // average RGB within the block
+    int mean_R, mean_G, mean_B; // average RGB within the block, 10-bit (0-1023)
     int lowInputLagOnOff;
 };
 ```
 
-### Architecture
+### First prototype
 
 ```
 [libvideoenhance.so] — hardware PPI in the video processor
@@ -67,6 +67,12 @@ struct VEPPIRgbMeasure_t {
         | UDP
 [server.py] — desktop GUI ambilight visualization
 ```
+
+The current version samples 14 points (4 per horizontal edge, 3 per vertical) for ~7 FPS and lets the ESP32 interpolate between them — see [ARCHITECTURE.md](ARCHITECTURE.md#capture-pipeline-capturecs).
+
+### Hardware availability
+
+The functions exist in `libvideoenhance.so` on every tested model, but the measurement block itself depends on the SoC. On a Q6F (Q4 Lite processor) `ppi_ve_get_rgb_measure_condition` returns an error, so this method does not work there ([#2](https://github.com/exzos28/tizen-os-ambilight/issues/2)). A software fallback through `libcapi-video-capture.so` is being explored; on that TV the library is present but `dlopen` from a service app fails.
 
 ### Measured TV parameters
 - Resolution: 3840x2160 (4K)
