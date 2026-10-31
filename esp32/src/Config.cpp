@@ -1,4 +1,5 @@
 #include "Config.h"
+#include "LEDController.h"   // MAX_LEDS
 
 Config& Config::instance() {
     static Config inst;
@@ -28,6 +29,17 @@ void Config::begin() {
     whiteBalanceR = _prefs.getUChar ("wb_r",       255);
     whiteBalanceG = _prefs.getUChar ("wb_g",       255);
     whiteBalanceB = _prefs.getUChar ("wb_b",       255);
+    sanitize();
+}
+
+void Config::sanitize() {
+    if (!isfinite(gamma))      gamma = 2.2f;
+    if (!isfinite(saturation)) saturation = 1.0f;
+    gamma       = constrain(gamma,      0.5f, 3.0f);
+    saturation  = constrain(saturation, 0.0f, 2.0f);
+    numLeds     = constrain(numLeds, (uint16_t)1, MAX_LEDS);
+    if (startCorner > 3) startCorner = 0;
+    if (ledMode > 1)     ledMode = 1;
 }
 
 void Config::reset() {
@@ -37,6 +49,7 @@ void Config::reset() {
 }
 
 void Config::save() {
+    sanitize();
     _prefs.putString("wifi_ssid",   wifiSSID);
     _prefs.putString("wifi_pass",   wifiPassword);
     _prefs.putString("ota_host",    otaHostname);
