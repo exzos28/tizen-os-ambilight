@@ -1,5 +1,6 @@
 #include "NetworkManager.h"
 #include "RemoteLogger.h"
+#include "StaticIp.h"
 
 NetworkManager& NetworkManager::instance() {
     static NetworkManager inst;
@@ -23,12 +24,22 @@ bool NetworkManager::connectSTA(const String& ssid, const String& password,
     }
 
     if (WiFi.status() == WL_CONNECTED && preferredLastOctet != 0) {
-        // Build preferred IP from router's gateway prefix + our desired last octet.
-        // e.g. gateway 192.168.1.1 → preferred IP 192.168.1.245
+        // Switch to <gateway prefix>.<preferredLastOctet>, e.g. 192.168.1.1 → 192.168.1.245,
+        // unless that address can't work on this network (then keep the DHCP address).
         IPAddress gw = WiFi.gatewayIP();
         IPAddress sn = WiFi.subnetMask();
-        IPAddress preferred(gw[0], gw[1], gw[2], preferredLastOctet);
-        WiFi.config(preferred, gw, sn);
+        uint32_t preferred = 0;
+        const char* problem = StaticIp::preferredAddress(
+            StaticIp::pack(gw[0], gw[1], gw[2], gw[3]),
+            StaticIp::pack(sn[0], sn[1], sn[2], sn[3]),
+            preferredLastOctet, preferred);
+        if (problem) {
+            Log.printf("[WiFi] Static IP .%u not used (%s) — keeping DHCP address %s\n",
+                       preferredLastOctet, problem, WiFi.localIP().toString().c_str());
+        } else {
+            WiFi.config(IPAddress(preferred >> 24, (preferred >> 16) & 0xFF, (preferred >> 8) & 0xFF, preferred & 0xFF),
+                        gw, sn);
+        }
     }
 
     _apMode = (WiFi.status() != WL_CONNECTED);
