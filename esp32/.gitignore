@@ -6,6 +6,7 @@
 
 # Generated — do not commit
 src/web_ui.h
+release/
 
 
 # macOS

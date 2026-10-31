@@ -38,9 +38,14 @@ jobs:
       - name: Install PlatformIO
         run: pip install platformio
 
-      - name: Build firmware
-        run: pio run
+      - name: Build firmware and flashable images
+        run: scripts/make_release.sh release
         working-directory: esp32
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: esp32-firmware
+          path: esp32/release/
 
   tv-service:
     name: TV service (compile check)
