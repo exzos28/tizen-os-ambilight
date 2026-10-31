@@ -232,8 +232,52 @@ namespace Service
             Check(listed, "serverinfo lists the 'Tizen Ambilight' source");
             if (!listed) Console.WriteLine(info.Length > 2000 ? info.Substring(0, 2000) : info);
 
+            // Failure handling, driven by shell commands from CI (skipped when not set).
+            string pause = Environment.GetEnvironmentVariable("HH_PAUSE");
+            string resume = Environment.GetEnvironmentVariable("HH_RESUME");
+            string kill = Environment.GetEnvironmentVariable("HH_KILL");
+            string start = Environment.GetEnvironmentVariable("HH_START");
+            if (pause != null && resume != null && kill != null && start != null)
+            {
+                // Frozen server: the socket stays open but nothing answers — like a host that
+                // lost power. Only the reply-based liveness check can notice this.
+                Shell(pause);
+                bool dropped = StreamUntil(output, () => !output.IsConnected, 10_000);
+                Check(dropped, "frozen server is detected by the liveness check");
+                lock (log) Check(log.Exists(l => l.StartsWith("HyperHdrDisconnected") && l.Contains("no reply")), "disconnect reason is 'no reply'");
+                Shell(resume);
+                Check(StreamUntil(output, () => output.IsConnected && output.RepliesReceived > 3, 20_000), "reconnects and gets replies after the server resumes");
+
+                // Server restart: the connection closes; the output must reconnect on its own.
+                Shell(kill);
+                Check(StreamUntil(output, () => !output.IsConnected, 10_000), "closed connection is detected");
+                Shell(start);
+                Check(StreamUntil(output, () => output.IsConnected && output.RepliesReceived > 3, 40_000), "reconnects after the server restarts");
+            }
+
             Console.WriteLine(_failures == 0 ? "E2E PASSED" : $"E2E: {_failures} FAILURE(S)");
             return _failures == 0 ? 0 : 1;
+        }
+
+        // Keeps offering frames at ~7 fps until the condition holds or the timeout expires.
+        private static bool StreamUntil(HyperHdrOutput output, Func<bool> condition, int timeoutMs)
+        {
+            long deadline = Environment.TickCount64 + timeoutMs;
+            var rgb = new byte[2 * (4 + 3) * 3];
+            while (Environment.TickCount64 < deadline)
+            {
+                if (condition()) return true;
+                output.Offer(new EdgeFrame(4, 3, rgb));
+                Thread.Sleep(140);
+            }
+            return condition();
+        }
+
+        private static void Shell(string command)
+        {
+            Console.WriteLine($"$ {command}");
+            using var p = System.Diagnostics.Process.Start("bash", new[] { "-c", command });
+            p.WaitForExit();
         }
     }
 }

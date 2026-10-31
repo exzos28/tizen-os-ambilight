@@ -104,14 +104,20 @@ jobs:
         run: |
           mkdir -p "$RUNNER_TEMP/hyperhdr"
           QT_QPA_PLATFORM=offscreen nohup hyperhdr --userdata "$RUNNER_TEMP/hyperhdr" --service > "$RUNNER_TEMP/hyperhdr.log" 2>&1 &
+          echo $! > "$RUNNER_TEMP/hyperhdr.pid"
           for i in $(seq 1 60); do
             if nc -z 127.0.0.1 19400 && nc -z 127.0.0.1 8090; then echo "HyperHDR is up"; exit 0; fi
             sleep 1
           done
           echo "HyperHDR did not open ports 19400/8090"; cat "$RUNNER_TEMP/hyperhdr.log"; exit 1
 
-      - name: Stream to HyperHDR and check it registered the source
+      - name: Stream to HyperHDR, then freeze / kill / restart it
         working-directory: .github/tv-service-check/Tests
+        env:
+          HH_PAUSE: kill -STOP "$(cat "$RUNNER_TEMP/hyperhdr.pid")"
+          HH_RESUME: kill -CONT "$(cat "$RUNNER_TEMP/hyperhdr.pid")"
+          HH_KILL: kill "$(cat "$RUNNER_TEMP/hyperhdr.pid")"; while kill -0 "$(cat "$RUNNER_TEMP/hyperhdr.pid")" 2>/dev/null; do sleep 0.2; done
+          HH_START: QT_QPA_PLATFORM=offscreen nohup hyperhdr --userdata "$RUNNER_TEMP/hyperhdr" --service >> "$RUNNER_TEMP/hyperhdr.log" 2>&1 & echo $! > "$RUNNER_TEMP/hyperhdr.pid"
         run: dotnet run -- -e2e 127.0.0.1 19400 8090
 
       - name: HyperHDR log
