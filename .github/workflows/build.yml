@@ -38,7 +38,7 @@ jobs:
       - name: Install PlatformIO
         run: pip install platformio
 
-      - name: Host unit tests (strip layout)
+      - name: Host unit tests (strip layout, power limit, static IP)
         run: pio test -e native
         working-directory: esp32
 
