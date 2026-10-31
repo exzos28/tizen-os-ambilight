@@ -53,7 +53,7 @@ void setup() {
     } else {
         Log.println("[WiFi] Could not connect — starting AP 'ambilight-setup'");
         Log.println("[WiFi] Open http://192.168.4.1 to configure WiFi.");
-        net.startAP("ambilight-setup", !cfg.wifiSSID.isEmpty());
+        net.startAP("ambilight-setup", cfg.wifiSSID, cfg.wifiPassword);
     }
 
     // 3. OTA updates (only meaningful in STA mode).
