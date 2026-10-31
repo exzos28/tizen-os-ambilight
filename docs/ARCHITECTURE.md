@@ -76,7 +76,8 @@ can block capture or another output.
 ### Capture pipeline (`Capture.cs`)
 
 The TV's video processor has a hardware PPI (Pixel Processing Interface) exposed through
-`libvideoenhance.so`. Three functions are accessed via `dlopen` / P/Invoke:
+`libvideoenhance.so`. Three functions are accessed via `NativeLibrary` (dlopen) / P/Invoke;
+a load failure is logged with the loader's own message:
 
 ```c
 ppi_ve_get_rgb_measure_condition()   // query HW: block count, block size, screen res, delay

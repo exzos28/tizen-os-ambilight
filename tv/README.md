@@ -22,7 +22,7 @@ int ppi_ve_set_rgb_measure_position(int idx, int x, int y);
 int ppi_ve_get_rgb_measure_pixel(int idx, VEPPIRgbMeasure_t *rgb);
 ```
 
-This is the same mechanism that Samsung's **Hue Sync** app uses internally — discovered by decompiling `Tizen.TV.System.ContentAnalysis.dll`, the .NET wrapper Samsung provides to partner apps. We bypass the managed wrapper and call `libvideoenhance.so` directly via dlopen/P/Invoke. The full story is in [docs/RESEARCH.md](../docs/RESEARCH.md).
+This is the same mechanism that Samsung's **Hue Sync** app uses internally — discovered by decompiling `Tizen.TV.System.ContentAnalysis.dll`, the .NET wrapper Samsung provides to partner apps. We bypass the managed wrapper and call `libvideoenhance.so` directly via `NativeLibrary` (dlopen) / P/Invoke. The full story is in [docs/RESEARCH.md](../docs/RESEARCH.md).
 
 ### Capture loop
 

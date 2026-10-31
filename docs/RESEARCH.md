@@ -72,7 +72,7 @@ The current version samples 14 points (4 per horizontal edge, 3 per vertical) fo
 
 ### Hardware availability
 
-The functions exist in `libvideoenhance.so` on every tested model, but the measurement block itself depends on the SoC. On a Q6F (Q4 Lite processor) `ppi_ve_get_rgb_measure_condition` returns an error, so this method does not work there ([#2](https://github.com/exzos28/tizen-os-ambilight/issues/2)). A software fallback through `libcapi-video-capture.so` is being explored; on that TV the library is present but `dlopen` from a service app fails.
+The functions exist in `libvideoenhance.so` on every tested model, but the measurement block itself depends on the SoC. On a Q6F (Q4 Lite processor) `ppi_ve_get_rgb_measure_condition` returns an error, so this method does not work there ([#2](https://github.com/exzos28/tizen-os-ambilight/issues/2)). A software fallback through `libcapi-video-capture.so` was looked at and is blocked for now: on that TV the library is present but fails to load from a service app, and it only exports C++ `VideoCapture` methods, which would need a native C shim rather than P/Invoke.
 
 ### Measured TV parameters
 - Resolution: 3840x2160 (4K)

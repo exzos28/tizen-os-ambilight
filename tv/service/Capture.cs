@@ -8,15 +8,19 @@ namespace Service
     {
         #region Native interop
 
-        [DllImport("libdl.so.2")] static extern IntPtr dlopen(string filename, int flags);
-        [DllImport("libdl.so.2")] static extern IntPtr dlsym(IntPtr handle, string symbol);
-        [DllImport("libdl.so.2")] static extern IntPtr dlerror();
-        const int RTLD_NOW = 2;
+        // NativeLibrary instead of raw dlopen/dlerror: dlerror() can come back empty when
+        // the runtime itself touches the loader in between, which used to turn every load
+        // failure into "unknown". NativeLibrary.Load throws with the real loader message.
+        const string LibraryName = "libvideoenhance.so";
 
-        static T GetFunc<T>(IntPtr lib, string name) where T : Delegate
+        // Returns the first export found among the given names (firmware versions differ:
+        // ppi_ve_* vs ve_*), or null.
+        static T GetFunc<T>(IntPtr lib, params string[] names) where T : Delegate
         {
-            IntPtr p = dlsym(lib, name);
-            return p != IntPtr.Zero ? (T)Marshal.GetDelegateForFunctionPointer(p, typeof(T)) : null;
+            foreach (var name in names)
+                if (NativeLibrary.TryGetExport(lib, name, out IntPtr p))
+                    return Marshal.GetDelegateForFunctionPointer<T>(p);
+            return null;
         }
 
         #endregion
@@ -64,26 +68,26 @@ namespace Service
             lock (_runLock)
             {
                 _running = true;
-                log("CaptureStart", "loading libvideoenhance.so");
+                log("CaptureStart", $"loading {LibraryName}");
 
-                var lib = dlopen("libvideoenhance.so", RTLD_NOW);
-                if (lib == IntPtr.Zero)
+                IntPtr lib;
+                try { lib = NativeLibrary.Load(LibraryName); }
+                catch (Exception ex)
                 {
-                    string err = Marshal.PtrToStringAnsi(dlerror()) ?? "unknown";
-                    log("CaptureError", $"dlopen failed: {err}");
+                    log("CaptureError", $"loading {LibraryName} failed: {ex.Message}");
                     return false;
                 }
 
-                var getCondition = GetFunc<GetConditionFunc>(lib, "ppi_ve_get_rgb_measure_condition")
-                                ?? GetFunc<GetConditionFunc>(lib, "ve_get_rgb_measure_condition");
-                var setPosition = GetFunc<SetPositionFunc>(lib, "ppi_ve_set_rgb_measure_position")
-                               ?? GetFunc<SetPositionFunc>(lib, "ve_set_rgb_measure_position");
-                var getPixel = GetFunc<GetPixelFunc>(lib, "ppi_ve_get_rgb_measure_pixel")
-                            ?? GetFunc<GetPixelFunc>(lib, "ve_get_rgb_measure_pixel");
+                var getCondition = GetFunc<GetConditionFunc>(lib, "ppi_ve_get_rgb_measure_condition", "ve_get_rgb_measure_condition");
+                var setPosition  = GetFunc<SetPositionFunc>(lib, "ppi_ve_set_rgb_measure_position", "ve_set_rgb_measure_position");
+                var getPixel     = GetFunc<GetPixelFunc>(lib, "ppi_ve_get_rgb_measure_pixel", "ve_get_rgb_measure_pixel");
 
                 if (getCondition == null || setPosition == null || getPixel == null)
                 {
-                    log("CaptureError", "missing symbols");
+                    log("CaptureError", "missing symbols:" +
+                        (getCondition == null ? " get_rgb_measure_condition" : "") +
+                        (setPosition == null ? " set_rgb_measure_position" : "") +
+                        (getPixel == null ? " get_rgb_measure_pixel" : ""));
                     return false;
                 }
 
