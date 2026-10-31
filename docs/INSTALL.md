@@ -62,7 +62,7 @@ pio run -e ota -t upload
 
 The current IP is also printed in the serial log and in the Telnet log (port 2323).
 
-**After a power outage** the ESP32 may boot faster than the router and fall back to the `ambilight-setup` access point. If Wi-Fi credentials are saved and nobody is connected to the access point, it restarts every 2 minutes to retry the saved network.
+**After a power outage** the ESP32 may boot faster than the router and fall back to the `ambilight-setup` access point. If Wi-Fi credentials are saved, it keeps the access point up and retries the saved network in the background (every minute, while nobody is connected to the access point). Once the router is back it restarts once and joins it.
 
 ## 3. Calibrate the strip
 

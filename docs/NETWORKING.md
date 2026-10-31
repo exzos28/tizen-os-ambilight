@@ -89,7 +89,7 @@ The service sends events to every discovered host. Only `tools/server.py` listen
 
 ## ESP32 HTTP API
 
-All `POST` endpoints take `application/x-www-form-urlencoded` bodies and return `{"message": "..."}`. Omitted fields keep their current value; out-of-range values are clamped. Changes persist in NVS.
+All `POST` endpoints take `application/x-www-form-urlencoded` bodies and return `{"message": "..."}`. Omitted or non-numeric fields keep their current value; out-of-range values are clamped. Changes persist in NVS.
 
 | Method | Path | Fields | Effect |
 |--------|------|--------|--------|

@@ -147,8 +147,9 @@ driven in `loop()`.
   the address is free. Set the constant to `0` to keep the DHCP address.
 - **AP mode**: opens the open network `ambilight-setup` and a captive-portal DNS that
   resolves every name to 192.168.4.1. If Wi-Fi credentials are saved (the AP is only a
-  fallback, e.g. the router was still booting), the device restarts to retry the station
-  connection once no client has been connected to the AP for 2 minutes.
+  fallback, e.g. the router was still booting), it runs in `WIFI_AP_STA` mode and retries
+  the station connection for 15 s every 60 s while no client is connected to the AP;
+  once connected it restarts into plain STA mode.
 
 ### LED control (`LEDController`)
 
@@ -182,8 +183,8 @@ step running `npm run build`) into a single HTML file, gzipped, embedded as `src
 and served from flash with `Content-Encoding: gzip` — no SPIFFS/LittleFS. Three tabs:
 Status, WiFi, LEDs. The LEDs tab has a Dynamic / Plain switch: Dynamic shows brightness,
 color correction and the strip layout editor; Plain shows LED count, brightness and the
-static color. Settings are saved to NVS on change (out-of-range values are clamped);
-only network changes restart the device.
+static color. Settings are saved to NVS on change; `Config::sanitize()` clamps them to
+valid ranges on every load and save. Only network changes restart the device.
 
 The firmware uses the `min_spiffs.csv` partition table: two 1.875 MB OTA app slots.
 
