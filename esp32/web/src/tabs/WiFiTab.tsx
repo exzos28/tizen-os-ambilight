@@ -11,11 +11,12 @@ interface WiFiTabProps {
   gateway?: string
 }
 
-// 0 = DHCP, otherwise 2–254 (1 is usually the router, 255 is broadcast).
+// 0 = DHCP, otherwise 1–254. The firmware checks the address against the router's own
+// address and subnet when it connects.
 function parseOctet(v: string): number | null {
   if (!/^\d{1,3}$/.test(v.trim())) return null
   const n = Number(v)
-  return n === 0 || (n >= 2 && n <= 254) ? n : null
+  return n <= 254 ? n : null
 }
 
 export function WiFiTab({
@@ -33,7 +34,7 @@ export function WiFiTab({
     e.preventDefault()
     const octet = parseOctet(ipOctet)
     if (octet === null) {
-      setMessage('IP last octet must be 0 (DHCP) or 2–254.')
+      setMessage('IP last octet must be 0 (DHCP) or 1–254.')
       return
     }
     setSaving(true)
@@ -47,8 +48,8 @@ export function WiFiTab({
         ip_octet:  octet,
       })
       setMessage(res.message)
-    } catch {
-      setMessage('Error: could not save network settings.')
+    } catch (err) {
+      setMessage(`Error: ${err instanceof Error ? err.message : 'could not save network settings.'}`)
     } finally {
       setSaving(false)
     }
@@ -89,7 +90,7 @@ function subnetPrefix(gateway?: string): string {
 }
 
 function octetHint(octet: number | null, gateway?: string) {
-  if (octet === null) return 'Enter 0 (DHCP) or a number from 2 to 254.'
+  if (octet === null) return 'Enter 0 (DHCP) or a number from 1 to 254.'
   if (octet === 0) return 'The device keeps the address it gets from the router (DHCP).'
   return <>After connecting, the device switches to <strong>{subnetPrefix(gateway)}{octet}</strong> if
     that address fits the router's network (otherwise it keeps the DHCP address). It doesn't check

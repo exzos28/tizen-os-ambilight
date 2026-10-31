@@ -46,9 +46,9 @@ void Config::sanitize() {
     numLeds     = constrain(numLeds, (uint16_t)1, MAX_LEDS);
     if (startCorner > 3) startCorner = 0;
     if (ledMode > 1)     ledMode = 1;
-    // 1 (usually the router) and 255 (broadcast) can't be valid choices; the HTTP API rejects
-    // them, this only guards values already stored in NVS.
-    if (preferredLastOctet == 1 || preferredLastOctet == 255) preferredLastOctet = 0;
+    // Whether the address fits the network (router's own address, broadcast, subnet) is
+    // checked at connect time against the real gateway and mask — see StaticIp.h.
+    if (preferredLastOctet == 255) preferredLastOctet = 0;
 }
 
 void Config::reset() {
