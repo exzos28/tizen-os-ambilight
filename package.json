@@ -1,6 +1,6 @@
 {
   "name": "tizen-os-ambilight",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
   "description": "DIY ambilight for Samsung Tizen TVs. This file only drives project versioning with changesets; the web UI has its own package in esp32/web.",
   "repository": "github:exzos28/tizen-os-ambilight",
