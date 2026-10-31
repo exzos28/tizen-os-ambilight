@@ -19,4 +19,9 @@
     <Folder Include="res\" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Apache-2.0; used to encode HyperHDR FlatBuffers messages (HyperHdrProtocol.cs) -->
+    <PackageReference Include="Google.FlatBuffers" Version="25.2.10" />
+  </ItemGroup>
+
 </Project>

@@ -21,6 +21,7 @@
 
   <ItemGroup>
     <PackageReference Include="Tizen.NET" Version="9.0.0.16760" />
+    <PackageReference Include="Google.FlatBuffers" Version="25.2.10" />
   </ItemGroup>
 
 </Project>
