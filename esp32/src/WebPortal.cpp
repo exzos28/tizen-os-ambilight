@@ -55,11 +55,12 @@ void WebPortal::handle() {
 }
 
 void WebPortal::handleRoot() {
-    // WEB_UI is ~70 KB — stream in 4 KB chunks to avoid heap exhaustion.
+    // The UI is stored gzipped in flash — stream it in 4 KB chunks to avoid heap exhaustion.
     const size_t kChunk = 4096;
-    const char*  p      = WEB_UI;
-    size_t       rem    = strlen(WEB_UI);
+    const char*  p      = reinterpret_cast<const char*>(WEB_UI_GZ);
+    size_t       rem    = WEB_UI_GZ_LEN;
 
+    _server.sendHeader("Content-Encoding", "gzip");
     _server.setContentLength(rem);
     _server.send(200, "text/html", "");
 
