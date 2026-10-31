@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Net.Http;
 using System.Text;
@@ -16,17 +17,48 @@ namespace Service
         private Discovery _discovery;
         private Esp32Output _esp32;
         private HyperHdrOutput _hyperHdr;
+        private volatile bool _restartCapture;
+
+        // Events logged before any log host is known (startup: config, capture init) are
+        // kept here and sent once discovery finds one, instead of being dropped.
+        private const int MaxPendingLogs = 100;
+        private readonly Queue<string> _pendingLogs = new Queue<string>();
 
         #region Logging
 
         // Event log: HTTP POST to port 9000 of every discovered host. Only tools/server.py
         // listens there; requests to ESP32s fail silently.
-        private async void SendLog(string eventName, string extra = null)
+        private void SendLog(string eventName, string extra = null)
         {
-            var hosts = _discovery?.Hosts;
-            if (hosts == null || hosts.Length == 0) return;
             var json = $"{{\"event\":\"{eventName}\",\"app\":\"Service\",\"timestamp\":\"{DateTime.UtcNow:o}\"" +
                        (extra != null ? $",\"data\":{Escape(extra)}" : "") + "}";
+            var hosts = _discovery?.Hosts;
+            if (hosts == null || hosts.Length == 0)
+            {
+                lock (_pendingLogs)
+                {
+                    if (_pendingLogs.Count == MaxPendingLogs) _pendingLogs.Dequeue();
+                    _pendingLogs.Enqueue(json);
+                }
+                return;
+            }
+            Post(hosts, json);
+        }
+
+        private void FlushPendingLogs(string[] hosts)
+        {
+            if (hosts.Length == 0) return;
+            string[] pending;
+            lock (_pendingLogs)
+            {
+                pending = _pendingLogs.ToArray();
+                _pendingLogs.Clear();
+            }
+            foreach (var json in pending) Post(hosts, json);
+        }
+
+        private static async void Post(string[] hosts, string json)
+        {
             foreach (var host in hosts)
             {
                 try
@@ -66,6 +98,7 @@ namespace Service
             _discovery = new Discovery(hosts =>
             {
                 Console.WriteLine($"[Discovery] hosts={string.Join(",", hosts)}");
+                FlushPendingLogs(hosts);
                 SendLog("DiscoveryHosts", $"hosts={string.Join(",", hosts)}");
             });
             _discovery.Start();
@@ -81,7 +114,7 @@ namespace Service
             {
                 try { await Task.Delay(2000, token); } catch (OperationCanceledException) { return; }
 
-                // Logged once a log host is known, so the startup state isn't lost.
+                // Queued until a log host is known (see SendLog), so these aren't lost.
                 SendLog("Config", $"esp32={config.Esp32Enabled} hyperhdr={(config.HyperHdr.Enabled ? _hyperHdr.Endpoint : "off")}");
                 foreach (var warning in config.Warnings) SendLog("ConfigWarning", warning);
 
@@ -90,7 +123,14 @@ namespace Service
                 while (!token.IsCancellationRequested && !_stopping)
                 {
                     bool cleanStop = Capture.Run(OnFrame, (evt, data) => SendLog(evt, data), token);
-                    if (cleanStop || token.IsCancellationRequested || _stopping) break;
+                    if (token.IsCancellationRequested || _stopping) break;
+                    if (cleanStop)
+                    {
+                        if (!_restartCapture) break;
+                        _restartCapture = false;   // Start pressed: re-init capture right away
+                        attempt = 0;
+                        continue;
+                    }
 
                     int delay = backoffMs[Math.Min(attempt, backoffMs.Length - 1)];
                     attempt++;
@@ -117,10 +157,13 @@ namespace Service
             else if (command == "start")
             {
                 // The service is already running (it starts with the TV, or this launch just
-                // created it). Look for hosts and reconnect now instead of waiting for the
-                // next scheduled attempt — e.g. after adding a controller or starting server.py.
+                // created it). Refresh everything instead of waiting for scheduled retries:
+                // probe for hosts (e.g. a new controller or server.py), reconnect HyperHDR, and
+                // re-initialise capture so it re-reads the hardware condition.
                 _discovery?.TriggerNow();
                 _hyperHdr?.ReconnectNow();
+                _restartCapture = true;
+                Capture.Stop();
             }
         }
 
