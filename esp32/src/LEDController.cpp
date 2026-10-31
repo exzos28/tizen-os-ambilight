@@ -30,7 +30,7 @@ void LEDController::setNumLeds(uint16_t numLeds) {
     // extra LEDs stay physically lit. Using the config total guarantees they go dark.
     auto& cfg = Config::instance();
     uint16_t calTotal = (uint16_t)(cfg.ledTop + cfg.ledRight + cfg.ledBottom + cfg.ledLeft);
-    uint16_t clearCount = max({_numLeds, calTotal, newCount});
+    uint16_t clearCount = max({_numLeds, calTotal, newCount, _previewLit});
     clearCount = min(clearCount, static_cast<uint16_t>(MAX_LEDS));
 
     Log.printf("[LED] setNumLeds: %d -> %d (clearing %d)\n", _numLeds, newCount, clearCount);
@@ -38,6 +38,7 @@ void LEDController::setNumLeds(uint16_t numLeds) {
     FastLED[0].setLeds(_leds, clearCount);
     FastLED.show();
 
+    _previewLit = 0;
     _numLeds = newCount;
     FastLED[0].setLeds(_leds, _numLeds);
     FastLED.show();
@@ -256,6 +257,7 @@ void LEDController::showCalibrationPreview(uint8_t startCorner, bool clockwise,
 
     uint16_t prevNum = _numLeds;
     _numLeds = min(static_cast<uint16_t>(total), static_cast<uint16_t>(MAX_LEDS));
+    _previewLit = max(_previewLit, _numLeds);   // cleared by setNumLeds() on expiry
     FastLED[0].setLeds(_leds, _numLeds);
 
     fillStrip(_leds, topC, rightC, bottomC, leftC,

@@ -67,6 +67,7 @@ private:
     uint8_t     _brightness   = 100;
     uint32_t    _previewUntil = 0;
     bool        _previewShown = false;   // a preview was drawn and not yet cleared
+    uint16_t    _previewLit   = 0;       // LEDs a preview lit beyond the current count
     uint32_t    _lastFrameMs  = 0;
     uint32_t    _lastUpdateMs = 0;
     uint8_t     _gammaTable[256];
