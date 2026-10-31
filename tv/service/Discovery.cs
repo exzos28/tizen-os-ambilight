@@ -56,26 +56,39 @@ namespace Service
             int failedAttempts = 0;
             while (!token.IsCancellationRequested)
             {
-                var replies = ProbeOnce(token);
-                long now = Environment.TickCount64;
-                foreach (var ip in replies) _lastSeen[ip] = now;
-                foreach (var stale in _lastSeen.Where(kv => now - kv.Value > HostTtlMs).Select(kv => kv.Key).ToList())
-                    _lastSeen.Remove(stale);
-
-                var hosts = _lastSeen.Keys.OrderBy(h => h, StringComparer.Ordinal).ToArray();
-                if (!hosts.SequenceEqual(_hosts))
+                try { failedAttempts = Iterate(token, failedAttempts); }
+                catch (Exception ex)
                 {
-                    _hosts = hosts;
-                    _onHostsChanged?.Invoke(hosts);
+                    // Never let one bad iteration (or the callback) end discovery for good.
+                    Console.Error.WriteLine($"[Discovery] {ex}");
+                    WaitHandle.WaitAny(new[] { _wake, token.WaitHandle }, 1000);
                 }
-
-                int waitMs;
-                if (hosts.Length > 0) { failedAttempts = 0; waitMs = Config.DiscoveryRefreshMs; }
-                else if (++failedAttempts < Config.DiscoveryMaxRetries) waitMs = 0;   // each probe already waits DiscoveryTimeoutMs
-                else waitMs = Config.DiscoveryRetryDelayMs;
-
-                if (waitMs > 0) WaitHandle.WaitAny(new[] { _wake, token.WaitHandle }, waitMs);
             }
+        }
+
+        // One probe + bookkeeping + wait. Returns the updated failed-attempt count.
+        private int Iterate(CancellationToken token, int failedAttempts)
+        {
+            var replies = ProbeOnce(token);
+            long now = Environment.TickCount64;
+            foreach (var ip in replies) _lastSeen[ip] = now;
+            foreach (var stale in _lastSeen.Where(kv => now - kv.Value > HostTtlMs).Select(kv => kv.Key).ToList())
+                _lastSeen.Remove(stale);
+
+            var hosts = _lastSeen.Keys.OrderBy(h => h, StringComparer.Ordinal).ToArray();
+            if (!hosts.SequenceEqual(_hosts))
+            {
+                _hosts = hosts;
+                _onHostsChanged?.Invoke(hosts);
+            }
+
+            int waitMs;
+            if (hosts.Length > 0) { failedAttempts = 0; waitMs = Config.DiscoveryRefreshMs; }
+            else if (++failedAttempts < Config.DiscoveryMaxRetries) waitMs = 0;   // each probe already waits DiscoveryTimeoutMs
+            else waitMs = Config.DiscoveryRetryDelayMs;
+
+            if (waitMs > 0) WaitHandle.WaitAny(new[] { _wake, token.WaitHandle }, waitMs);
+            return failedAttempts;
         }
 
         // Broadcasts the discovery magic once and returns every IP that replied within
@@ -90,11 +103,15 @@ namespace Service
                 using var udp = new UdpClient();
                 udp.EnableBroadcast = true;
                 udp.Send(magic, magic.Length, new IPEndPoint(IPAddress.Broadcast, Config.DiscoveryPort));
-                udp.Client.ReceiveTimeout = Config.DiscoveryTimeoutMs;
 
                 long deadline = Environment.TickCount64 + Config.DiscoveryTimeoutMs;
-                while (Environment.TickCount64 < deadline && !token.IsCancellationRequested)
+                while (!token.IsCancellationRequested)
                 {
+                    // Wait only for what is left of the window, so unrelated or late
+                    // datagrams can't stretch one probe beyond DiscoveryTimeoutMs.
+                    long remaining = deadline - Environment.TickCount64;
+                    if (remaining <= 0) break;
+                    udp.Client.ReceiveTimeout = (int)remaining;
                     try
                     {
                         var remote = new IPEndPoint(IPAddress.Any, 0);
