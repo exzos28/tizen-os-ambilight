@@ -17,7 +17,11 @@ namespace Service
         private string[] _serverHosts;
         private CancellationTokenSource _cts;
         private readonly object _workerLock = new object();
-        private DateTime _workerStartedAt = DateTime.MinValue;
+        // The launch that creates the service also delivers an AppControl. It is
+        // consumed without restarting the worker that OnCreate just started.
+        private bool _launchControlPending;
+        private long _createdAtTicks;   // Environment.TickCount64 — monotonic, unaffected by clock sync
+        private const long LaunchControlWindowMs = 10_000;
 
         #region Logging
 
@@ -107,6 +111,8 @@ namespace Service
         protected override void OnCreate()
         {
             base.OnCreate();
+            _launchControlPending = true;
+            _createdAtTicks = Environment.TickCount64;
             StartWorker();
         }
 
@@ -121,7 +127,6 @@ namespace Service
                 _cts?.Cancel();
                 _cts = new CancellationTokenSource();
                 token = _cts.Token;
-                _workerStartedAt = DateTime.UtcNow;
             }
 
             Capture.Stop();
@@ -161,13 +166,15 @@ namespace Service
             string command = "unknown";
             try { if (e.ReceivedAppControl.ExtraData.TryGet("command", out string c)) command = c; } catch { }
             if (command == "stop") { _stopping = true; Exit(); }
-            else if (command == "start")
+            else
             {
-                // The launch that creates the service also delivers this AppControl;
-                // only restart a worker that has been running for a while.
-                bool justStarted;
-                lock (_workerLock) justStarted = DateTime.UtcNow - _workerStartedAt < TimeSpan.FromSeconds(5);
-                if (!justStarted) StartWorker();
+                // First AppControl shortly after OnCreate = the launch request itself.
+                // The time bound covers launches that deliver no AppControl (e.g. on
+                // boot): a later Start press is then never swallowed.
+                bool isLaunchControl = _launchControlPending
+                    && Environment.TickCount64 - _createdAtTicks < LaunchControlWindowMs;
+                _launchControlPending = false;
+                if (command == "start" && !isLaunchControl) StartWorker();
             }
         }
 
