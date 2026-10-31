@@ -39,7 +39,11 @@ namespace Service
         private int _backoffMs = 1000;
         private volatile string _dropReason;  // set by the reader thread
         private long _replyErrors;
-        private int _consecutiveFailures;     // only touched by the sender thread
+        private int _consecutiveFailures;     // reset by the first reply of a connection
+
+        // Guards the per-connection state (_generation, counters, _dropReason) so a reader
+        // of an old connection can't update it after the sender has moved to a new one.
+        private readonly object _stateLock = new object();
 
         public HyperHdrOutput(HyperHdrSettings settings, Action<string, string> log)
         {
@@ -50,7 +54,7 @@ namespace Service
         public string Endpoint => $"{_settings.Host}:{_settings.Port}";
 
         // Number of replies received so far (for tests and diagnostics).
-        public long RepliesReceived => Interlocked.Read(ref _replied);
+        public long RepliesReceived { get { lock (_stateLock) return _replied; } }
         public bool IsConnected => Volatile.Read(ref _socket) != null;
 
         public void Start()
@@ -98,14 +102,15 @@ namespace Service
                     WaitHandle.WaitAny(new[] { _wake, token.WaitHandle }, 500);
                     if (token.IsCancellationRequested) break;
 
-                    string reason = _dropReason;
-                    if (reason != null) { Drop(reason); continue; }
-                    if (Interlocked.Read(ref _sent) > Interlocked.Read(ref _replied)
-                        && Environment.TickCount64 - Interlocked.Read(ref _waitingSinceTicks) > LivenessMs)
+                    string reason;
+                    bool stale;
+                    lock (_stateLock)
                     {
-                        Drop($"no reply for {LivenessMs} ms");
-                        continue;
+                        reason = _dropReason;
+                        stale = _sent > _replied && Environment.TickCount64 - _waitingSinceTicks > LivenessMs;
                     }
+                    if (reason != null) { Drop(reason); continue; }
+                    if (stale) { Drop($"no reply for {LivenessMs} ms"); continue; }
 
                     var frame = Interlocked.Exchange(ref _pending, null);
                     if (frame == null) continue;
@@ -113,8 +118,10 @@ namespace Service
                     var rgb = EdgeImage.Render(frame, _settings.ImageWidth, _settings.ImageHeight);
                     Send(HyperHdrProtocol.EncodeRawImage(rgb, _settings.ImageWidth, _settings.ImageHeight));
                 }
-                catch (Exception ex) when (!token.IsCancellationRequested)
+                catch (Exception ex)
                 {
+                    // After Dispose() the socket is closed under us — just leave.
+                    if (token.IsCancellationRequested) break;
                     Drop(ex.Message);
                 }
             }
@@ -140,26 +147,31 @@ namespace Service
                 return;
             }
 
-            int generation = Interlocked.Increment(ref _generation);
-            Interlocked.Exchange(ref _sent, 0);
-            Interlocked.Exchange(ref _replied, 0);
-            _dropReason = null;
-            _connectedAtTicks = Environment.TickCount64;
-            Volatile.Write(ref _socket, socket);
+            int generation;
+            lock (_stateLock)
+            {
+                generation = ++_generation;
+                _sent = 0;
+                _replied = 0;
+                _dropReason = null;
+                _connectedAtTicks = Environment.TickCount64;
+                Volatile.Write(ref _socket, socket);
+            }
             new Thread(() => ReaderLoop(socket, generation)) { IsBackground = true, Name = "HyperHDR reader" }.Start();
 
             Send(HyperHdrProtocol.EncodeRegister(_settings.Origin, _settings.Priority));
-            _consecutiveFailures = 0;
             _log("HyperHdrConnected", $"{Endpoint} priority={_settings.Priority} image={_settings.ImageWidth}x{_settings.ImageHeight}");
         }
 
         private void Send(byte[] message)
         {
-            long now = Environment.TickCount64;
-            if (Interlocked.Read(ref _sent) == Interlocked.Read(ref _replied))
-                Interlocked.Exchange(ref _waitingSinceTicks, now);   // first unanswered message starts the clock
-            Interlocked.Increment(ref _sent);
-            _socket.Send(HyperHdrProtocol.Frame(message));
+            var socket = Volatile.Read(ref _socket) ?? throw new ObjectDisposedException("socket");
+            lock (_stateLock)
+            {
+                if (_sent == _replied) _waitingSinceTicks = Environment.TickCount64;   // first unanswered message starts the clock
+                _sent++;
+            }
+            socket.Send(HyperHdrProtocol.Frame(message));
         }
 
         private void ReaderLoop(Socket socket, int generation)
@@ -176,11 +188,17 @@ namespace Service
                     ReadExactly(socket, body);
 
                     var reply = HyperHdrProtocol.DecodeReply(body);
-                    if (generation != Volatile.Read(ref _generation)) return;
-
-                    Interlocked.Increment(ref _replied);
-                    Interlocked.Exchange(ref _waitingSinceTicks, Environment.TickCount64);
-                    Interlocked.Exchange(ref _backoffMs, 1000);   // the server is really talking to us
+                    lock (_stateLock)
+                    {
+                        if (generation != _generation) return;
+                        _replied++;
+                        _waitingSinceTicks = Environment.TickCount64;
+                    }
+                    // The server is really talking to us: reset backoff and failure count
+                    // (not on connect — a server that accepts and then drops us must still
+                    // back off and keep its logging throttled).
+                    Interlocked.Exchange(ref _backoffMs, 1000);
+                    Interlocked.Exchange(ref _consecutiveFailures, 0);
 
                     if (!string.IsNullOrEmpty(reply.Error))
                     {
@@ -191,12 +209,14 @@ namespace Service
             }
             catch (Exception ex)
             {
-                if (generation != Volatile.Read(ref _generation)) return;
-                bool closedRightAway = Interlocked.Read(ref _replied) == 0
-                                       && Environment.TickCount64 - _connectedAtTicks < 2000;
-                _dropReason = closedRightAway
-                    ? "closed by the server right after connecting — if the TV is in another subnet, allow its IP in HyperHDR's network settings"
-                    : $"connection lost: {ex.Message}";
+                lock (_stateLock)
+                {
+                    if (generation != _generation) return;
+                    bool closedRightAway = _replied == 0 && Environment.TickCount64 - _connectedAtTicks < 2000;
+                    _dropReason = closedRightAway
+                        ? "closed by the server right after connecting — if the TV is in another subnet, allow its IP in HyperHDR's network settings"
+                        : $"connection lost: {ex.Message}";
+                }
                 _wake.Set();
             }
         }
@@ -214,7 +234,7 @@ namespace Service
 
         private void Drop(string reason)
         {
-            Interlocked.Increment(ref _generation);   // silences the old reader
+            lock (_stateLock) _generation++;   // silences the old reader
             CloseSocket();
             ScheduleReconnect(reason);
         }
@@ -226,7 +246,7 @@ namespace Service
             Interlocked.Exchange(ref _backoffMs, Math.Min(backoff * 2, MaxBackoffMs));
             // While the server stays down this repeats every 5 s — log the first failure
             // and then about once a minute.
-            int n = ++_consecutiveFailures;
+            int n = Interlocked.Increment(ref _consecutiveFailures);
             if (n == 1 || n % 12 == 0)
                 _log("HyperHdrDisconnected", $"{Endpoint}: {reason}; retry in {backoff} ms (failure #{n})");
         }
