@@ -4,7 +4,7 @@ Thanks for helping out! The most valuable contribution right now is **testing on
 
 ## Reporting a TV model
 
-Whether it works or not, both results are useful. Open an [issue](https://github.com/exzos28/tizen-os-ambilight/issues) or a pull request that adds a row to the *Supported TVs* table in [README.md](../README.md).
+Whether it works or not, both results are useful. Open a [TV compatibility report](https://github.com/exzos28/tizen-os-ambilight/issues/new?template=tv-compatibility.yml) or a pull request that adds a row to the *Supported TVs* table in [README.md](../README.md).
 
 Please include:
 
