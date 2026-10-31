@@ -53,6 +53,71 @@ jobs:
       - name: Compile against Tizen 9 reference assemblies
         run: dotnet build .github/tv-service-check/ServiceCheck.csproj -warnaserror:CS0168,CS0219,CS0162
 
+      - name: Unit tests (edge image, HyperHDR protocol, config)
+        working-directory: .github/tv-service-check/Tests
+        run: dotnet run
+
+      - name: Decode our HyperHDR messages with flatc against HyperHDR's schema
+        working-directory: .github/tv-service-check/Tests
+        run: |
+          sudo apt-get install -y -qq flatbuffers-compiler >/dev/null
+          curl -fsSL -o hyperhdr_request.fbs \
+            https://raw.githubusercontent.com/awawa-dev/HyperHDR/${HYPERHDR_TAG}/include/flatbuffers/parser/hyperhdr_request.fbs
+          flatc --json --strict-json --raw-binary -o out hyperhdr_request.fbs -- out/register.bin out/image.bin
+          python3 - <<'EOF'
+          import json
+          reg = json.load(open('out/register.json'))
+          img = json.load(open('out/image.json'))
+          assert reg['command_type'] == 'Register', reg
+          assert reg['command'] == {'origin': 'Tizen Ambilight', 'priority': 150}, reg
+          assert img['command_type'] == 'Image', img['command_type']
+          raw = img['command']
+          assert raw['data_type'] == 'RawImage', raw['data_type']
+          assert raw['data']['width'] == 16 and raw['data']['height'] == 9, raw['data']
+          assert len(raw['data']['data']) == 16 * 9 * 3
+          assert raw.get('duration', -1) == -1
+          print('flatc decodes both messages as HyperHDR expects')
+          EOF
+    env:
+      HYPERHDR_TAG: v22.0.0.0
+
+  hyperhdr-e2e:
+    name: HyperHDR end-to-end
+    runs-on: ubuntu-24.04
+    env:
+      HYPERHDR_VERSION: 22.0.0
+      HYPERHDR_TAG: v22.0.0.0
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Install HyperHDR
+        run: |
+          curl -fsSL -o hyperhdr.deb \
+            "https://github.com/awawa-dev/HyperHDR/releases/download/${HYPERHDR_TAG}/HyperHDR-${HYPERHDR_VERSION}-Linux-x86_64.deb"
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ./hyperhdr.deb >/dev/null
+
+      - name: Start HyperHDR
+        run: |
+          mkdir -p "$RUNNER_TEMP/hyperhdr"
+          QT_QPA_PLATFORM=offscreen nohup hyperhdr --userdata "$RUNNER_TEMP/hyperhdr" --service > "$RUNNER_TEMP/hyperhdr.log" 2>&1 &
+          for i in $(seq 1 60); do
+            if nc -z 127.0.0.1 19400 && nc -z 127.0.0.1 8090; then echo "HyperHDR is up"; exit 0; fi
+            sleep 1
+          done
+          echo "HyperHDR did not open ports 19400/8090"; cat "$RUNNER_TEMP/hyperhdr.log"; exit 1
+
+      - name: Stream to HyperHDR and check it registered the source
+        working-directory: .github/tv-service-check/Tests
+        run: dotnet run -- -e2e 127.0.0.1 19400 8090
+
+      - name: HyperHDR log
+        if: always()
+        run: tail -n 100 "$RUNNER_TEMP/hyperhdr.log" || true
+
   tools:
     name: Python tools
     runs-on: ubuntu-latest

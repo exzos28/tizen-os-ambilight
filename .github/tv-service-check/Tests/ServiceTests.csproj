@@ -1,0 +1,30 @@
+<!--
+  Tests for the parts of tv/service that don't depend on Tizen: edge-image synthesis,
+  HyperHDR FlatBuffers encoding, output config parsing, and (with -e2e) a live session
+  against a real HyperHDR server. Run by CI; see .github/workflows/build.yml.
+-->
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <LangVersion>10</LangVersion>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <Nullable>disable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="Program.cs" />
+    <Compile Include="../../../tv/service/EdgeFrame.cs" />
+    <Compile Include="../../../tv/service/EdgeImage.cs" />
+    <Compile Include="../../../tv/service/HyperHdrProtocol.cs" />
+    <Compile Include="../../../tv/service/HyperHdrOutput.cs" />
+    <Compile Include="../../../tv/service/OutputConfig.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Google.FlatBuffers" Version="25.2.10" />
+  </ItemGroup>
+
+</Project>
