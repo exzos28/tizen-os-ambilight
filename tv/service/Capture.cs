@@ -21,16 +21,23 @@ namespace Service
         static IntPtr LoadLibrary(out string error)
         {
             error = null;
+            // Call dlerror() once first: binding the P/Invoke stub runs dlopen/dlsym on
+            // libdl, which would otherwise reset the error we want to read below.
+            dlerror();
             IntPtr lib = dlopen(LibraryName, RTLD_NOW);
             if (lib != IntPtr.Zero) return lib;
 
-            error = Marshal.PtrToStringAnsi(dlerror());
+            string dlopenError = Marshal.PtrToStringAnsi(dlerror());
             try
             {
+                // Lazy load with the runtime's wider search path, only to tell the two
+                // failure kinds apart; the library is not used from this handle.
                 NativeLibrary.Free(NativeLibrary.Load(LibraryName));
-                error ??= "dlopen(RTLD_NOW) failed — unresolved symbols in a dependency?";
+                error = $"dlopen(RTLD_NOW) failed: {dlopenError ?? "no error text"} " +
+                        "(a lazy load from the runtime's search path succeeded, so the library exists — " +
+                        "an unresolved symbol, or found only outside the system library path)";
             }
-            catch (Exception ex) { error = ex.Message; }
+            catch (Exception ex) { error = dlopenError ?? ex.Message; }
             return IntPtr.Zero;
         }
 
