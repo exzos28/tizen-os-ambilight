@@ -1,4 +1,5 @@
 export interface StatusResponse {
+  version: string  // firmware version, e.g. "1.1.0"
   ip: string
   mode: string
   ssid: string

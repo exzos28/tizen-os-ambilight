@@ -117,6 +117,7 @@ void WebPortal::handleRoot() {
 void WebPortal::handleStatus() {
     auto& net = NetworkManager::instance();
     JsonDocument doc;
+    doc["version"]            = AMBILIGHT_VERSION;
     doc["ip"]                 = net.ipAddress();
     doc["mode"]               = net.mode();
     doc["ssid"]               = WiFi.SSID();

@@ -38,7 +38,7 @@ static void checkFactoryReset() {
 
 void setup() {
     Serial.begin(115200);
-    Log.println("[Boot] Starting...");
+    Log.println("[Boot] Starting Tizen OS Ambilight " AMBILIGHT_VERSION "...");
 
     pinMode(FACTORY_RESET_PIN, INPUT_PULLUP);
 

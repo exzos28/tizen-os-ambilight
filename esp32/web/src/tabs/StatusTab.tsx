@@ -28,6 +28,7 @@ export function StatusTab({ status, metrics }: StatusTabProps) {
             <Stat label="Mode"       value={status.mode}                               />
             <Stat label="SSID"       value={status.ssid || '—'}                        />
             <Stat label="Signal"     value={status.rssi ? `${status.rssi} dBm` : '—'} />
+            <Stat label="Firmware"   value={status.version ? `v${status.version}` : '—'} />
           </div>
         </section>
       )}
