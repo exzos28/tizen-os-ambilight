@@ -55,7 +55,8 @@ export default function App() {
         setOtaHost(cfg.ota_host)
         setIpOctet(String(cfg.ip_octet ?? 245))
         setPowerLimit(String(cfg.power_limit_w ?? 0))
-        setPixelWatts(String(cfg.pixel_watts !== undefined ? Number(cfg.pixel_watts.toFixed(2)) : 0.72))
+        // toPrecision strips float32 noise (0.7200000286 → 0.72) without rounding real digits away
+        setPixelWatts(String(cfg.pixel_watts !== undefined ? Number(cfg.pixel_watts.toPrecision(6)) : 0.72))
         setNumLeds(cfg.num_leds)
         setMaxLeds(cfg.max_leds)
         setBrightness(cfg.brightness)

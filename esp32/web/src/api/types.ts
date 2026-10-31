@@ -5,7 +5,6 @@ export interface StatusResponse {
   rssi: number
   connected: boolean
   gateway: string
-  preferred_last_oct: number  // 0 = DHCP, otherwise the static last IP octet
 }
 
 export interface ConfigResponse {

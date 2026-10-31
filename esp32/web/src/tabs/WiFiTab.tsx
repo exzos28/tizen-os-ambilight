@@ -63,10 +63,7 @@ export function WiFiTab({
         <Field label="Static IP — last number (0 = DHCP)" type="number" min={0} max={254}
                value={ipOctet} onChange={setIpOctet} placeholder="245" />
         <p style={{ fontSize: '0.85em', opacity: 0.65, marginTop: '0.5rem' }}>
-          {parseOctet(ipOctet) === 0
-            ? 'The device keeps the address it gets from the router (DHCP).'
-            : <>After connecting, the device switches to <strong>{subnetPrefix(gateway)}{ipOctet}</strong>.
-               It doesn't check whether another device uses that address — give each controller its own number.</>}
+          {octetHint(parseOctet(ipOctet), gateway)}
         </p>
       </section>
 
@@ -89,4 +86,12 @@ export function WiFiTab({
 function subnetPrefix(gateway?: string): string {
   const parts = gateway?.split('.')
   return parts && parts.length === 4 && gateway !== '0.0.0.0' ? parts.slice(0, 3).join('.') + '.' : 'x.x.x.'
+}
+
+function octetHint(octet: number | null, gateway?: string) {
+  if (octet === null) return 'Enter 0 (DHCP) or a number from 2 to 254.'
+  if (octet === 0) return 'The device keeps the address it gets from the router (DHCP).'
+  return <>After connecting, the device switches to <strong>{subnetPrefix(gateway)}{octet}</strong> if
+    that address fits the router's network (otherwise it keeps the DHCP address). It doesn't check
+    whether another device already uses it — give each controller its own number.</>
 }
