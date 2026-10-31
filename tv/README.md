@@ -1,6 +1,11 @@
-# TV Service
+# TV apps
 
-.NET Tizen service that captures screen edge colors and sends them to a server via UDP.
+| Path | What |
+|------|------|
+| `service/` | .NET Tizen service that captures screen edge colors and streams them to the ESP32 over UDP |
+| `ui/` | Launcher web app with *Start* / *Stop* / *Debug* buttons |
+
+Both apps ship as one hybrid package — building `ui/` also builds `service/`. Build, signing and installation: [docs/INSTALL.md § TV apps](../docs/INSTALL.md#4-tv-apps).
 
 ## How it works
 
@@ -13,36 +18,40 @@ int ppi_ve_get_rgb_measure_condition(VEPPIRgbMeasureInfo_t *info);
 // Set where to measure (x, y in screen coordinates)
 int ppi_ve_set_rgb_measure_position(int idx, int x, int y);
 
-// Read the average RGB for the 16x16 block at that position
+// Read the average 10-bit RGB for the 16x16 block at that position
 int ppi_ve_get_rgb_measure_pixel(int idx, VEPPIRgbMeasure_t *rgb);
 ```
 
-This is the same mechanism that Samsung's **Hue Sync** app uses internally — discovered by decompiling `Tizen.TV.System.ContentAnalysis.dll`, the .NET wrapper Samsung provides to partner apps. We bypass the managed wrapper and call `libvideoenhance.so` directly via dlopen/P/Invoke.
+This is the same mechanism that Samsung's **Hue Sync** app uses internally — discovered by decompiling `Tizen.TV.System.ContentAnalysis.dll`, the .NET wrapper Samsung provides to partner apps. We bypass the managed wrapper and call `libvideoenhance.so` directly via dlopen/P/Invoke. The full story is in [docs/RESEARCH.md](../docs/RESEARCH.md).
 
 ### Capture loop
 
-The hardware has a limited number of measurement slots (2 on our TV). To sample all edge points, the service iterates through them in batches:
+The hardware has a limited number of measurement slots (2 on tested TVs). To sample all edge points, the service iterates through them in batches, setting the next batch's positions while the current results are read:
 
 ```
-for each batch of 2 points:
-    set_position(0, x0, y0)    -- tell HW slot 0 where to measure
-    set_position(1, x1, y1)    -- tell HW slot 1 where to measure
-    sleep(delay)               -- wait for HW to measure
-    read_pixel(0) -> RGB       -- read result from slot 0
-    read_pixel(1) -> RGB       -- read result from slot 1
-
-send all colors via UDP
+set positions for batch 0, sleep(delay)
+loop:
+    for each batch:
+        read_pixel(0..N-1) -> RGB         -- results for the current batch
+        set_position(0..N-1, next batch)  -- start measuring the next one
+        sleep(delay)                      -- wait for HW to measure
+    send all colors via UDP to every discovered ESP32
 ```
 
 ### Performance
 
-The bottleneck is the hardware measurement delay. After setting a position, the video processor needs time to average the 16x16 pixel block. The HW requires **20ms** — this is the minimum reliable delay we use.
+The bottleneck is the hardware measurement delay: after setting a position, the video processor needs **20 ms** to average the block. Shorter delays return garbage.
 
-| Delay | Points | Cycles | Frame time | FPS |
-|-------|--------|--------|------------|-----|
-| 20ms  | 50     | 25     | 500ms      | ~2  |
+| Delay | Points | Batches (2 slots) | Frame time | FPS |
+|-------|--------|-------------------|------------|-----|
+| 20 ms | 14 (current: 4 + 3 + 4 + 3) | 7 | ~140 ms | ~7 |
+| 20 ms | 50 (first prototype) | 25 | ~500 ms | ~2 |
 
-Tune `CaptureDelayMs`, `TargetCaptureW`, and `TargetCaptureH` in `Config.cs`.
+More points give finer spatial detail at a lower frame rate. Since the ESP32 interpolates between points and smooths transitions, a few points per edge are usually enough.
+
+### Tuning
+
+Sample point counts, edge inset and capture delay are compile-time constants in `service/Config.cs`; their defaults and effects are listed in [docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md#tv-service-tvserviceconfigcs--compile-time-constants). A larger `EdgeInsetPx` helps skip letterbox bars (~270 px each for 2.39:1 content on a 4K panel).
 
 ### Measured HW parameters (Samsung 4K TV, Tizen 9.0, SDP)
 
@@ -57,14 +66,17 @@ Tune `CaptureDelayMs`, `TargetCaptureW`, and `TargetCaptureH` in `Config.cs`.
 
 ```
 service/
-  Service_App.cs      App lifecycle, server discovery, HTTP logging
+  Service_App.cs      App lifecycle, discovery (re-run on Start), capture retries, HTTP event log
   Capture.cs          HW PPI capture loop via libvideoenhance.so
-  Config.cs           Ports, sample point count, delay, FPS limit
-  tizen-manifest.xml  Manifest with contentanalysis privilege
+  Config.cs           Ports, discovery settings, sample points, edge inset, delay
+  tizen-manifest.xml  Manifest: on-boot service, contentanalysis privilege
 
-capture-tool/         Standalone test tool (runs via corerun without installing)
+ui/
+  index.html, main.js Launcher: Start / Stop the service, Debug color wheel
+  config.xml          Web app manifest (application.launch privilege)
+  tizen_web_project.yaml  Declares ../service as a dependency → hybrid package
 ```
 
 ## Privilege
 
-The manifest includes `http://developer.samsung.com/privilege/contentanalysis` (Samsung partner level). A Samsung partner certificate is required to sign the package.
+The service manifest includes `http://developer.samsung.com/privilege/contentanalysis`, which Samsung lists as a partner privilege. In Developer Mode a regular **Public** Samsung distributor certificate bound to the TV's DUID is enough — see [docs/INSTALL.md](../docs/INSTALL.md#42-connect-and-create-a-certificate).

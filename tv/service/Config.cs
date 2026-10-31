@@ -7,7 +7,10 @@ namespace Service
         public const int DiscoveryPort = 9003;
         public const string DiscoveryMagic = "AMBILIGHT_DISCOVER";
         public const int DiscoveryTimeoutMs = 2000;
+        // Quick attempts (one per DiscoveryTimeoutMs) before slowing down to
+        // one attempt per DiscoveryRetryDelayMs. Discovery never gives up.
         public const int DiscoveryMaxRetries = 30;
+        public const int DiscoveryRetryDelayMs = 10_000;
 
         // Edge sample points: h per top/bottom, v per left/right
         public const int TargetCaptureW = 4;

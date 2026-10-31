@@ -13,6 +13,48 @@ static void sendJson(WebServer& server, const JsonDocument& doc) {
     server.send(200, "application/json", out);
 }
 
+// ---------------------------------------------------------------------------
+// Argument parsing. A missing or non-numeric argument keeps the current value
+// (String::toInt/toFloat would turn "abc" into 0). Ranges of stored settings are
+// enforced in Config::sanitize(), which runs on every load and save.
+// ---------------------------------------------------------------------------
+
+static bool parseLongArg(WebServer& server, const char* key, long& out) {
+    if (!server.hasArg(key)) return false;
+    String v = server.arg(key);
+    v.trim();
+    if (v.isEmpty()) return false;
+    char* end = nullptr;
+    long  n   = strtol(v.c_str(), &end, 10);
+    if (*end != '\0') return false;
+    out = n;
+    return true;
+}
+
+static bool parseFloatArg(WebServer& server, const char* key, float& out) {
+    if (!server.hasArg(key)) return false;
+    String v = server.arg(key);
+    v.trim();
+    if (v.isEmpty()) return false;
+    char* end = nullptr;
+    float f   = strtof(v.c_str(), &end);
+    if (*end != '\0' || !isfinite(f)) return false;
+    out = f;
+    return true;
+}
+
+// 0–255 value (clamped), or `current` if the argument is missing or not a number.
+static uint8_t byteArg(WebServer& server, const char* key, uint8_t current) {
+    long n;
+    if (!parseLongArg(server, key, n)) return current;
+    return static_cast<uint8_t>(constrain(n, 0L, 255L));
+}
+
+static float floatArg(WebServer& server, const char* key, float current) {
+    float f;
+    return parseFloatArg(server, key, f) ? f : current;
+}
+
 WebPortal& WebPortal::instance() {
     static WebPortal inst;
     return inst;
@@ -55,11 +97,12 @@ void WebPortal::handle() {
 }
 
 void WebPortal::handleRoot() {
-    // WEB_UI is ~70 KB — stream in 4 KB chunks to avoid heap exhaustion.
+    // The UI is stored gzipped in flash — stream it in 4 KB chunks to avoid heap exhaustion.
     const size_t kChunk = 4096;
-    const char*  p      = WEB_UI;
-    size_t       rem    = strlen(WEB_UI);
+    const char*  p      = reinterpret_cast<const char*>(WEB_UI_GZ);
+    size_t       rem    = WEB_UI_GZ_LEN;
 
+    _server.sendHeader("Content-Encoding", "gzip");
     _server.setContentLength(rem);
     _server.send(200, "text/html", "");
 
@@ -157,73 +200,55 @@ void WebPortal::handleSaveLeds() {
                _server.hasArg("num_leds") ? _server.arg("num_leds").c_str() : "(none)",
                _server.hasArg("brightness") ? _server.arg("brightness").c_str() : "(none)");
 
-    if (_server.hasArg("num_leds")) {
-        uint16_t n = static_cast<uint16_t>(_server.arg("num_leds").toInt());
-        if (n > 0) {
-            cfg.numLeds = n;
-            if (plain) leds.setNumLeds(n);
-        }
+    long n;
+    if (parseLongArg(_server, "num_leds", n) && n > 0) {
+        cfg.numLeds = static_cast<uint16_t>(min<long>(n, MAX_LEDS));
+        if (plain) leds.setNumLeds(cfg.numLeds);
     }
 
-    if (_server.hasArg("brightness")) {
-        cfg.brightness = static_cast<uint8_t>(_server.arg("brightness").toInt());
-        leds.setBrightness(cfg.brightness);
+    uint8_t brightness = byteArg(_server, "brightness", cfg.brightness);
+    if (brightness != cfg.brightness) {
+        cfg.brightness = brightness;
+        leds.setBrightness(brightness);
     }
 
     if (_server.hasArg("color")) {
         String hex = _server.arg("color");
         if (hex.startsWith("#")) hex = hex.substring(1);
-        long val   = strtol(hex.c_str(), nullptr, 16);
-        cfg.colorR = (val >> 16) & 0xFF;
-        cfg.colorG = (val >>  8) & 0xFF;
-        cfg.colorB =  val        & 0xFF;
-        if (plain) leds.setColor(cfg.colorR, cfg.colorG, cfg.colorB);
+        char* end = nullptr;
+        long  val = strtol(hex.c_str(), &end, 16);
+        if (hex.length() == 6 && end && *end == '\0') {
+            cfg.colorR = (val >> 16) & 0xFF;
+            cfg.colorG = (val >>  8) & 0xFF;
+            cfg.colorB =  val        & 0xFF;
+            if (plain) leds.setColor(cfg.colorR, cfg.colorG, cfg.colorB);
+        }
     }
 
-    if (_server.hasArg("gamma"))
-        cfg.gamma = _server.arg("gamma").toFloat();
+    cfg.gamma         = floatArg(_server, "gamma",      cfg.gamma);
+    cfg.saturation    = floatArg(_server, "saturation", cfg.saturation);
+    cfg.whiteBalanceR = byteArg(_server, "wb_r", cfg.whiteBalanceR);
+    cfg.whiteBalanceG = byteArg(_server, "wb_g", cfg.whiteBalanceG);
+    cfg.whiteBalanceB = byteArg(_server, "wb_b", cfg.whiteBalanceB);
 
-    if (_server.hasArg("saturation"))
-        cfg.saturation = _server.arg("saturation").toFloat();
-
-    if (_server.hasArg("wb_r"))
-        cfg.whiteBalanceR = static_cast<uint8_t>(_server.arg("wb_r").toInt());
-
-    if (_server.hasArg("wb_g"))
-        cfg.whiteBalanceG = static_cast<uint8_t>(_server.arg("wb_g").toInt());
-
-    if (_server.hasArg("wb_b"))
-        cfg.whiteBalanceB = static_cast<uint8_t>(_server.arg("wb_b").toInt());
-
-    cfg.save();
+    cfg.save();   // also clamps gamma/saturation to their valid ranges
     Log.println("[Web] LED config applied.");
 
     _server.send(200, "application/json", "{\"message\":\"Applied.\"}");
-}
-
-// ---------------------------------------------------------------------------
-// Calibration helpers
-// ---------------------------------------------------------------------------
-
-static uint8_t parseCalibrationParam(WebServer& server, const char* key, uint8_t defaultVal) {
-    if (!server.hasArg(key)) return defaultVal;
-    int v = server.arg(key).toInt();
-    return (v >= 0 && v <= 255) ? (uint8_t)v : defaultVal;
 }
 
 void WebPortal::handleSaveCalibration() {
     auto& cfg  = Config::instance();
     auto& leds = LEDController::instance();
 
-    cfg.ledTop     = parseCalibrationParam(_server, "led_top",     cfg.ledTop);
-    cfg.ledRight   = parseCalibrationParam(_server, "led_right",   cfg.ledRight);
-    cfg.ledBottom  = parseCalibrationParam(_server, "led_bottom",  cfg.ledBottom);
-    cfg.ledLeft    = parseCalibrationParam(_server, "led_left",    cfg.ledLeft);
+    cfg.ledTop     = byteArg(_server, "led_top",     cfg.ledTop);
+    cfg.ledRight   = byteArg(_server, "led_right",   cfg.ledRight);
+    cfg.ledBottom  = byteArg(_server, "led_bottom",  cfg.ledBottom);
+    cfg.ledLeft    = byteArg(_server, "led_left",    cfg.ledLeft);
 
-    if (_server.hasArg("start_corner")) {
-        int v = _server.arg("start_corner").toInt();
-        if (v >= 0 && v <= 3) cfg.startCorner = (uint8_t)v;
-    }
+    long v;
+    if (parseLongArg(_server, "start_corner", v) && v >= 0 && v <= 3)
+        cfg.startCorner = (uint8_t)v;
     if (_server.hasArg("clockwise"))
         cfg.clockwise = (_server.arg("clockwise") != "0");
 
@@ -246,16 +271,15 @@ void WebPortal::handleSaveCalibration() {
 }
 
 void WebPortal::handlePreviewCalibration() {
-    uint8_t top    = parseCalibrationParam(_server, "led_top",     Config::instance().ledTop);
-    uint8_t right  = parseCalibrationParam(_server, "led_right",   Config::instance().ledRight);
-    uint8_t bottom = parseCalibrationParam(_server, "led_bottom",  Config::instance().ledBottom);
-    uint8_t left   = parseCalibrationParam(_server, "led_left",    Config::instance().ledLeft);
+    uint8_t top    = byteArg(_server, "led_top",     Config::instance().ledTop);
+    uint8_t right  = byteArg(_server, "led_right",   Config::instance().ledRight);
+    uint8_t bottom = byteArg(_server, "led_bottom",  Config::instance().ledBottom);
+    uint8_t left   = byteArg(_server, "led_left",    Config::instance().ledLeft);
 
     uint8_t corner = Config::instance().startCorner;
-    if (_server.hasArg("start_corner")) {
-        int v = _server.arg("start_corner").toInt();
-        if (v >= 0 && v <= 3) corner = (uint8_t)v;
-    }
+    long v;
+    if (parseLongArg(_server, "start_corner", v) && v >= 0 && v <= 3)
+        corner = (uint8_t)v;
 
     bool cw = Config::instance().clockwise;
     if (_server.hasArg("clockwise"))
@@ -269,10 +293,9 @@ void WebPortal::handleSaveMode() {
     auto& cfg  = Config::instance();
     auto& leds = LEDController::instance();
 
-    if (_server.hasArg("led_mode")) {
-        int m = _server.arg("led_mode").toInt();
-        if (m == 0 || m == 1) cfg.ledMode = (uint8_t)m;
-    }
+    long m;
+    if (parseLongArg(_server, "led_mode", m) && (m == 0 || m == 1))
+        cfg.ledMode = (uint8_t)m;
     cfg.save();
     Log.printf("[Web] Mode set to %s\n", cfg.ledMode == 1 ? "dynamic" : "plain");
 

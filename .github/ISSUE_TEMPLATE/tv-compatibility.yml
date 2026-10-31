@@ -1,0 +1,51 @@
+name: TV compatibility report
+description: Tell us whether hardware capture works on your Samsung TV
+title: "TV report: <model>"
+labels: ["tv-compatibility"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for testing! Both working and non-working results help. See [CONTRIBUTING.md](https://github.com/exzos28/tizen-os-ambilight/blob/main/docs/CONTRIBUTING.md) for how to collect the service log.
+  - type: input
+    id: model
+    attributes:
+      label: Model code
+      description: Settings → Support → About This TV
+      placeholder: QE65QN90DAU
+    validations:
+      required: true
+  - type: input
+    id: software
+    attributes:
+      label: Software version
+      description: Settings → Support → About This TV → Software version
+      placeholder: T-KSU2EFDEUC-0090-1296.8
+    validations:
+      required: true
+  - type: input
+    id: tizen
+    attributes:
+      label: Model year / Tizen version
+      description: If you know it
+  - type: dropdown
+    id: result
+    attributes:
+      label: Result
+      options:
+        - Works
+        - Partially works
+        - Doesn't work
+    validations:
+      required: true
+  - type: textarea
+    id: tested
+    attributes:
+      label: What did you test?
+      description: Streaming app, HDMI input, broadcast TV, etc.
+  - type: textarea
+    id: log
+    attributes:
+      label: Service log
+      description: The HwCondition, CaptureReady and CaptureError lines from tools/server.py
+      render: text

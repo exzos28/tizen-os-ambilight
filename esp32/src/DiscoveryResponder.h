@@ -1,6 +1,6 @@
 #pragma once
 #include <Arduino.h>
-#include <WiFiUDP.h>
+#include <WiFiUdp.h>
 
 // Listens for UDP broadcast discovery probes from the TV service.
 // Protocol: TV broadcasts "AMBILIGHT_DISCOVER" on DISCOVERY_PORT.

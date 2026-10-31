@@ -3,6 +3,9 @@
 DIY ambilight for Samsung Tizen TVs. Captures edge colors directly from the TV's video
 processor — no HDMI splitter, no external camera.
 
+Ports, packet formats and the HTTP API are documented in [NETWORKING.md](NETWORKING.md);
+wiring in [HARDWARE.md](HARDWARE.md).
+
 ---
 
 ## System diagram
@@ -11,37 +14,48 @@ processor — no HDMI splitter, no external camera.
 ┌─────────────────────────────────────────────────────────────┐
 │  Samsung Tizen TV                                           │
 │                                                             │
-│  libvideoenhance.so  ──►  Capture.cs  ──► UDP packet       │
-│  (HW video engine)         (.NET)          port 9001        │
+│  libvideoenhance.so  ──►  Capture.cs  ──►  UDP frame        │
+│  (HW video engine)        (.NET)           port 9001        │
 │                                                             │
-│  Service_App.cs — lifecycle, discovery, HTTP logging        │
+│  Service_App.cs — lifecycle, discovery, event log           │
+│  tv/ui — launcher web app (Start / Stop)                    │
 └───────────────────────────────────┬─────────────────────────┘
                                     │ UDP  (same LAN)
                                     ▼
 ┌─────────────────────────────────────────────────────────────┐
 │  ESP32                                                      │
 │                                                             │
-│  UDPReceiver  ──►  LEDController  ──►  WS2811 LED strip    │
+│  UDPReceiver  ──►  LEDController  ──►  WS2811 LED strip     │
 │                                                             │
-│  WebPortal  ──►  React UI (served from flash)              │
+│  DiscoveryResponder  (answers TV broadcast on UDP 9003)     │
+│  WebPortal  ──►  React UI (served from flash)               │
 │  NetworkManager  (STA / AP captive-portal fallback)         │
 │  OTAManager  (Arduino OTA)                                  │
-│  RemoteLogger  (Telnet)                                     │
+│  RemoteLogger  (Telnet, port 2323)                          │
 └─────────────────────────────────────────────────────────────┘
 ```
 
-Discovery (startup only): TV broadcasts `AMBILIGHT_DISCOVER` on UDP:9003 → ESP32 replies
-with its IP → TV learns where to send frames.
-
 ---
 
-## Components
+## 1. TV service (`tv/service/`)
 
-### 1. TV service (`tv/service/`)
+.NET 6 Tizen background service (`on-boot="true"`). Entry point: `Service_App.cs`.
 
-.NET 6 Tizen background service. Entry point: `Service_App.cs`.
+### Lifecycle
 
-**Capture pipeline** (`Capture.cs`):
+1. On start, waits 2 s, then runs discovery (`DiscoverServers()`): broadcasts
+   `AMBILIGHT_DISCOVER` on UDP 9003 and collects **all** replies for 2 s. Retries until
+   someone answers — 30 quick attempts, then one every `DiscoveryRetryDelayMs` (10 s).
+2. Runs the capture loop (`Capture.Run()`), sending every frame to all discovered hosts.
+3. If capture fails (library or symbols missing, invalid HW condition), retries after
+   5 s, 10 s, then every 30 s.
+4. AppControl `command=start` on a running service (the launcher's *Start*) cancels the
+   current worker and runs discovery + capture again; `command=stop` exits the service.
+
+An ESP32 that changes its IP while streaming is not picked up until the next *Start* or
+service restart.
+
+### Capture pipeline (`Capture.cs`)
 
 The TV's video processor has a hardware PPI (Pixel Processing Interface) exposed through
 `libvideoenhance.so`. Three functions are accessed via `dlopen` / P/Invoke:
@@ -49,34 +63,36 @@ The TV's video processor has a hardware PPI (Pixel Processing Interface) exposed
 ```c
 ppi_ve_get_rgb_measure_condition()   // query HW: block count, block size, screen res, delay
 ppi_ve_set_rgb_measure_position()    // set where to measure (x, y in screen coords)
-ppi_ve_get_rgb_measure_pixel()       // read average RGB of a 16×16 block at that position
+ppi_ve_get_rgb_measure_pixel()       // read average RGB (10-bit) of a block at that position
 ```
 
+Both `ppi_ve_*` and `ve_*` symbol names are probed to handle firmware differences.
+
 The HW has a limited number of measurement slots (2 on tested hardware). To cover all edge
-points, capture batches them:
+points, capture batches them and pipelines the next batch's positions:
 
 ```
 for each batch of N slots:
-    1. set_position(i, x, y)   for i in [0..N-1]
-    2. sleep(delay)            HW needs time to average pixels
-    3. get_pixel(i) → RGB      for i in [0..N-1]
-    advance to next batch positions
+    1. get_pixel(i) → RGB      for i in [0..N-1]   (positions set in the previous step)
+    2. set_position(i, x, y)   for the next batch
+    3. sleep(delay)            HW needs time to average pixels
 send complete frame via UDP
 ```
 
-The hardware delay is 20 ms minimum. Below that, results are garbage (confirmed by
-diagnostics). The final FPS depends on: `delay × ceil(totalPoints / slotsPerCycle)`.
+The hardware delay is 20 ms minimum; below that, results are garbage (confirmed by
+diagnostics). Frame time ≈ `delay × ceil(totalPoints / slotsPerCycle)`.
 
-**Sample points layout** — edge pixels are sampled in a clockwise ring:
+**Sample points layout** — clockwise ring, each point inset `EdgeInsetPx` from the edge:
 
 ```
-top:    hCount points  (left → right, top edge)
-right:  vCount points  (top → bottom, right edge)
-bottom: hCount points  (right → left, bottom edge)
-left:   vCount points  (bottom → top, left edge)
+top:    hCount points  (left → right)
+right:  vCount points  (top → bottom)
+bottom: hCount points  (right → left)
+left:   vCount points  (bottom → top)
 ```
 
-Defaults: `hCount=6`, `vCount=4` → 20 points → 10 batches × 20 ms = 200 ms/frame (~5 fps).
+Defaults: `hCount = 4`, `vCount = 3` → 14 points → 7 batches × 20 ms ≈ 140 ms/frame
+(~7 fps). Raw values are 10-bit and are shifted to 8-bit before sending.
 
 **Tested hardware** (Samsung 4K TV, Tizen 9.0, SDP platform):
 
@@ -87,147 +103,132 @@ Defaults: `hCount=6`, `vCount=4` → 20 points → 10 batches × 20 ms = 200 ms/
 | Slots per cycle  | 2           |
 | HW delay         | 20 ms       |
 
-**Discovery** (`Service_App.cs → DiscoverServer()`): at startup, broadcasts
-`AMBILIGHT_DISCOVER` on UDP:9003 up to 30 times with 2-second timeouts. Expects reply
-`AMBILIGHT_DISCOVER:<ip>`. If no reply, service exits.
+### Event log
 
-**Logging**: HTTP POST JSON events to `http://<esp32>:9000`. Non-critical — failures are
-silently swallowed.
-
----
-
-### 2. ESP32 firmware (`esp32/src/`)
-
-Arduino/PlatformIO project. All major subsystems are singletons initialized in `setup()`
-and driven in `loop()`.
-
-**Boot sequence** (`main.cpp`):
-
-```
-1. Config::begin()          load NVS (WiFi creds, LED layout, calibration)
-2. NetworkManager           connect STA; fall back to AP "ambilight-setup" if fail
-3. OTAManager::begin()      Arduino OTA (STA mode only)
-4. RemoteLogger::begin()    Telnet log server
-5. LEDController::begin()   FastLED init, static color
-6. WebPortal::begin()       HTTP config UI
-7. UDPReceiver::begin()     listen on UDP:9001 for ambilight frames
-```
-
-**Factory reset**: hold BOOT button (GPIO 0) for 3 seconds at any time → wipes NVS →
-restarts.
-
-**Networking** (`NetworkManager`):
-
-- STA mode: tries DHCP, then attempts a semi-static IP by requesting the preferred last
-  octet (`PREFERRED_IP_LAST_OCTET = 245`) from the gateway. This makes the IP predictable
-  without a reserved DHCP lease.
-- AP mode: opens `ambilight-setup` (open), starts a captive-portal DNS that redirects all
-  DNS queries to 192.168.4.1 so the config page opens automatically on most devices.
-
-**LED control** (`LEDController`):
-
-Two modes controlled by `Config::ledMode`:
-
-| Mode | Value | Behavior |
-|------|-------|----------|
-| Static color | 0 | Fills all LEDs with `colorR/G/B` |
-| Ambilight | 1 | Applies incoming UDP frames; ignores frames in mode 0 |
-
-`applyAmbilight()` receives a frame, interpolates each side's sample points to the actual
-LED count for that side, then maps the sides onto the physical strip using `startCorner`
-and `clockwise` config.
-
-`showCalibrationPreview()` lights each side in a distinct color and marks LED 0 white —
-lets users visually verify strip direction before going live.
-
-**UDP receiver** (`UDPReceiver`): listens on port 9001. Packet format:
-
-```
-[hCount : 1 byte]
-[vCount : 1 byte]
-[top    : hCount × 3 bytes RGB]
-[right  : vCount × 3 bytes RGB]
-[bottom : hCount × 3 bytes RGB]
-[left   : vCount × 3 bytes RGB]
-```
-
-Max packet for default config (h=6, v=4): 2 + 20×3 = 62 bytes. Buffer is capped at 512
-bytes for ESP32 safety.
-
-**Web portal** (`WebPortal` + React UI built into `web_ui.h`): serves a single-page app
-with four tabs — Status, LEDs, Calibration, WiFi. All config changes are persisted to NVS
-immediately via `Config::save()`.
-
-**OTA** (`OTAManager`): standard Arduino OTA. Hostname and password from config.
-
-**Remote logger** (`RemoteLogger`): Telnet server on port 23. Forwards all `Serial`
-output so you can monitor the device without USB.
+`SendLog()` posts JSON events (`CaptureStart`, `HwCondition`, `Frame`, `CaptureError`, …)
+over HTTP to port 9000 of every discovered host. Only `tools/server.py` listens there;
+failures are ignored.
 
 ---
 
-### 3. Configuration
+## 2. TV launcher (`tv/ui/`)
 
-**TV side** (`tv/service/Config.cs`) — compile-time constants:
+Plain JavaScript Tizen web app. *Start* / *Stop* send an AppControl with
+`command=start|stop` to `fCAYP0k0uD.Service`; *Debug* shows an animated color wheel
+for testing the strip response. Navigation: ◀ ▶ and OK on the remote; Back exits.
+
+---
+
+## 3. ESP32 firmware (`esp32/src/`)
+
+Arduino/PlatformIO project. All subsystems are singletons initialized in `setup()` and
+driven in `loop()`.
+
+### Boot sequence (`main.cpp`)
+
+```
+1. Config::begin()              load settings from NVS
+2. NetworkManager               connect STA (12 s timeout); fall back to AP "ambilight-setup"
+3. OTAManager::begin()          Arduino OTA
+4. RemoteLogger::begin()        Telnet log server on port 2323
+5. LEDController::begin()       FastLED init, static color
+6. WebPortal::begin()           HTTP config UI on port 80
+7. UDPReceiver::begin()         listen on UDP 9001 for frames
+8. DiscoveryResponder::begin()  answer discovery probes on UDP 9003
+```
+
+**Factory reset**: hold BOOT (GPIO 0) for 3 s at any time → wipes NVS → restarts.
+
+### Networking (`NetworkManager`)
+
+- **STA mode**: connects via DHCP, then switches to a static IP with the last octet
+  `PREFERRED_IP_LAST_OCTET` (245) in the gateway's subnet, reusing the gateway and mask.
+  This makes the address predictable without a DHCP reservation, but nothing checks that
+  the address is free. Set the constant to `0` to keep the DHCP address.
+- **AP mode**: opens the open network `ambilight-setup` and a captive-portal DNS that
+  resolves every name to 192.168.4.1. If Wi-Fi credentials are saved (the AP is only a
+  fallback, e.g. the router was still booting), it runs in `WIFI_AP_STA` mode and retries
+  the station connection for 15 s every 60 s while no client is connected to the AP;
+  once connected it restarts into plain STA mode.
+
+### LED control (`LEDController`)
+
+| Mode | `ledMode` | Behavior |
+|------|-----------|----------|
+| Plain | 0 | All LEDs show `colorR/G/B`; UDP frames are ignored |
+| Dynamic | 1 | UDP frames drive the strip; fades to black 5 s after the last frame |
+
+Frame processing (`applyAmbilight()`):
+
+1. **Interpolate** each side's samples to the configured LED count for that side
+   (`ledTop/Right/Bottom/Left`), in HSV with shortest-path hue.
+2. **Color correction**: saturation boost → white balance → gamma (lookup table).
+3. **Map** sides onto the physical strip using `startCorner` and `clockwise`.
+4. **Smooth**: `update()` runs at ~60 Hz and blends the displayed colors toward the
+   target (`SMOOTH_ALPHA = 32/255` per step).
+
+`showCalibrationPreview()` lights the sides red / green / yellow / blue
+(top / right / bottom / left) and the first LED white for 10 s. When it expires,
+`update()` clears it and, in plain mode, restores the static color.
+
+`UDPReceiver` drains all queued datagrams each loop and applies only the newest frame.
+
+Limits: `MAX_LEDS = 1500`, up to 255 LEDs per side, data on GPIO 23, color order BRG
+(see [HARDWARE.md](HARDWARE.md#led-color-order)).
+
+### Web portal (`WebPortal`)
+
+The React app in `esp32/web/` is built by `scripts/embed_web.py` (a PlatformIO pre-build
+step running `npm run build`) into a single HTML file, gzipped, embedded as `src/web_ui.h`
+and served from flash with `Content-Encoding: gzip` — no SPIFFS/LittleFS. Three tabs:
+Status, WiFi, LEDs. The LEDs tab has a Dynamic / Plain switch: Dynamic shows brightness,
+color correction and the strip layout editor; Plain shows LED count, brightness and the
+static color. Settings are saved to NVS on change; `Config::sanitize()` clamps them to
+valid ranges on every load and save. Only network changes restart the device.
+
+The firmware uses the `min_spiffs.csv` partition table: two 1.875 MB OTA app slots.
+
+### Other
+
+- **OTA** (`OTAManager`): standard Arduino OTA; hostname and password from settings
+  (default password `123456`).
+- **Remote logger** (`RemoteLogger`): mirrors all log output to Serial and to one Telnet
+  client on port 2323, sending whole lines.
+
+---
+
+## 4. Configuration reference
+
+### TV service (`tv/service/Config.cs`) — compile-time constants
 
 | Constant | Default | Description |
 |---|---|---|
-| `UdpPort` | 9001 | Target port for color frames |
-| `DiscoveryPort` | 9003 | UDP broadcast port |
-| `DiscoveryMaxRetries` | 30 | Attempts before giving up |
-| `TargetCaptureW` | 6 | Sample points per horizontal edge |
-| `TargetCaptureH` | 4 | Sample points per vertical edge |
-| `CaptureDelayMs` | 20 | ms between set_position and get_pixel |
+| `HttpPort` | 9000 | Event log target port |
+| `UdpPort` | 9001 | Color frame target port |
+| `DiscoveryPort` | 9003 | Discovery broadcast port |
+| `DiscoveryTimeoutMs` | 2000 | How long to collect replies per attempt |
+| `DiscoveryMaxRetries` | 30 | Quick attempts before slowing down |
+| `DiscoveryRetryDelayMs` | 10000 | Interval between attempts after that (discovery never gives up) |
+| `TargetCaptureW` | 4 | Sample points per horizontal edge |
+| `TargetCaptureH` | 3 | Sample points per vertical edge |
+| `EdgeInsetPx` | 250 | Distance of sample points from the screen edge, in HW pixels (3840 × 2160 on 4K) |
+| `CaptureDelayMs` | 20 | Delay between `set_position` and `get_pixel`; `-1` uses the HW-reported value |
 
-**ESP32 side** (`esp32/src/Config.h`) — persisted in NVS, editable via web UI:
+### ESP32 settings (NVS)
 
-| Field | Description |
-|---|---|
-| `wifiSSID / wifiPassword` | Station credentials |
-| `otaHostname / otaPassword` | OTA update settings |
-| `numLeds` | Total LED count in strip |
-| `brightness` | 0–255 |
-| `colorR/G/B` | Static color (mode 0) |
-| `ledTop/Right/Bottom/Left` | LEDs per side (calibration) |
-| `startCorner` | 0=top-left, 1=top-right, 2=bottom-right, 3=bottom-left |
-| `clockwise` | Strip winding direction |
-| `ledMode` | 0=static, 1=ambilight |
+Stored in the `ambilight` NVS namespace, editable in the web UI (`esp32/src/Config.h`):
 
----
-
-## Network ports
-
-| Port | Protocol | Direction | Purpose |
-|------|----------|-----------|---------|
-| 9000 | HTTP | TV → ESP32 | Log events (JSON POST) |
-| 9001 | UDP | TV → ESP32 | Color frames |
-| 9003 | UDP broadcast | TV → LAN | ESP32 discovery |
-| 23 | TCP | Client → ESP32 | Telnet remote log |
-| 80 | HTTP | Browser → ESP32 | Web config portal |
-| OTA port | TCP | Host → ESP32 | Arduino OTA |
-
----
-
-## Hardware
-
-```
-12V PSU
-  └─► DC-DC 12V→5V ─► ESP32 (GPIO 23 → 330Ω → WS2811 DATA)
-  └─► WS2811 12V LED strip (via JST-SM 3-pin: +12V / GND / DATA)
-```
-
-Decoupling: 1000 µF / 16 V on the 12 V rail, 100 µF / 10 V after the DC-DC converter.
-
-LED pin: GPIO 23. Max addressable: 1500 LEDs (`MAX_LEDS` in `LEDController.h`).
-
----
-
-## Key implementation notes
-
-- `libvideoenhance.so` is probed for two symbol name variants (`ppi_ve_*` and `ve_*`) to
-  handle differences between Tizen firmware versions.
-- The TV service has no retry logic after `Capture.Run()` fails — if `dlopen` or symbol
-  lookup fails, the service exits silently (logged via HTTP first if possible).
-- ESP32 ignores UDP frames when `ledMode != 1` — the ambilight receiver is always
-  listening, just not acting.
-- The React web UI is compiled to a single `web_ui.h` header and served from ESP32 flash;
-  there is no SD card or SPIFFS dependency.
+| Field | API name | Default | Description |
+|---|---|---|---|
+| `wifiSSID` / `wifiPassword` | `wifi_ssid` / `wifi_pass` | empty | Station credentials |
+| `otaHostname` / `otaPassword` | `ota_host` / `ota_pass` | `ambilight` / `123456` | OTA settings |
+| `numLeds` | `num_leds` | 300 | LEDs driven (set to the sum of the sides on calibration save) |
+| `brightness` | `brightness` | 100 | 0–255 |
+| `colorR/G/B` | `color` | white | Color in plain mode |
+| `ledTop/Right/Bottom/Left` | `led_top` … | 10 / 6 / 10 / 6 | LEDs per side |
+| `startCorner` | `start_corner` | 0 | 0 = top-left, 1 = top-right, 2 = bottom-right, 3 = bottom-left |
+| `clockwise` | `clockwise` | true | Strip direction from the start corner |
+| `ledMode` | `led_mode` | 1 | 0 = plain, 1 = dynamic |
+| `gamma` | `gamma` | 2.2 | Gamma correction (UI range 0.5–3.0) |
+| `saturation` | `saturation` | 1.0 | Saturation multiplier (UI range 0–2) |
+| `whiteBalanceR/G/B` | `wb_r` / `wb_g` / `wb_b` | 255 | Per-channel scale |

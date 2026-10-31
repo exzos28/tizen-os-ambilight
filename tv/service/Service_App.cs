@@ -16,6 +16,12 @@ namespace Service
         private volatile bool _stopping;
         private string[] _serverHosts;
         private CancellationTokenSource _cts;
+        private readonly object _workerLock = new object();
+        // The launch that creates the service also delivers an AppControl. It is
+        // consumed without restarting the worker that OnCreate just started.
+        private bool _launchControlPending;
+        private long _createdAtTicks;   // Environment.TickCount64 — monotonic, unaffected by clock sync
+        private const long LaunchControlWindowMs = 10_000;
 
         #region Logging
 
@@ -49,11 +55,19 @@ namespace Service
 
         // Broadcasts the discovery magic and collects ALL responses within
         // Config.DiscoveryTimeoutMs. Returns every unique IP that replied.
-        private string[] DiscoverServers()
+        // Never gives up: after DiscoveryMaxRetries quick attempts it keeps probing
+        // every DiscoveryRetryDelayMs, so an ESP32 that comes online later (e.g. after
+        // a power cut) is still found. Returns null only when cancelled.
+        private string[] DiscoverServers(CancellationToken token)
         {
             var magic = Encoding.UTF8.GetBytes(Config.DiscoveryMagic);
-            for (int attempt = 1; attempt <= Config.DiscoveryMaxRetries && !_stopping; attempt++)
+            for (int attempt = 1; !_stopping && !token.IsCancellationRequested; attempt++)
             {
+                if (attempt > Config.DiscoveryMaxRetries)
+                {
+                    if (token.WaitHandle.WaitOne(Config.DiscoveryRetryDelayMs)) break;
+                }
+
                 try
                 {
                     using var udp = new UdpClient();
@@ -97,30 +111,45 @@ namespace Service
         protected override void OnCreate()
         {
             base.OnCreate();
-            _cts?.Cancel();
-            _cts = new CancellationTokenSource();
-            var token = _cts.Token;
+            _launchControlPending = true;
+            _createdAtTicks = Environment.TickCount64;
+            StartWorker();
+        }
+
+        // (Re)starts discovery + capture. Cancels a running worker first, so a
+        // "start" command re-runs discovery and picks up hosts that appeared or
+        // changed IP since the last start.
+        private void StartWorker()
+        {
+            CancellationToken token;
+            lock (_workerLock)
+            {
+                _cts?.Cancel();
+                _cts = new CancellationTokenSource();
+                token = _cts.Token;
+            }
 
             Capture.Stop();
             Task.Run(async () =>
             {
-                await Task.Delay(2000);
+                try { await Task.Delay(2000, token); } catch (OperationCanceledException) { return; }
                 if (token.IsCancellationRequested || _stopping) return;
 
-                _serverHosts = DiscoverServers();
-                if (_serverHosts == null || _stopping || token.IsCancellationRequested) return;
+                var hosts = DiscoverServers(token);
+                if (hosts == null || _stopping || token.IsCancellationRequested) return;
+                _serverHosts = hosts;
 
                 SendLog("OnCreate", $"servers={string.Join(",", _serverHosts)}");
                 SendLog("CaptureInit", "starting HW RGB capture...");
 
-                await Task.Delay(500);
+                try { await Task.Delay(500, token); } catch (OperationCanceledException) { return; }
                 if (token.IsCancellationRequested || _stopping) return;
 
                 int[] backoffMs = { 5_000, 10_000, 30_000 };
                 int attempt = 0;
                 while (!token.IsCancellationRequested && !_stopping)
                 {
-                    bool cleanStop = Capture.Run(_serverHosts, (evt, data) => SendLog(evt, data));
+                    bool cleanStop = Capture.Run(hosts, (evt, data) => SendLog(evt, data), token);
                     if (cleanStop || token.IsCancellationRequested || _stopping) break;
 
                     int delay = backoffMs[Math.Min(attempt, backoffMs.Length - 1)];
@@ -137,6 +166,16 @@ namespace Service
             string command = "unknown";
             try { if (e.ReceivedAppControl.ExtraData.TryGet("command", out string c)) command = c; } catch { }
             if (command == "stop") { _stopping = true; Exit(); }
+            else
+            {
+                // First AppControl shortly after OnCreate = the launch request itself.
+                // The time bound covers launches that deliver no AppControl (e.g. on
+                // boot): a later Start press is then never swallowed.
+                bool isLaunchControl = _launchControlPending
+                    && Environment.TickCount64 - _createdAtTicks < LaunchControlWindowMs;
+                _launchControlPending = false;
+                if (command == "start" && !isLaunchControl) StartWorker();
+            }
         }
 
         protected override void OnTerminate()

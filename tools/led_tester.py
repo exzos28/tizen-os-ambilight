@@ -120,12 +120,12 @@ def gen_sweep(h_count, v_count, fps):
 
 
 def gen_sides(h_count, v_count):
-    """Each side a distinct color — mirrors the calibration preview on the ESP32."""
+    """Each side a distinct color — same colors as the calibration preview on the ESP32."""
     colors = {
-        'top':    (249, 115, 22),   # orange
-        'right':  ( 34, 197, 94),   # green
-        'bottom': ( 14, 165, 233),  # blue
-        'left':   (168,  85, 247),  # purple
+        'top':    (255,   0,   0),  # red
+        'right':  (  0, 255,   0),  # green
+        'bottom': (255, 255,   0),  # yellow
+        'left':   (  0,   0, 255),  # blue
     }
     top    = [colors['top']]    * h_count
     right  = [colors['right']]  * v_count

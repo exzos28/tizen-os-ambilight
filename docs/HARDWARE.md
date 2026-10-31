@@ -49,10 +49,38 @@ flowchart TB
 | Connector | JST-SM 3-pin | +12V / GND / DATA to LED strip |
 | LED strip | 12V WS2811 | Adhered to the back of the TV |
 
+## Photos
+
+<p>
+  <img src="media/controller.jpg" width="360" alt="Controller: ESP32, DC-DC converter, 1000 µF capacitor and barrel jack in an enclosure">
+  <img src="media/strip-on-tv.jpg" width="360" alt="WS2811 strip glued along the edges of the TV back panel">
+</p>
+
+Left: the controller — ESP32 dev board, DC-DC converter (top left), 1000 µF capacitor and the 12 V barrel jack with a screw terminal. Right: the strip runs around the perimeter of the TV's back panel.
+
 ## Notes
 
 - The 330 Ω resistor on the DATA line dampens signal ringing on long runs — do not omit.
 - Place the 1000 µF capacitor as close to the LED strip power input as possible.
+- **Common ground**: the ESP32 GND and the strip GND must be connected, otherwise the data signal has no reference.
 - ESP32 DATA pin is GPIO 23 (set in `esp32/src/LEDController.h` as `LED_PIN`).
-- Maximum addressable LEDs: 1500 (set in `LEDController.h` as `MAX_LEDS`).
+- Maximum addressable LEDs: 1500 (set in `LEDController.h` as `MAX_LEDS`); up to 255 per side.
 - PSU barrel jack: 5.5 × 2.1 mm, center-positive.
+
+## LED color order
+
+WS2811 strips from different vendors wire the R, G and B channels in different orders. The firmware assumes **BRG**:
+
+```cpp
+// esp32/src/LEDController.cpp
+FastLED.addLeds<WS2811, LED_PIN, BRG>(_leds, _numLeds);
+```
+
+If colors come out wrong, set the strip to solid red (web UI *Plain* mode, or `tools/led_tester.py --mode solid --color 255 0 0`), try `RGB`, `GRB`, `BRG`, etc. until it shows red, and reflash.
+
+## Power
+
+- **Size the PSU from your strip's datasheet**: watts per meter × length, plus ~20 % headroom. The firmware does not limit current, so full-white at brightness 255 draws the maximum.
+- **Fuse**: an inline fuse on the 12 V output, rated slightly above the strip's maximum current, protects the wiring if something shorts behind the TV.
+- **Long strips**: if the far end looks dimmer or yellowish at full white, feed +12 V / GND to both ends of the strip.
+- **Data level**: the ESP32 outputs 3.3 V logic. It usually works with a short data wire; if the first LEDs flicker or show random colors, shorten the wire or add a 3.3 → 5 V level shifter (e.g. 74AHCT125).

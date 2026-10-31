@@ -14,9 +14,12 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json() as Promise<T>
 }
 
-function toFormBody(data: Record<string, string | number | undefined>): string {
+type FormFields<T> = { [K in keyof T]: string | number | undefined }
+
+function toFormBody<T extends FormFields<T>>(data: T): string {
   const params = new URLSearchParams()
-  for (const [key, value] of Object.entries(data)) {
+  const entries = Object.entries(data) as [string, string | number | undefined][]
+  for (const [key, value] of entries) {
     if (value !== undefined && value !== '') {
       params.append(key, String(value))
     }
@@ -54,11 +57,6 @@ export function saveLeds(data: LedSaveRequest): Promise<SaveResponse> {
 /** Saves calibration (LED counts per side + layout) and shows it on the strip. */
 export function saveCalibration(data: CalibrationRequest): Promise<SaveResponse> {
   return request<SaveResponse>('/save/calibration', { ...POST_FORM, body: toFormBody(data) })
-}
-
-/** Temporarily lights the strip to visualise the current calibration. Does not save. */
-export function previewCalibration(data: CalibrationRequest): Promise<SaveResponse> {
-  return request<SaveResponse>('/preview/calibration', { ...POST_FORM, body: toFormBody(data) })
 }
 
 /** Switches between plain (0) and dynamic (1) mode. */

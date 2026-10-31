@@ -10,6 +10,10 @@ public:
     void save();
     void reset();   // wipes all NVS keys (factory reset)
 
+    // Clamps settings to their valid ranges. Runs on load and on save, so values
+    // saved by older firmware or sent by a malformed request can't break output.
+    void sanitize();
+
     String   wifiSSID;
     String   wifiPassword;
     String   otaHostname;
