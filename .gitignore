@@ -54,3 +54,6 @@ env/
 # === OS files ===
 .DS_Store
 Thumbs.db
+
+# === Node (changesets tooling at the repo root) ===
+node_modules/
