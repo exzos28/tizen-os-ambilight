@@ -102,6 +102,11 @@ jobs:
 
       - name: Start HyperHDR
         run: |
+          # The package starts a system instance; stop it so the test owns the process
+          # it freezes and kills (a second instance refuses to start).
+          sudo systemctl stop 'hyperhdr@*' 2>/dev/null || true
+          sudo pkill -x hyperhdr 2>/dev/null || true
+          while pgrep -x hyperhdr >/dev/null; do sleep 0.2; done
           mkdir -p "$RUNNER_TEMP/hyperhdr"
           QT_QPA_PLATFORM=offscreen nohup hyperhdr --userdata "$RUNNER_TEMP/hyperhdr" --service > "$RUNNER_TEMP/hyperhdr.log" 2>&1 &
           echo $! > "$RUNNER_TEMP/hyperhdr.pid"
