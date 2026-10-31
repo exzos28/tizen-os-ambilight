@@ -49,7 +49,7 @@ Support depends on the TV's video processor, not only on the Tizen version. Trie
 ## Quick start
 
 1. **Build the hardware** — ESP32, 12 V WS2811 strip, 12 V PSU, DC-DC converter. → [Hardware](docs/HARDWARE.md)
-2. **Flash the ESP32** and connect it to Wi-Fi through the `ambilight-setup` access point. → [Installation § ESP32](docs/INSTALL.md#1-esp32-firmware)
+2. **Flash the ESP32** — prebuilt image from [Releases](https://github.com/exzos28/tizen-os-ambilight/releases) or build it — and connect it to Wi-Fi through the `ambilight-setup` access point. → [Installation § ESP32](docs/INSTALL.md#1-esp32-firmware)
 3. **Calibrate the strip** in the web UI: LEDs per side, start corner, direction. → [Installation § Calibration](docs/INSTALL.md#3-calibrate-the-strip)
 4. **Install the TV apps** (service + launcher UI) and press *Start*. → [Installation § TV](docs/INSTALL.md#4-tv-apps)
 

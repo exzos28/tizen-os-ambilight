@@ -18,6 +18,31 @@ Build the hardware first — see [HARDWARE.md](HARDWARE.md).
 
 ## 1. ESP32 firmware
 
+### Option A: prebuilt firmware (no toolchain)
+
+Each [release](https://github.com/exzos28/tizen-os-ambilight/releases) has two files:
+
+| File | Flash at | Use |
+|------|----------|-----|
+| `ambilight-esp32-factory.bin` | `0x0` | First install over USB. **Erases saved settings** (Wi-Fi, calibration) |
+| `ambilight-esp32-app.bin` | `0x10000` / OTA | Update of an already flashed device; settings are kept |
+
+First install — with [esptool](https://docs.espressif.com/projects/esptool/) (`pip install esptool`) or the browser-based [ESP Web Flasher](https://espressif.github.io/esptool-js/) (Chrome/Edge, offset `0x0`):
+
+```sh
+esptool.py --chip esp32 write_flash 0x0 ambilight-esp32-factory.bin
+```
+
+Update over USB, keeping settings:
+
+```sh
+esptool.py --chip esp32 write_flash 0x10000 ambilight-esp32-app.bin
+```
+
+Then continue with [2. Connect to Wi-Fi](#2-connect-to-wi-fi).
+
+### Option B: build from source
+
 Install the web UI dependencies once:
 
 ```sh
@@ -25,7 +50,7 @@ cd esp32/web
 npm install
 ```
 
-### First flash (USB)
+#### First flash (USB)
 
 Connect the ESP32 over USB, then build and flash:
 
@@ -39,7 +64,7 @@ If PlatformIO picks the wrong serial port, set `upload_port` in `[env:esp32dev]`
 
 > **Upgrading an older install:** the firmware now uses a partition table with larger app slots (`min_spiffs.csv`). Saved settings are kept, but the new table only takes effect after one USB flash. Until then, OTA updates keep working as long as the firmware fits the old 1.25 MB slot.
 
-### Later updates (OTA)
+#### Later updates (OTA)
 
 Once the ESP32 is on Wi-Fi, update it over the network:
 

@@ -29,10 +29,13 @@ pio run                   # build (also builds the web UI; needs npm install in 
 pio run -t upload         # flash over USB
 pio run -e ota -t upload  # flash over Wi-Fi (ambilight.local, see [env:ota] in platformio.ini)
 pio device monitor        # serial log, 115200 baud
+scripts/make_release.sh   # build + factory/app images into release/ (what GitHub Releases publish)
 nc <esp32-ip> 2323        # remote log over Telnet
 ```
 
 `src/web_ui.h` is generated on every build and is not committed.
+
+**Releases:** pushing a tag `v*` runs `.github/workflows/release.yml`, which builds the images with `scripts/make_release.sh` and attaches them to a GitHub release. Every CI run also uploads them as the `esp32-firmware` artifact.
 
 ## Compile-time constants
 
