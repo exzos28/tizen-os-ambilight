@@ -30,12 +30,17 @@ void Config::begin() {
     whiteBalanceR = _prefs.getUChar ("wb_r",       255);
     whiteBalanceG = _prefs.getUChar ("wb_g",       255);
     whiteBalanceB = _prefs.getUChar ("wb_b",       255);
+    powerLimitW   = _prefs.getUShort("pwr_limit",  0);
+    pixelWatts    = _prefs.getFloat ("px_watts",   0.72f);
     sanitize();
 }
 
 void Config::sanitize() {
     if (!isfinite(gamma))      gamma = 2.2f;
     if (!isfinite(saturation)) saturation = 1.0f;
+    if (!isfinite(pixelWatts)) pixelWatts = 0.72f;
+    pixelWatts  = constrain(pixelWatts, 0.05f, 5.0f);
+    powerLimitW = min(powerLimitW, (uint16_t)2000);
     gamma       = constrain(gamma,      0.5f, 3.0f);
     saturation  = constrain(saturation, 0.0f, 2.0f);
     numLeds     = constrain(numLeds, (uint16_t)1, MAX_LEDS);
@@ -74,4 +79,6 @@ void Config::save() {
     _prefs.putUChar ("wb_r",        whiteBalanceR);
     _prefs.putUChar ("wb_g",        whiteBalanceG);
     _prefs.putUChar ("wb_b",        whiteBalanceB);
+    _prefs.putUShort("pwr_limit",   powerLimitW);
+    _prefs.putFloat ("px_watts",    pixelWatts);
 }

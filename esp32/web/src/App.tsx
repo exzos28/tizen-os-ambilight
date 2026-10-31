@@ -44,12 +44,18 @@ export default function App() {
   const [wbG,        setWbG]        = useState(255)
   const [wbB,        setWbB]        = useState(255)
 
+  // Power limit (kept as strings while editing)
+  const [powerLimit, setPowerLimit] = useState('0')
+  const [pixelWatts, setPixelWatts] = useState('0.72')
+
   useEffect(() => {
     getConfig()
       .then((cfg: ConfigResponse) => {
         setWifiSSID(cfg.wifi_ssid)
         setOtaHost(cfg.ota_host)
         setIpOctet(String(cfg.ip_octet ?? 245))
+        setPowerLimit(String(cfg.power_limit_w ?? 0))
+        setPixelWatts(String(cfg.pixel_watts !== undefined ? Number(cfg.pixel_watts.toFixed(2)) : 0.72))
         setNumLeds(cfg.num_leds)
         setMaxLeds(cfg.max_leds)
         setBrightness(cfg.brightness)
@@ -128,6 +134,8 @@ export default function App() {
           wbR={wbR}               setWbR={setWbR}
           wbG={wbG}               setWbG={setWbG}
           wbB={wbB}               setWbB={setWbB}
+          powerLimit={powerLimit} setPowerLimit={setPowerLimit}
+          pixelWatts={pixelWatts} setPixelWatts={setPixelWatts}
         />
       )}
     </div>

@@ -28,6 +28,8 @@ export interface ConfigResponse {
   wb_r: number
   wb_g: number
   wb_b: number
+  power_limit_w: number  // 0 = no limit
+  pixel_watts: number    // W per LED pixel at full white
 }
 
 export interface CalibrationRequest {
@@ -56,6 +58,8 @@ export interface LedSaveRequest {
   wb_r?: number
   wb_g?: number
   wb_b?: number
+  power_limit_w?: number
+  pixel_watts?: number
 }
 
 export interface MetricsResponse {
@@ -64,6 +68,8 @@ export interface MetricsResponse {
   heap_min:   number
   uptime_s:   number
   cpu_mhz:    number
+  power_w:       number   // estimated strip power of the last frame
+  power_limited: boolean  // the power limit reduced brightness
 }
 
 export interface SaveResponse {

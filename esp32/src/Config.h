@@ -48,6 +48,12 @@ public:
     uint8_t  whiteBalanceG;  // 0 - 255
     uint8_t  whiteBalanceB;  // 0 - 255
 
+    // Power limit: if the estimated strip power exceeds powerLimitW, the global brightness
+    // is scaled down for that frame. 0 = no limit. pixelWatts = power of one LED pixel at
+    // full white and brightness 255 (12 V WS2811, 60 LEDs/m ≈ 14.4 W/m / 20 pixels = 0.72).
+    uint16_t powerLimitW;    // 0 - 2000
+    float    pixelWatts;     // 0.05 - 5.0
+
 private:
     Config() = default;
     Preferences _prefs;

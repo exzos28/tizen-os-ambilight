@@ -1,5 +1,6 @@
 #include "LEDController.h"
 #include "StripLayout.h"
+#include "PowerLimit.h"
 #include "Config.h"
 #include "RemoteLogger.h"
 
@@ -37,36 +38,51 @@ void LEDController::setNumLeds(uint16_t numLeds) {
     Log.printf("[LED] setNumLeds: %d -> %d (clearing %d)\n", _numLeds, newCount, clearCount);
     fill_solid(_leds, clearCount, CRGB::Black);
     FastLED[0].setLeds(_leds, clearCount);
-    FastLED.show();
+    show();
 
     _previewLit = 0;
     _numLeds = newCount;
     FastLED[0].setLeds(_leds, _numLeds);
-    FastLED.show();
+    show();
     Log.printf("[LED] setNumLeds done: driving %d LEDs\n", _numLeds);
 }
 
 void LEDController::setBrightness(uint8_t brightness) {
     _brightness = brightness;
-    FastLED.setBrightness(brightness);
-    FastLED.show();
+    show();
 }
 
 void LEDController::setColor(uint8_t r, uint8_t g, uint8_t b) {
     Log.printf("[LED] setColor: rgb(%d,%d,%d) x %d LEDs\n", r, g, b, _numLeds);
     fill_solid(_leds, _numLeds, CRGB(r, g, b));
-    FastLED.show();
+    show();
 }
 
 void LEDController::setColors(const CRGB* colors, uint16_t count) {
     uint16_t n = min(count, _numLeds);
     memcpy(_leds, colors, n * sizeof(CRGB));
-    FastLED.show();
+    show();
 }
 
 // ---------------------------------------------------------------------------
 // Private helpers
 // ---------------------------------------------------------------------------
+
+// Pushes _leds to the strip, applying the power limit: the estimated power of the frame
+// (channel values are PWM duty, so power ≈ linear in them) is compared with the budget
+// and, if over it, the global brightness is scaled down for this frame only.
+void LEDController::show() {
+    auto& cfg = Config::instance();
+    uint32_t sum = 0;
+    for (uint16_t i = 0; i < _numLeds; i++) sum += _leds[i].r + _leds[i].g + _leds[i].b;
+
+    PowerLimit::Result p = PowerLimit::apply(sum, _brightness, cfg.pixelWatts, cfg.powerLimitW);
+    _estimatedWatts = p.watts;
+    _powerLimited   = p.limited;
+
+    FastLED.setBrightness(p.brightness);
+    FastLED.show();
+}
 
 void LEDController::interpolateSide(const uint8_t* src, uint8_t srcCount,
                                     CRGB* dst, uint8_t dstCount) {
@@ -239,7 +255,7 @@ void LEDController::showCalibrationPreview(uint8_t startCorner, bool clockwise,
     // LED #0 = white, helps locate the physical start of the strip.
     _leds[0] = CRGB::White;
 
-    FastLED.show();
+    show();
 
     // Restore numLeds if it changed (preview is temporary).
     if (_numLeds != prevNum) {
@@ -286,7 +302,7 @@ void LEDController::update() {
         }
 
         if (changed) {
-            FastLED.show();
+            show();
         }
     }
 }

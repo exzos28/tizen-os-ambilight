@@ -154,6 +154,8 @@ void WebPortal::handleConfig() {
     doc["wb_r"]         = cfg.whiteBalanceR;
     doc["wb_g"]         = cfg.whiteBalanceG;
     doc["wb_b"]         = cfg.whiteBalanceB;
+    doc["power_limit_w"] = cfg.powerLimitW;
+    doc["pixel_watts"]  = cfg.pixelWatts;
     sendJson(_server, doc);
 }
 
@@ -164,6 +166,8 @@ void WebPortal::handleMetrics() {
     doc["heap_min"]   = ESP.getMinFreeHeap();
     doc["uptime_s"]   = millis() / 1000;
     doc["cpu_mhz"]    = ESP.getCpuFreqMHz();
+    doc["power_w"]       = LEDController::instance().estimatedWatts();
+    doc["power_limited"] = LEDController::instance().powerLimited();
     sendJson(_server, doc);
 }
 
@@ -235,6 +239,14 @@ void WebPortal::handleSaveLeds() {
     cfg.whiteBalanceR = byteArg(_server, "wb_r", cfg.whiteBalanceR);
     cfg.whiteBalanceG = byteArg(_server, "wb_g", cfg.whiteBalanceG);
     cfg.whiteBalanceB = byteArg(_server, "wb_b", cfg.whiteBalanceB);
+
+    long limit;
+    if (parseLongArg(_server, "power_limit_w", limit) && limit >= 0)
+        cfg.powerLimitW = static_cast<uint16_t>(min(limit, 2000L));
+    cfg.pixelWatts = floatArg(_server, "pixel_watts", cfg.pixelWatts);
+    // Re-show so a changed limit applies right away (plain mode has no frame loop).
+    if (plain && (_server.hasArg("power_limit_w") || _server.hasArg("pixel_watts")))
+        leds.setBrightness(cfg.brightness);
 
     cfg.save();   // also clamps gamma/saturation to their valid ranges
     Log.println("[Web] LED config applied.");

@@ -30,6 +30,10 @@ public:
     void update();
 
     uint16_t numLeds()    const { return _numLeds; }
+    // Estimated strip power of the last frame (after the power limit) and whether the
+    // limit reduced it. See Config::powerLimitW / pixelWatts.
+    float    estimatedWatts() const { return _estimatedWatts; }
+    bool     powerLimited()   const { return _powerLimited; }
     uint8_t  brightness() const { return _brightness; }
     bool     previewActive() const { return millis() < _previewUntil; }
 
@@ -39,6 +43,7 @@ private:
     LEDController() = default;
 
     void updateGammaTable(float gamma);
+    void show();   // FastLED.show() with the power limit applied
 
     // Apply saturation, white balance and gamma to a range of pixels.
     void processColors(CRGB* leds, uint16_t count);
@@ -68,6 +73,8 @@ private:
     uint32_t    _previewUntil = 0;
     bool        _previewShown = false;   // a preview was drawn and not yet cleared
     uint16_t    _previewLit   = 0;       // LEDs a preview lit beyond the current count
+    float       _estimatedWatts = 0;
+    bool        _powerLimited   = false;
     uint32_t    _lastFrameMs  = 0;
     uint32_t    _lastUpdateMs = 0;
     uint8_t     _gammaTable[256];

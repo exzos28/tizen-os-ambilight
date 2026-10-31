@@ -41,6 +41,8 @@ export function StatusTab({ status, metrics }: StatusTabProps) {
             <Stat label="Min Heap"   value={fmtKB(metrics.heap_min)}     />
             <Stat label="CPU"        value={`${metrics.cpu_mhz} MHz`}    />
             <Stat label="Uptime"     value={fmtUptime(metrics.uptime_s)} />
+            <Stat label="LED Power (est.)"
+                  value={`${metrics.power_w.toFixed(0)} W${metrics.power_limited ? ' · limited' : ''}`} />
           </div>
         </section>
       )}

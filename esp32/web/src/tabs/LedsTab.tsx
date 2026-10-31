@@ -3,6 +3,7 @@ import { saveLeds, saveCalibration } from '../api'
 import type { CalibrationRequest, LedSaveRequest } from '../api'
 import { CalibrationDiagram } from '../components/CalibrationDiagram'
 import { Stat } from '../components/ui/Stat'
+import { PowerCard } from '../components/PowerCard'
 
 const CORNER_NAMES = ['Top-Left', 'Top-Right', 'Bot-Right', 'Bot-Left']
 
@@ -29,6 +30,9 @@ interface LedsTabProps {
   wbR:        number;  setWbR:        (v: number) => void
   wbG:        number;  setWbG:        (v: number) => void
   wbB:        number;  setWbB:        (v: number) => void
+  // Power limit
+  powerLimit: string;  setPowerLimit: (v: string) => void
+  pixelWatts: string;  setPixelWatts: (v: string) => void
 }
 
 export function LedsTab({
@@ -47,6 +51,8 @@ export function LedsTab({
   wbR,         setWbR,
   wbG,         setWbG,
   wbB,         setWbB,
+  powerLimit,  setPowerLimit,
+  pixelWatts,  setPixelWatts,
 }: LedsTabProps) {
   const ledsTimer  = useRef<ReturnType<typeof setTimeout> | null>(null)
   const calibTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -285,6 +291,12 @@ export function LedsTab({
           </div>
         </section>
       )}
+
+      <PowerCard
+        powerLimit={powerLimit} setPowerLimit={setPowerLimit}
+        pixelWatts={pixelWatts} setPixelWatts={setPixelWatts}
+        numLeds={numLeds}       brightness={brightness}
+      />
     </div>
   )
 }
