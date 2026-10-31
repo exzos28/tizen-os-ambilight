@@ -16,7 +16,8 @@ cd "$(dirname "$0")/.."
 
 PIO="${PIO:-pio}"
 command -v "$PIO" >/dev/null || PIO="$HOME/.platformio/penv/bin/pio"
-PIO_HOME="${PLATFORMIO_CORE_DIR:-$HOME/.platformio}"
+# PlatformIO's core dir (honours PLATFORMIO_CORE_DIR and core_dir in platformio.ini).
+PIO_HOME="$("$PIO" system info --json-output | python3 -c 'import json,sys; print(json.load(sys.stdin)["core_dir"]["value"])')"
 
 "$PIO" run -e esp32dev
 
