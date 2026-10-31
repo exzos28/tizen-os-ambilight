@@ -18,6 +18,7 @@ src/
   LEDController.*         Interpolation, color correction, strip mapping, smoothing, power limit
   StripLayout.h           Strip traversal + interpolation math (no Arduino deps, unit-tested)
   PowerLimit.h            Power estimate + brightness scaling (no Arduino deps, unit-tested)
+  StaticIp.h              Static-address validation against the DHCP subnet (unit-tested)
   WebPortal.*             HTTP server: web UI and JSON API
   OTAManager.*            Arduino OTA
   RemoteLogger.*          Log to Serial + Telnet (port 2323)
@@ -29,7 +30,7 @@ test/                     Host unit tests (pio test -e native)
 
 ```sh
 pio run                   # build (also builds the web UI; needs npm install in web/ once)
-pio test -e native        # host unit tests (src/StripLayout.h, src/PowerLimit.h)
+pio test -e native        # host unit tests (StripLayout.h, PowerLimit.h, StaticIp.h)
 pio run -t upload         # flash over USB
 pio run -e ota -t upload  # flash over Wi-Fi (ambilight.local, see [env:ota] in platformio.ini)
 pio device monitor        # serial log, 115200 baud

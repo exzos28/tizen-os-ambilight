@@ -76,8 +76,9 @@ can block capture or another output.
 ### Capture pipeline (`Capture.cs`)
 
 The TV's video processor has a hardware PPI (Pixel Processing Interface) exposed through
-`libvideoenhance.so`. Three functions are accessed via `NativeLibrary` (dlopen) / P/Invoke;
-a load failure is logged with the loader's own message:
+`libvideoenhance.so`. It is loaded with `dlopen(RTLD_NOW)` (unresolved dependencies fail at
+load time, not on first call) and a failure is logged with the loader's own message. Three
+functions are called via P/Invoke:
 
 ```c
 ppi_ve_get_rgb_measure_condition()   // query HW: block count, block size, screen res, delay
@@ -162,8 +163,10 @@ driven in `loop()`.
 
 - **STA mode**: connects via DHCP, then switches to a static IP with the last octet
   `preferredLastOctet` (setting, default 245) in the gateway's subnet, reusing the gateway
-  and mask. This makes the address predictable without a DHCP reservation, but nothing
-  checks that the address is free. `0` keeps the DHCP address.
+  and mask. This makes the address predictable without a DHCP reservation. If that address
+  can't work on the network (outside the subnet, the router's own address, network or
+  broadcast address — `StaticIp.h`), the DHCP address is kept and the reason logged.
+  Nothing checks whether another device already uses it. `0` keeps the DHCP address.
 - **AP mode**: opens the open network `ambilight-setup` and a captive-portal DNS that
   resolves every name to 192.168.4.1. If Wi-Fi credentials are saved (the AP is only a
   fallback, e.g. the router was still booting), it runs in `WIFI_AP_STA` mode and retries
