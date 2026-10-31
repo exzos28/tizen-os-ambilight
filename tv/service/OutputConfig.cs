@@ -49,7 +49,12 @@ namespace Service
                 }
 
                 if (root.TryGetProperty("esp32", out var esp32))
-                    cfg.Esp32Enabled = GetBool(esp32, "enabled", true, "esp32", cfg.Warnings);
+                {
+                    if (esp32.ValueKind == JsonValueKind.Object)
+                        cfg.Esp32Enabled = GetBool(esp32, "enabled", true, "esp32", cfg.Warnings);
+                    else
+                        cfg.Warnings.Add(@"esp32 must be an object, e.g. ""esp32"": { ""enabled"": false } — ESP32 output left enabled");
+                }
 
                 if (root.TryGetProperty("hyperhdr", out var hyper))
                     cfg.HyperHdr = HyperHdrSettings.Parse(hyper, cfg.Warnings);

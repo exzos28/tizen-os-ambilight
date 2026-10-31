@@ -181,6 +181,9 @@ namespace Service
             var off = OutputConfig.Parse(@"{ ""esp32"": { ""enabled"": false } }");
             Check(!off.Esp32Enabled, "esp32.enabled=false is honoured");
 
+            var notObject = OutputConfig.Parse(@"{ ""esp32"": false }");
+            Check(notObject.Esp32Enabled && notObject.Warnings.Exists(w => w.Contains("esp32 must be an object")), "\"esp32\": false (not an object) → warning, ESP32 left on");
+
             var missing = OutputConfig.Load("/nonexistent/ambilight.json");
             Check(missing.Esp32Enabled && missing.Warnings.Count == 1, "missing file → defaults with a warning");
         }
