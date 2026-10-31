@@ -263,7 +263,6 @@ void LEDController::showCalibrationPreview(uint8_t startCorner, bool clockwise,
               ledTop, ledRight, ledBottom, ledLeft);
 
     // Log the resulting strip layout: which LEDs got which side's color.
-    const CRGB* sideArrays[4] = { topC, rightC, bottomC, leftC };
     uint8_t     sideCounts[4] = { ledTop, ledRight, ledBottom, ledLeft };
     uint16_t pos = 0;
     if (clockwise) {
