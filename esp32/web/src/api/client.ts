@@ -10,7 +10,15 @@ import type {
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, init)
-  if (!res.ok) throw new Error(`HTTP ${res.status}: ${path}`)
+  if (!res.ok) {
+    // The firmware explains rejections in {"message": "..."} — surface it.
+    let message = `HTTP ${res.status}: ${path}`
+    try {
+      const body = await res.json() as { message?: string }
+      if (body.message) message = body.message
+    } catch { /* not JSON */ }
+    throw new Error(message)
+  }
   return res.json() as Promise<T>
 }
 
