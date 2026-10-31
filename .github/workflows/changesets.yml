@@ -1,0 +1,60 @@
+name: Changesets
+
+# On every push to main: if there are pending changesets, open/update the
+# "chore: release" PR. When that PR is merged (no changesets left, new version),
+# tag vX.Y.Z, create the GitHub release from CHANGELOG.md and attach the firmware.
+on:
+  push:
+    branches: [main]
+
+concurrency: ${{ github.workflow }}-${{ github.ref }}
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    outputs:
+      published: ${{ steps.changesets.outputs.published }}
+      tag: ${{ steps.tag.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # tags are needed to know which version is already released
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - run: npm ci
+
+      - name: Create release PR or tag the release
+        id: changesets
+        uses: changesets/action@66d7d1ddafddf1ef45f98ee51a7496f9cdadb2f4 # v2.1.2
+        with:
+          version-script: npm run version-packages
+          publish-script: npm run release      # private package: only creates the vX.Y.Z tag
+          create-github-releases: true
+          commit-message: "chore: release"
+          pr-title: "chore: release"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Released tag
+        id: tag
+        if: steps.changesets.outputs.published == 'true'
+        run: echo "tag=v$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+
+  # Tags pushed with GITHUB_TOKEN don't trigger other workflows, so the firmware
+  # release is called from here.
+  firmware:
+    needs: version
+    if: needs.version.outputs.published == 'true'
+    permissions:
+      contents: write
+    uses: ./.github/workflows/release.yml
+    with:
+      tag: ${{ needs.version.outputs.tag }}

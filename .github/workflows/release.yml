@@ -1,10 +1,19 @@
 name: Release
 
-# Push a tag like v1.2.0 to build the firmware and publish it as a GitHub release.
+# Builds the firmware images and attaches them to the GitHub release of a tag.
+#  - Normal path: called by the Changesets workflow after it tagged vX.Y.Z and created the
+#    release from CHANGELOG.md (tags pushed by GITHUB_TOKEN don't trigger workflows).
+#  - Manual path: push a tag like v1.2.0 yourself; the release is created here.
 # The TV apps are not attached: they must be signed with a certificate for each TV.
 on:
   push:
     tags: ['v*']
+  workflow_call:
+    inputs:
+      tag:
+        description: Tag to build and attach the firmware to, e.g. v1.2.0
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -12,8 +21,12 @@ permissions:
 jobs:
   firmware:
     runs-on: ubuntu-latest
+    env:
+      TAG: ${{ inputs.tag || github.ref_name }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
 
       - uses: actions/setup-node@v4
         with:
@@ -36,12 +49,13 @@ jobs:
         run: scripts/make_release.sh release
         working-directory: esp32
 
-      - name: Publish release
+      - name: Attach to the release
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ github.ref_name }}
         run: |
-          gh release create "$TAG" --title "$TAG" --generate-notes \
-            esp32/release/ambilight-esp32-factory.bin \
-            esp32/release/ambilight-esp32-app.bin \
-            esp32/release/SHA256SUMS.txt
+          files="esp32/release/ambilight-esp32-factory.bin esp32/release/ambilight-esp32-app.bin esp32/release/SHA256SUMS.txt"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" $files --clobber
+          else
+            gh release create "$TAG" --title "$TAG" --generate-notes $files
+          fi
