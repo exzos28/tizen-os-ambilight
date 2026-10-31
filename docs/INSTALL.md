@@ -120,6 +120,8 @@ A regular Samsung account and a **Public** distributor certificate are enough. T
 
 ### 4.3 Build and install
 
+**Outputs.** By default the service streams to ESP32 controllers only. To also (or instead) stream to a HyperHDR server, edit `tv/service/res/ambilight.json` before building — see [HYPERHDR.md](HYPERHDR.md) (untested on a TV).
+
 The projects use the VS Code Tizen extension format (`tizen_web_project.yaml`, `tizen_dotnet_project.yaml`).
 
 1. Open the `tv/` folder in VS Code with the Tizen extension and select your Samsung certificate profile as the active signing profile.
@@ -133,7 +135,7 @@ If you change the package ID, update it in both manifests and `SERVICE_APP_ID` i
 
 Open **Ambilight** on the TV and press **Start**. The service waits 2 s, broadcasts a discovery probe and starts streaming to every ESP32 that answers. The strip should follow the picture within a few seconds.
 
-The service also starts on its own when the TV boots. Pressing **Start** while it is running re-runs discovery — useful after adding a controller or when an ESP32 got a new IP.
+The service also starts on its own when the TV boots. It keeps looking for controllers in the background (new ones and IP changes are picked up within ~30 s); pressing **Start** while it is running probes immediately, reconnects HyperHDR and restarts capture.
 
 ---
 
@@ -160,7 +162,7 @@ Hold the **BOOT** button (GPIO 0) on the ESP32 for 3 seconds. All settings, incl
 
 **The TV doesn't find the ESP32.**
 - TV and ESP32 must be in the same subnet, with broadcast allowed (no guest network, no client isolation).
-- The service keeps probing: every 2 s for the first minute, then every 10 s. Once the ESP32 is reachable it is picked up automatically; press *Start* to retry immediately.
+- The service keeps probing: every 2 s for the first minute, then every 10 s (every 30 s once something answered). Once the ESP32 is reachable it is picked up automatically; press *Start* to retry immediately.
 - In the ESP32 Telnet log, look for `[Discovery] Replied to …`.
 
 **The strip doesn't react to the picture on some models.** The hardware color-measurement block is missing on some processors (e.g. Q6F, [#2](https://github.com/exzos28/tizen-os-ambilight/issues/2)). The TV service log shows `CaptureError invalid HW condition`. Please report your model — see [CONTRIBUTING.md](CONTRIBUTING.md).

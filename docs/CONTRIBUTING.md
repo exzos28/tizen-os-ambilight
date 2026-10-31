@@ -19,7 +19,7 @@ Please include:
 ### Getting the service log
 
 1. Run [`tools/server.py`](../tools/README.md) on a PC in the same network.
-2. Press *Start* in the Ambilight launcher on the TV. If the service is already running (it starts with the TV), this re-runs discovery so it picks up `server.py`.
+2. Press *Start* in the Ambilight launcher on the TV (or wait up to 30 s): discovery picks up `server.py` and the event log starts flowing.
 3. Copy the `HwCondition`, `CaptureReady` and any `CaptureError` lines from the server window.
 
 `HwCondition` shows what the hardware reports (`ret=0 blocks=2 blockSize=16x16 full=3840x2160 delay=20ms` on working TVs). A non-zero `ret` or `blocks=0` means the measurement block is not available on that processor.

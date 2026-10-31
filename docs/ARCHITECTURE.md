@@ -14,14 +14,16 @@ wiring in [HARDWARE.md](HARDWARE.md).
 ┌─────────────────────────────────────────────────────────────┐
 │  Samsung Tizen TV                                           │
 │                                                             │
-│  libvideoenhance.so  ──►  Capture.cs  ──►  UDP frame        │
-│  (HW video engine)        (.NET)           port 9001        │
-│                                                             │
-│  Service_App.cs — lifecycle, discovery, event log           │
-│  tv/ui — launcher web app (Start / Stop)                    │
-└───────────────────────────────────┬─────────────────────────┘
-                                    │ UDP  (same LAN)
-                                    ▼
+│  libvideoenhance.so ─► Capture.cs ─► EdgeFrame ─┬─► Esp32Output    │
+│  (HW video engine)      (.NET)                  └─► HyperHdrOutput │
+│                                                                    │
+│  Service_App.cs — lifecycle, outputs, event log                    │
+│  Discovery.cs — finds ESP32s in the background                     │
+│  tv/ui — launcher web app (Start / Stop)                           │
+└──────────────────┬───────────────────────────────────┬─────────────┘
+                   │ UDP 9001 (same LAN)               │ TCP 19400 (optional)
+                   ▼                                   ▼
+                                       HyperHDR server — see HYPERHDR.md
 ┌─────────────────────────────────────────────────────────────┐
 │  ESP32                                                      │
 │                                                             │
@@ -43,17 +45,33 @@ wiring in [HARDWARE.md](HARDWARE.md).
 
 ### Lifecycle
 
-1. On start, waits 2 s, then runs discovery (`DiscoverServers()`): broadcasts
-   `AMBILIGHT_DISCOVER` on UDP 9003 and collects **all** replies for 2 s. Retries until
-   someone answers — 30 quick attempts, then one every `DiscoveryRetryDelayMs` (10 s).
-2. Runs the capture loop (`Capture.Run()`), sending every frame to all discovered hosts.
-3. If capture fails (library or symbols missing, invalid HW condition), retries after
+1. Loads the output settings from `res/ambilight.json` (bundled at build time; see
+   [Configuration](#4-configuration-reference)). A missing or invalid file falls back to
+   ESP32 only.
+2. Starts discovery (`Discovery.cs`) in the background: broadcasts `AMBILIGHT_DISCOVER` on
+   UDP 9003 and collects **all** replies for 2 s. While nobody is known it retries — 30
+   quick attempts, then every 10 s; once hosts are known it re-probes every 30 s, so new
+   controllers and IP changes are picked up while streaming. A host is dropped after
+   2 minutes without a reply.
+3. Starts the enabled outputs and, after 2 s, the capture loop (`Capture.Run()`). Capture
+   does **not** wait for discovery — frames go to whichever outputs have somewhere to send.
+4. If capture fails (library or symbols missing, invalid HW condition), retries after
    5 s, 10 s, then every 30 s.
-4. AppControl `command=start` on a running service (the launcher's *Start*) cancels the
-   current worker and runs discovery + capture again; `command=stop` exits the service.
+5. AppControl `command=start` (the launcher's *Start*) probes for hosts, reconnects
+   HyperHDR and re-initialises capture (re-reading the hardware condition) immediately;
+   `command=stop` exits the service.
+6. Events logged before any log host is known (config, capture init) are queued — up to
+   100 — and sent once discovery finds one.
 
-An ESP32 that changes its IP while streaming is not picked up until the next *Start* or
-service restart.
+### Outputs
+
+Capture hands every frame (`EdgeFrame`: the 14 samples) to each enabled output; no output
+can block capture or another output.
+
+| Output | Transport | Runs on | Notes |
+|--------|-----------|---------|-------|
+| `Esp32Output` | UDP 9001 to every discovered host | capture thread (UDP never blocks) | [Frame format](NETWORKING.md#color-frame-udp-9001) |
+| `HyperHdrOutput` | TCP to HyperHDR's FlatBuffers server | own sender + reader threads, one-frame mailbox | Renders a small image (`EdgeImage.cs`); reply-based liveness, reconnect backoff 1–5 s. **Untested on a TV** — see [HYPERHDR.md](HYPERHDR.md) |
 
 ### Capture pipeline (`Capture.cs`)
 
@@ -209,10 +227,19 @@ The firmware uses the `min_spiffs.csv` partition table: two 1.875 MB OTA app slo
 | `DiscoveryTimeoutMs` | 2000 | How long to collect replies per attempt |
 | `DiscoveryMaxRetries` | 30 | Quick attempts before slowing down |
 | `DiscoveryRetryDelayMs` | 10000 | Interval between attempts after that (discovery never gives up) |
+| `DiscoveryRefreshMs` | 30000 | Re-probe interval once hosts are known |
+| `OutputConfigFile` | `ambilight.json` | Output settings file in the package's `res/` folder |
 | `TargetCaptureW` | 4 | Sample points per horizontal edge |
 | `TargetCaptureH` | 3 | Sample points per vertical edge |
 | `EdgeInsetPx` | 250 | Distance of sample points from the screen edge, in HW pixels (3840 × 2160 on 4K) |
 | `CaptureDelayMs` | 20 | Delay between `set_position` and `get_pixel`; `-1` uses the HW-reported value |
+
+### TV output settings (`tv/service/res/ambilight.json`)
+
+JSON (comments allowed), bundled into the package. `esp32.enabled` (default `true`) and the
+`hyperhdr` section (host, port, priority, image size; disabled by default). Keys, defaults and
+validation: [HYPERHDR.md](HYPERHDR.md#setup). Invalid sections are disabled and reported as
+`ConfigWarning` events.
 
 ### ESP32 settings (NVS)
 

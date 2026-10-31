@@ -44,6 +44,7 @@ sequenceDiagram
 | 9001 | UDP | ESP32, `tools/server.py` | TV service, `tools/led_tester.py` | [Color frames](#color-frame-udp-9001) |
 | 9003 | UDP | ESP32, `tools/server.py` | TV service (broadcast) | [Discovery](#discovery-udp-9003) |
 | 53 | UDP (DNS) | ESP32, AP mode only | Clients of `ambilight-setup` | Captive portal: every name resolves to `192.168.4.1` |
+| 19400 | TCP | HyperHDR | TV service (optional) | [HyperHDR FlatBuffers input](#hyperhdr-tcp-19400) — off by default |
 
 ## Discovery (UDP 9003)
 
@@ -51,7 +52,7 @@ sequenceDiagram
 2. Every listener replies by unicast to the sender's address and port: `AMBILIGHT_DISCOVER:<own-ip>`.
 3. The service collects replies for 2 s. If at least one arrived, it streams to **all** of them. Otherwise it retries — 30 quick attempts (~1 min), then one every 10 s — until a host answers.
 
-Discovery runs when the service starts and again whenever *Start* is pressed in the TV launcher (which restarts streaming with the new host list). An ESP32 that changes its IP while streaming is not picked up until then.
+Discovery runs in the background and never delays capture. Once hosts are known, the service re-probes every 30 s, so new controllers and IP changes are picked up while streaming; a host that hasn't replied for 2 minutes is dropped. Pressing *Start* in the TV launcher probes immediately.
 
 ## Color frame (UDP 9001)
 
@@ -76,6 +77,16 @@ ESP32 acceptance rules (`esp32/src/UDPReceiver.cpp`):
 - If several frames are queued, only the newest one is applied.
 - Frames are applied only in *Dynamic* mode (`led_mode = 1`) and not during a calibration preview.
 - The ESP32 interpolates each edge to the LED count configured for that side, so `hCount`/`vCount` do not need to match the strip.
+
+## HyperHDR (TCP 19400)
+
+Optional output, configured in `tv/service/res/ambilight.json` — setup in [HYPERHDR.md](HYPERHDR.md). The service speaks HyperHDR's FlatBuffers protocol (`hyperhdr_request.fbs`, v20+):
+
+1. Each message is a FlatBuffers `Request`, prefixed with its length as a 4-byte **big-endian** integer.
+2. After connecting: `Register { origin: "Tizen Ambilight", priority }` (50–250).
+3. Per frame: `Image { RawImage { data, width, height } }` — an RGB image (default 64 × 36) rendered from the edge samples, `duration` left at −1.
+4. HyperHDR answers every message with a `Reply { error, video, registered }`; the service reads them and treats 3 s without an answer as a dead connection.
+5. Disconnecting releases the priority; no `Clear` is sent.
 
 ## TV service event log (HTTP 9000)
 

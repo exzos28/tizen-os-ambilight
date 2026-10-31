@@ -14,7 +14,7 @@ Pretends to be an ESP32 on the network and shows what the TV sends:
 python3 tools/server.py
 ```
 
-Start it, then press *Start* in the TV launcher — the service runs discovery at TV boot and again on each *Start*, so a `server.py` started later is picked up only after that. The PC must be in the same subnet as the TV, and the firewall must allow incoming UDP 9001/9003 and TCP 9000.
+Start it, then press *Start* in the TV launcher (or wait up to 30 s — the service re-probes in the background). The PC must be in the same subnet as the TV, and the firewall must allow incoming UDP 9001/9003 and TCP 9000.
 
 The `HwCondition` and `CaptureError` events are the quickest way to check whether a new TV model supports hardware capture (see [CONTRIBUTING.md](../docs/CONTRIBUTING.md)).
 
