@@ -38,6 +38,10 @@ jobs:
       - name: Install PlatformIO
         run: pip install platformio
 
+      - name: Host unit tests (strip layout)
+        run: pio test -e native
+        working-directory: esp32
+
       - name: Build firmware and flashable images
         run: scripts/make_release.sh release
         working-directory: esp32
