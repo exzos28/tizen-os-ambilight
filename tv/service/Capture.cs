@@ -193,19 +193,19 @@ namespace Service
 
                     frameCount++;
                     if (!_running || token.IsCancellationRequested) break;
-                    onFrame(new EdgeFrame(hCount, vCount, (byte[])colors.Clone()));
+                    var frame = new EdgeFrame(hCount, vCount, (byte[])colors.Clone());   // outputs may keep it
+                    onFrame(frame);
 
                     if (frameCount % 200 == 1)
                     {
                         long actualMs = sw.ElapsedMilliseconds - frameStart;
+                        var c = frame.Rgb;
+                        int t = frame.TopOffset, r = frame.RightOffset, l = frame.LeftOffset;
                         log("Frame", $"#{frameCount} {(actualMs > 0 ? 1000 / actualMs : 999)}fps " +
-                            $"p0=({colors[0]},{colors[1]},{colors[2]})");
-
-                        int rightOff = hCount * 3;
-                        int leftOff  = (2 * hCount + vCount) * 3;
+                            $"p0=({c[t]},{c[t + 1]},{c[t + 2]})");
                         log("SideColors",
-                            $"right[0]=({colors[rightOff]},{colors[rightOff+1]},{colors[rightOff+2]}) " +
-                            $"left[0]=({colors[leftOff]},{colors[leftOff+1]},{colors[leftOff+2]})");
+                            $"right[0]=({c[r]},{c[r + 1]},{c[r + 2]}) " +
+                            $"left[0]=({c[l]},{c[l + 1]},{c[l + 2]})");
                     }
                 }
 
