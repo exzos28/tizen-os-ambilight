@@ -27,7 +27,12 @@ export function PowerCard({ powerLimit, setPowerLimit, pixelWatts, setPixelWatts
     if (req.power_limit_w === undefined && req.pixel_watts === undefined) return
     if (req.power_limit_w !== undefined) dirty.current.limit = false
     if (req.pixel_watts !== undefined) dirty.current.pixel = false
-    saveLeds(req).catch(console.error)
+    saveLeds(req).catch((err) => {
+      // Keep the edit pending so the next blur retries it.
+      if (req.power_limit_w !== undefined) dirty.current.limit = true
+      if (req.pixel_watts !== undefined) dirty.current.pixel = true
+      console.error(err)
+    })
   }
 
   return (
