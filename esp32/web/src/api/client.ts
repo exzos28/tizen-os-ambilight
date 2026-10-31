@@ -14,9 +14,12 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json() as Promise<T>
 }
 
-function toFormBody(data: Record<string, string | number | undefined>): string {
+type FormFields<T> = { [K in keyof T]: string | number | undefined }
+
+function toFormBody<T extends FormFields<T>>(data: T): string {
   const params = new URLSearchParams()
-  for (const [key, value] of Object.entries(data)) {
+  const entries = Object.entries(data) as [string, string | number | undefined][]
+  for (const [key, value] of entries) {
     if (value !== undefined && value !== '') {
       params.append(key, String(value))
     }
