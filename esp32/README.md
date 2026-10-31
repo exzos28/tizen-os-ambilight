@@ -1,0 +1,44 @@
+# ESP32 firmware
+
+PlatformIO / Arduino firmware that receives color frames from the TV and drives a WS2811 strip. Includes a React web UI for configuration, embedded into the firmware binary.
+
+Setup and flashing: [docs/INSTALL.md § ESP32](../docs/INSTALL.md#1-esp32-firmware). Internals: [docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md#3-esp32-firmware-esp32src).
+
+## Layout
+
+```
+platformio.ini            Build config: env esp32dev (USB upload), env ota (Wi-Fi upload)
+scripts/embed_web.py      Pre-build step: npm run build in web/ → gzipped byte array in src/web_ui.h
+src/
+  main.cpp                setup()/loop(), factory reset on BOOT button
+  Config.*                Settings persisted in NVS
+  NetworkManager.*        Wi-Fi STA, AP + captive-portal fallback, preferred IP
+  UDPReceiver.*           Color frames on UDP 9001
+  DiscoveryResponder.*    Answers TV discovery on UDP 9003
+  LEDController.*         Interpolation, color correction, strip mapping, smoothing
+  WebPortal.*             HTTP server: web UI and JSON API
+  OTAManager.*            Arduino OTA
+  RemoteLogger.*          Log to Serial + Telnet (port 2323)
+web/                      React + Vite web UI (built into a single HTML file)
+```
+
+## Commands
+
+```sh
+pio run                   # build (also builds the web UI; needs npm install in web/ once)
+pio run -t upload         # flash over USB
+pio run -e ota -t upload  # flash over Wi-Fi (ambilight.local, see [env:ota] in platformio.ini)
+pio device monitor        # serial log, 115200 baud
+nc <esp32-ip> 2323        # remote log over Telnet
+```
+
+`src/web_ui.h` is generated on every build and is not committed.
+
+## Compile-time constants
+
+| Constant | File | See |
+|----------|------|-----|
+| `LED_PIN`, `MAX_LEDS` | `src/LEDController.h` | [HARDWARE.md](../docs/HARDWARE.md#notes) |
+| Color order (`addLeds<WS2811, LED_PIN, BRG>`) | `src/LEDController.cpp` | [HARDWARE.md](../docs/HARDWARE.md#led-color-order) |
+| `PREFERRED_IP_LAST_OCTET` | `src/NetworkManager.h` | [INSTALL.md](../docs/INSTALL.md#2-connect-to-wi-fi) |
+| `UDP_PORT` | `src/UDPReceiver.h` | [NETWORKING.md](../docs/NETWORKING.md#ports) |
