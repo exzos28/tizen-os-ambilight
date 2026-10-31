@@ -42,6 +42,17 @@ jobs:
         run: pio run
         working-directory: esp32
 
+  tv-service:
+    name: TV service (compile check)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: Compile against Tizen 9 reference assemblies
+        run: dotnet build .github/tv-service-check/ServiceCheck.csproj -warnaserror:CS0168,CS0219,CS0162
+
   tools:
     name: Python tools
     runs-on: ubuntu-latest
