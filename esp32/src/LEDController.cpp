@@ -1,4 +1,5 @@
 #include "LEDController.h"
+#include "StripLayout.h"
 #include "Config.h"
 #include "RemoteLogger.h"
 
@@ -70,16 +71,10 @@ void LEDController::setColors(const CRGB* colors, uint16_t count) {
 void LEDController::interpolateSide(const uint8_t* src, uint8_t srcCount,
                                     CRGB* dst, uint8_t dstCount) {
     if (dstCount == 0 || srcCount == 0) return;
-    if (srcCount == 1) {
-        dst[0] = CRGB(src[0], src[1], src[2]);
-        for (uint8_t i = 1; i < dstCount; i++) dst[i] = dst[0];
-        return;
-    }
     for (uint8_t i = 0; i < dstCount; i++) {
-        float   t    = (float)i / (dstCount - 1) * (srcCount - 1);
-        uint8_t lo   = (uint8_t)t;
-        uint8_t hi   = (lo + 1 < srcCount) ? lo + 1 : lo;
-        uint8_t frac = (uint8_t)((t - lo) * 255.0f);
+        StripLayout::InterpPos p = StripLayout::interpPosition(i, dstCount, srcCount);
+        uint8_t lo = p.lo, hi = p.hi, frac = p.frac;
+        if (lo == hi) { dst[i] = CRGB(src[lo*3], src[lo*3+1], src[lo*3+2]); continue; }
 
         CHSV hsv_lo = rgb2hsv_approximate(CRGB(src[lo*3], src[lo*3+1], src[lo*3+2]));
         CHSV hsv_hi = rgb2hsv_approximate(CRGB(src[hi*3], src[hi*3+1], src[hi*3+2]));
@@ -97,52 +92,18 @@ void LEDController::interpolateSide(const uint8_t* src, uint8_t srcCount,
     }
 }
 
-// Fills _leds[] using per-side CRGB arrays and calibration.
-//
-// Side natural directions (index 0 = where the strip would START if coming from that corner CW):
-//   TOP[0]    = top-left   corner
-//   RIGHT[0]  = top-right  corner
-//   BOTTOM[0] = bottom-right corner
-//   LEFT[0]   = bottom-left corner
-//
-// Clockwise traversal from startCorner:
-//   TL(0): TOP, RIGHT, BOTTOM, LEFT  (each in natural order)
-//   TR(1): RIGHT, BOTTOM, LEFT, TOP
-//   BR(2): BOTTOM, LEFT, TOP, RIGHT
-//   BL(3): LEFT, TOP, RIGHT, BOTTOM
-//
-// Counter-clockwise traversal: same side rotation but each side reversed.
-//   TL(0) CCW: LEFT, BOTTOM, RIGHT, TOP  (each reversed)
+// Fills dst[] from per-side colors following the calibration (start corner, direction,
+// LEDs per side). Traversal order and side directions: see StripLayout.h.
 void LEDController::fillStrip(CRGB* dst,
                                const CRGB* topC,    const CRGB* rightC,
                                const CRGB* bottomC, const CRGB* leftC,
                                uint8_t startCorner, bool clockwise,
                                uint8_t ledTop, uint8_t ledRight,
                                uint8_t ledBottom, uint8_t ledLeft) {
-    const CRGB* sides[4]  = { topC, rightC, bottomC, leftC };
-    const uint8_t cnt[4]  = { ledTop, ledRight, ledBottom, ledLeft };
-
-    uint16_t idx = 0;
-
-    if (clockwise) {
-        for (int s = 0; s < 4; s++) {
-            int si = (startCorner + s) % 4;
-            for (uint8_t i = 0; i < cnt[si]; i++) {
-                if (idx >= _numLeds) return;
-                dst[idx++] = sides[si][i];
-            }
-        }
-    } else {
-        // CCW: rotate sides in reverse, traverse each side reversed.
-        // First side for CCW from corner c = (c+3)%4, then (c+2)%4, etc.
-        for (int s = 0; s < 4; s++) {
-            int si = (startCorner + 3 - s) % 4;
-            for (int i = cnt[si] - 1; i >= 0; i--) {
-                if (idx >= _numLeds) return;
-                dst[idx++] = sides[si][i];
-            }
-        }
-    }
+    const CRGB* sides[4] = { topC, rightC, bottomC, leftC };
+    const uint8_t cnt[4] = { ledTop, ledRight, ledBottom, ledLeft };
+    StripLayout::forEach(startCorner, clockwise, cnt, _numLeds,
+                         [&](uint16_t idx, uint8_t side, uint8_t i) { dst[idx] = sides[side][i]; });
 }
 
 // ---------------------------------------------------------------------------
@@ -265,24 +226,14 @@ void LEDController::showCalibrationPreview(uint8_t startCorner, bool clockwise,
               ledTop, ledRight, ledBottom, ledLeft);
 
     // Log the resulting strip layout: which LEDs got which side's color.
-    uint8_t     sideCounts[4] = { ledTop, ledRight, ledBottom, ledLeft };
+    uint8_t  sideCounts[4] = { ledTop, ledRight, ledBottom, ledLeft };
     uint16_t pos = 0;
-    if (clockwise) {
-        for (int s = 0; s < 4; s++) {
-            int si = (startCorner + s) % 4;
-            if (sideCounts[si] > 0)
-                Log.printf("[Calib]   LED %3d..%3d → %s\n",
-                           pos, pos + sideCounts[si] - 1, sideNames[si]);
-            pos += sideCounts[si];
-        }
-    } else {
-        for (int s = 0; s < 4; s++) {
-            int si = (startCorner + 3 - s) % 4;
-            if (sideCounts[si] > 0)
-                Log.printf("[Calib]   LED %3d..%3d → %s (reversed)\n",
-                           pos, pos + sideCounts[si] - 1, sideNames[si]);
-            pos += sideCounts[si];
-        }
+    for (uint8_t seg = 0; seg < 4; seg++) {
+        uint8_t si = StripLayout::sideAt(startCorner, clockwise, seg);
+        if (sideCounts[si] > 0)
+            Log.printf("[Calib]   LED %3d..%3d → %s%s\n",
+                       pos, pos + sideCounts[si] - 1, sideNames[si], clockwise ? "" : " (reversed)");
+        pos += sideCounts[si];
     }
 
     // LED #0 = white, helps locate the physical start of the strip.
