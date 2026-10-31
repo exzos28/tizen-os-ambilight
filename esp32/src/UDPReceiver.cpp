@@ -21,23 +21,45 @@ void UDPReceiver::begin() {
 void UDPReceiver::handle() {
     if (!_started) return;
 
-    // Drain the socket and keep only the newest frame: if frames queued up while
-    // the loop was busy, applying them one per iteration would add latency.
-    int n = 0;
+    // Drain the socket and keep only the newest *valid* frame: if frames queued up
+    // while the loop was busy, applying them one per iteration would add latency.
+    // Each datagram is validated in a scratch buffer, so a malformed packet can't
+    // overwrite a good frame that arrived before it.
+    int       n = 0;
     IPAddress remote;
     for (int i = 0; i < MAX_PACKETS_PER_LOOP; i++) {
         int size = _udp.parsePacket();
         if (size <= 0) break;
+        IPAddress from = _udp.remoteIP();
+
         if (size < 2 || size > (int)BUF_SIZE) {
-            logThrottled("[UDP] Packet from %s bad size=%d\n",
-                         _udp.remoteIP().toString().c_str(), size);
+            logThrottled("[UDP] Packet from %s bad size=%d\n", from.toString().c_str(), size);
             _udp.flush();
             continue;
         }
-        remote = _udp.remoteIP();
-        n = _udp.read(_buf, BUF_SIZE);
+
+        int len = _udp.read(_scratch, BUF_SIZE);
+        if (len < 2) continue;
+
+        uint8_t hCount = _scratch[0];
+        uint8_t vCount = _scratch[1];
+        if (hCount > MAX_SIDE_COUNT || vCount > MAX_SIDE_COUNT) {
+            logThrottled("[UDP] Packet from %s rejected: h=%d v=%d exceeds max=%d\n",
+                         from.toString().c_str(), hCount, vCount, MAX_SIDE_COUNT);
+            continue;
+        }
+        int expected = 2 + (hCount + vCount) * 2 * 3;
+        if (len < expected) {
+            logThrottled("[UDP] Packet from %s too short: got=%d expected=%d h=%d v=%d\n",
+                         from.toString().c_str(), len, expected, hCount, vCount);
+            continue;
+        }
+
+        memcpy(_buf, _scratch, len);
+        n      = len;
+        remote = from;
     }
-    if (n < 2) return;
+    if (n == 0) return;
 
     // Only apply frames in dynamic mode, and not while a calibration preview is active.
     if (Config::instance().ledMode != 1 || LEDController::instance().previewActive()) {
@@ -48,32 +70,15 @@ void UDPReceiver::handle() {
         return;
     }
 
-    uint8_t hCount = _buf[0];
-    uint8_t vCount = _buf[1];
-
-    if (hCount > MAX_SIDE_COUNT || vCount > MAX_SIDE_COUNT) {
-        logThrottled("[UDP] Packet from %s rejected: h=%d v=%d exceeds max=%d\n",
-                     remote.toString().c_str(), hCount, vCount, MAX_SIDE_COUNT);
-        return;
-    }
-
-    // Validate expected payload length.
-    int expected = 2 + (hCount + vCount) * 2 * 3;
-    if (n < expected) {
-        logThrottled("[UDP] Packet from %s too short: got=%d expected=%d h=%d v=%d\n",
-                     remote.toString().c_str(), n, expected, hCount, vCount);
-        return;
-    }
-
     // Log every ~5 seconds (avoid spam at frame rate).
     uint32_t now = millis();
     if (now - _lastLogMs >= 5000) {
         _lastLogMs = now;
         Log.printf("[UDP] Frame from %s h=%d v=%d bytes=%d\n",
-                   remote.toString().c_str(), hCount, vCount, n);
+                   remote.toString().c_str(), _buf[0], _buf[1], n);
     }
 
-    LEDController::instance().applyAmbilight(_buf + 2, hCount, vCount);
+    LEDController::instance().applyAmbilight(_buf + 2, _buf[0], _buf[1]);
 }
 
 void UDPReceiver::logThrottled(const char* fmt, ...) {

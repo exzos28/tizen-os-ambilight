@@ -28,7 +28,8 @@ private:
     static constexpr uint16_t BUF_SIZE = 512;
     // TV service uses TargetCaptureW/H points (currently 4/3). Cap at 32 to reject garbage.
     static constexpr uint8_t  MAX_SIDE_COUNT = 32;
-    uint8_t  _buf[BUF_SIZE];
+    uint8_t  _buf[BUF_SIZE];       // newest valid frame
+    uint8_t  _scratch[BUF_SIZE];   // datagram being validated
     uint32_t _lastLogMs  = 0;
     uint32_t _lastWarnMs = 0;
     // Upper bound on datagrams drained per loop() so a flood can't stall the loop.
