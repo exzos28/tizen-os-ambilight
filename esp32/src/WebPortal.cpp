@@ -173,6 +173,17 @@ void WebPortal::handleMetrics() {
 void WebPortal::handleSaveNetwork() {
     auto& cfg = Config::instance();
 
+    // Validate everything before touching the config: a rejected request must not leave
+    // half-applied values in memory for the next unrelated cfg.save() to persist.
+    long octet = cfg.preferredLastOctet;
+    if (_server.hasArg("ip_octet") &&
+        (!parseLongArg(_server, "ip_octet", octet) || octet < 0 || octet > 254)) {
+        _server.send(400, "application/json",
+                     "{\"message\":\"ip_octet must be 0 (DHCP) or 1-254. Nothing was saved.\"}");
+        return;
+    }
+    cfg.preferredLastOctet = static_cast<uint8_t>(octet);
+
     if (_server.hasArg("wifi_ssid"))
         cfg.wifiSSID = _server.arg("wifi_ssid");
 
@@ -184,17 +195,6 @@ void WebPortal::handleSaveNetwork() {
 
     if (_server.hasArg("ota_pass") && !_server.arg("ota_pass").isEmpty())
         cfg.otaPassword = _server.arg("ota_pass");
-
-    if (_server.hasArg("ip_octet")) {
-        long octet;
-        if (!parseLongArg(_server, "ip_octet", octet) || !(octet == 0 || (octet >= 2 && octet <= 254))) {
-            // Reject instead of silently keeping the old value and restarting.
-            _server.send(400, "application/json",
-                         "{\"message\":\"ip_octet must be 0 (DHCP) or 2-254. Nothing was saved.\"}");
-            return;
-        }
-        cfg.preferredLastOctet = static_cast<uint8_t>(octet);
-    }
 
     cfg.save();
     Log.println("[Web] Network config saved — restarting.");
