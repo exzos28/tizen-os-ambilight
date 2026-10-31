@@ -40,7 +40,7 @@ nc <esp32-ip> 2323        # remote log over Telnet
 
 `src/web_ui.h` is generated on every build and is not committed.
 
-**Releases:** pushing a tag `v*` runs `.github/workflows/release.yml`, which builds the images with `scripts/make_release.sh` and attaches them to a GitHub release. Every CI run also uploads them as the `esp32-firmware` artifact.
+**Releases** are driven by [changesets](../.changeset/README.md): merging the *chore: release* PR tags `vX.Y.Z`, creates the GitHub release from `CHANGELOG.md` and runs `.github/workflows/release.yml`, which builds the images with `scripts/make_release.sh` and attaches them. Pushing a `v*` tag by hand also works. Every CI run uploads the images as the `esp32-firmware` artifact.
 
 ## Compile-time constants
 
