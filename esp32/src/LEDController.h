@@ -40,9 +40,6 @@ private:
 
     void updateGammaTable(float gamma);
 
-    // Log the first `n` and last `n` pixels of `buf` (length `count`).
-    static void logLedDump(const char* tag, const CRGB* buf, uint16_t count, uint8_t n = 4);
-
     // Apply saturation, white balance and gamma to a range of pixels.
     void processColors(CRGB* leds, uint16_t count);
 
@@ -69,6 +66,7 @@ private:
     uint16_t    _numLeds      = 0;
     uint8_t     _brightness   = 100;
     uint32_t    _previewUntil = 0;
+    bool        _previewShown = false;   // a preview was drawn and not yet cleared
     uint32_t    _lastFrameMs  = 0;
     uint32_t    _lastUpdateMs = 0;
     uint8_t     _gammaTable[256];

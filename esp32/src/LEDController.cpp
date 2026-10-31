@@ -19,7 +19,6 @@ void LEDController::begin(uint16_t numLeds, uint8_t brightness) {
     FastLED.clear(true);
 
     updateGammaTable(Config::instance().gamma);
-//     Log.printf("[LED] begin: driving %d LEDs at brightness %d\n", _numLeds, _brightness);
 }
 
 void LEDController::setNumLeds(uint16_t numLeds) {
@@ -54,7 +53,6 @@ void LEDController::setBrightness(uint8_t brightness) {
 void LEDController::setColor(uint8_t r, uint8_t g, uint8_t b) {
     Log.printf("[LED] setColor: rgb(%d,%d,%d) x %d LEDs\n", r, g, b, _numLeds);
     fill_solid(_leds, _numLeds, CRGB(r, g, b));
-    // logLedDump("setColor→strip", _leds, _numLeds);
     FastLED.show();
 }
 
@@ -67,12 +65,6 @@ void LEDController::setColors(const CRGB* colors, uint16_t count) {
 // ---------------------------------------------------------------------------
 // Private helpers
 // ---------------------------------------------------------------------------
-
-void LEDController::logLedDump(const char* tag, const CRGB* buf, uint16_t count, uint8_t /*n*/) {
-    Log.printf("[LED] %s count=%d:\n", tag, count);
-    for (uint16_t i = 0; i < count; i++)
-        Log.printf("  [%3d] rgb(%3d,%3d,%3d)\n", i, buf[i].r, buf[i].g, buf[i].b);
-}
 
 void LEDController::interpolateSide(const uint8_t* src, uint8_t srcCount,
                                     CRGB* dst, uint8_t dstCount) {
@@ -221,15 +213,7 @@ void LEDController::applyAmbilight(const uint8_t* data, uint8_t hCount, uint8_t 
               cfg.startCorner, cfg.clockwise,
               cfg.ledTop, cfg.ledRight, cfg.ledBottom, cfg.ledLeft);
 
-    uint32_t now = millis();
-    static uint32_t _lastAmbilightLogMs = 0;
-    if (now - _lastAmbilightLogMs >= 1000) {
-        _lastAmbilightLogMs = now;
-        uint16_t total = cfg.ledTop + cfg.ledRight + cfg.ledBottom + cfg.ledLeft;
-        // logLedDump("target→strip", _target, total);
-    }
-
-    _lastFrameMs = now;
+    _lastFrameMs = millis();
 }
 
 // ---------------------------------------------------------------------------
@@ -240,6 +224,7 @@ void LEDController::showCalibrationPreview(uint8_t startCorner, bool clockwise,
                                             uint8_t ledTop, uint8_t ledRight,
                                             uint8_t ledBottom, uint8_t ledLeft) {
     _previewUntil = millis() + PREVIEW_HOLD_MS;
+    _previewShown = true;
 
     const char* cornerNames[] = { "TL", "TR", "BR", "BL" };
     Log.printf("[Calib] corner=%s(%d) dir=%s top=%d right=%d bottom=%d left=%d\n",
@@ -319,6 +304,15 @@ void LEDController::update() {
     if (now - _lastUpdateMs < 16) return;
     _lastUpdateMs = now;
 
+    // When a calibration preview expires, clear it (it may have lit more LEDs
+    // than numLeds) and, in plain mode, bring back the static color — nothing
+    // else would repaint the strip there.
+    if (_previewShown && !previewActive()) {
+        _previewShown = false;
+        setNumLeds(cfg.numLeds);
+        if (cfg.ledMode == 0) setColor(cfg.colorR, cfg.colorG, cfg.colorB);
+    }
+
     // In Ambilight mode, handle timeout (Auto-Off) and smooth blending.
     if (cfg.ledMode == 1 && !previewActive()) {
         // If no frames received for a long time, fade the target to black.
@@ -330,7 +324,11 @@ void LEDController::update() {
         bool changed = false;
         for (uint16_t i = 0; i < _numLeds; i++) {
             if (_leds[i] != _target[i]) {
-                _leds[i] = blend(_leds[i], _target[i], SMOOTH_ALPHA);
+                CRGB prev = _leds[i];
+                _leds[i] = blend(prev, _target[i], SMOOTH_ALPHA);
+                // 8-bit blending can stall a step short of the target; snap to it
+                // so the strip settles and FastLED.show() stops being called.
+                if (_leds[i] == prev) _leds[i] = _target[i];
                 changed = true;
             }
         }
