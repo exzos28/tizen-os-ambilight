@@ -59,9 +59,9 @@ namespace Service
         static volatile bool _running;
         static readonly object _runLock = new object();
 
-        // Returns true on clean stop (_running set to false), false on failure.
+        // Returns true on clean stop (Stop() called or token cancelled), false on failure.
         // Sends each captured frame to all hosts in serverHosts simultaneously.
-        public static bool Run(string[] serverHosts, Action<string, string> log)
+        public static bool Run(string[] serverHosts, Action<string, string> log, CancellationToken token)
         {
             lock (_runLock)
             {
@@ -166,13 +166,13 @@ namespace Service
                 }
                 if (delay > 0) Thread.Sleep(delay);
 
-                while (_running)
+                while (_running && !token.IsCancellationRequested)
                 {
                     long frameStart = sw.ElapsedMilliseconds;
 
                     for (int batchIdx = 0; batchIdx < numBatches; batchIdx++)
                     {
-                        if (!_running) break;
+                        if (!_running || token.IsCancellationRequested) break;
 
                         int curStart = batchIdx * blocksPerCycle;
                         int curSize = Math.Min(blocksPerCycle, totalPoints - curStart);
