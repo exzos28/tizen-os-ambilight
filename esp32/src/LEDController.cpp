@@ -71,6 +71,10 @@ void LEDController::setColors(const CRGB* colors, uint16_t count) {
 // Pushes _leds to the strip, applying the power limit: the estimated power of the frame
 // (channel values are PWM duty, so power ≈ linear in them) is compared with the budget
 // and, if over it, the global brightness is scaled down for this frame only.
+//
+// Not FastLED's setMaxPowerInMilliWatts: its power model stores milliwatts per channel in
+// a uint8 (≤ 255 mW) tuned for 5 V WS2812, while a 12 V WS2811 pixel draws ~240 mW per
+// channel or more. PowerLimit.h uses a per-pixel wattage the user takes from the datasheet.
 void LEDController::show() {
     auto& cfg = Config::instance();
     uint32_t sum = 0;

@@ -123,7 +123,6 @@ void WebPortal::handleStatus() {
     doc["rssi"]               = WiFi.RSSI();
     doc["connected"]          = net.isConnected();
     doc["gateway"]            = WiFi.gatewayIP().toString();
-    doc["preferred_last_oct"] = Config::instance().preferredLastOctet;
     sendJson(_server, doc);
 }
 
@@ -186,9 +185,16 @@ void WebPortal::handleSaveNetwork() {
     if (_server.hasArg("ota_pass") && !_server.arg("ota_pass").isEmpty())
         cfg.otaPassword = _server.arg("ota_pass");
 
-    long octet;
-    if (parseLongArg(_server, "ip_octet", octet) && octet >= 0 && octet <= 254)
-        cfg.preferredLastOctet = static_cast<uint8_t>(octet);   // 1 is mapped to 0 by sanitize()
+    if (_server.hasArg("ip_octet")) {
+        long octet;
+        if (!parseLongArg(_server, "ip_octet", octet) || !(octet == 0 || (octet >= 2 && octet <= 254))) {
+            // Reject instead of silently keeping the old value and restarting.
+            _server.send(400, "application/json",
+                         "{\"message\":\"ip_octet must be 0 (DHCP) or 2-254. Nothing was saved.\"}");
+            return;
+        }
+        cfg.preferredLastOctet = static_cast<uint8_t>(octet);
+    }
 
     cfg.save();
     Log.println("[Web] Network config saved — restarting.");
@@ -244,11 +250,14 @@ void WebPortal::handleSaveLeds() {
     if (parseLongArg(_server, "power_limit_w", limit) && limit >= 0)
         cfg.powerLimitW = static_cast<uint16_t>(min(limit, 2000L));
     cfg.pixelWatts = floatArg(_server, "pixel_watts", cfg.pixelWatts);
-    // Re-show so a changed limit applies right away (plain mode has no frame loop).
-    if (plain && (_server.hasArg("power_limit_w") || _server.hasArg("pixel_watts")))
-        leds.setBrightness(cfg.brightness);
 
-    cfg.save();   // also clamps gamma/saturation to their valid ranges
+    cfg.save();   // also clamps gamma/saturation/power settings to their valid ranges
+
+    // Redraw with the (clamped) power settings right away: plain mode has no frame
+    // loop, and in dynamic mode a settled strip isn't redrawn until the picture changes.
+    if (_server.hasArg("power_limit_w") || _server.hasArg("pixel_watts"))
+        leds.refresh();
+
     Log.println("[Web] LED config applied.");
 
     _server.send(200, "application/json", "{\"message\":\"Applied.\"}");

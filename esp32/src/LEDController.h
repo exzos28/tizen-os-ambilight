@@ -14,6 +14,8 @@ public:
     void setBrightness(uint8_t brightness);
     void setColor(uint8_t r, uint8_t g, uint8_t b);
     void setColors(const CRGB* colors, uint16_t count);
+    // Re-sends the current pixels, e.g. after the power-limit settings changed.
+    void refresh() { show(); }
 
     // Apply one ambilight frame from UDP data.
     // data layout: [hCount top RGB] [vCount right RGB] [hCount bottom RGB] [vCount left RGB]
