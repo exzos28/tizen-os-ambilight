@@ -21,6 +21,7 @@ export default function App() {
   const [wifiPass,  setWifiPass]  = useState('')
   const [otaHost,   setOtaHost]   = useState('ambilight')
   const [otaPass,   setOtaPass]   = useState('')
+  const [ipOctet,   setIpOctet]   = useState('245')
 
   // LED settings
   const [numLeds,    setNumLeds]    = useState(300)
@@ -48,6 +49,7 @@ export default function App() {
       .then((cfg: ConfigResponse) => {
         setWifiSSID(cfg.wifi_ssid)
         setOtaHost(cfg.ota_host)
+        setIpOctet(String(cfg.ip_octet ?? 245))
         setNumLeds(cfg.num_leds)
         setMaxLeds(cfg.max_leds)
         setBrightness(cfg.brightness)
@@ -104,7 +106,8 @@ export default function App() {
           wifiPass={wifiPass}   setWifiPass={setWifiPass}
           otaHost={otaHost}     setOtaHost={setOtaHost}
           otaPass={otaPass}     setOtaPass={setOtaPass}
-          preferredLastOct={status?.preferred_last_oct ?? 0}
+          ipOctet={ipOctet}     setIpOctet={setIpOctet}
+          gateway={status?.gateway}
         />
       )}
 

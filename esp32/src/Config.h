@@ -18,6 +18,9 @@ public:
     String   wifiPassword;
     String   otaHostname;
     String   otaPassword;
+    // Static IP last octet in the router's subnet after connecting (0 = keep the DHCP
+    // address). Valid: 0 or 2–254. Each controller on a network needs its own value.
+    uint8_t  preferredLastOctet;
     uint16_t numLeds;
     uint8_t  brightness;
     uint8_t  colorR;

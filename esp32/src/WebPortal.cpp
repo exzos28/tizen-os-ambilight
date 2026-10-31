@@ -123,7 +123,7 @@ void WebPortal::handleStatus() {
     doc["rssi"]               = WiFi.RSSI();
     doc["connected"]          = net.isConnected();
     doc["gateway"]            = WiFi.gatewayIP().toString();
-    doc["preferred_last_oct"] = PREFERRED_IP_LAST_OCTET;
+    doc["preferred_last_oct"] = Config::instance().preferredLastOctet;
     sendJson(_server, doc);
 }
 
@@ -137,6 +137,7 @@ void WebPortal::handleConfig() {
     JsonDocument doc;
     doc["wifi_ssid"]    = cfg.wifiSSID;
     doc["ota_host"]     = cfg.otaHostname;
+    doc["ip_octet"]     = cfg.preferredLastOctet;
     doc["num_leds"]     = cfg.numLeds;
     doc["max_leds"]     = MAX_LEDS;
     doc["brightness"]   = cfg.brightness;
@@ -180,6 +181,10 @@ void WebPortal::handleSaveNetwork() {
 
     if (_server.hasArg("ota_pass") && !_server.arg("ota_pass").isEmpty())
         cfg.otaPassword = _server.arg("ota_pass");
+
+    long octet;
+    if (parseLongArg(_server, "ip_octet", octet) && octet >= 0 && octet <= 254)
+        cfg.preferredLastOctet = static_cast<uint8_t>(octet);   // 1 is mapped to 0 by sanitize()
 
     cfg.save();
     Log.println("[Web] Network config saved — restarting.");

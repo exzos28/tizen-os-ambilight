@@ -5,12 +5,13 @@ export interface StatusResponse {
   rssi: number
   connected: boolean
   gateway: string
-  preferred_last_oct: number  // 0 = disabled, otherwise the desired last IP octet
+  preferred_last_oct: number  // 0 = DHCP, otherwise the static last IP octet
 }
 
 export interface ConfigResponse {
   wifi_ssid: string
   ota_host: string
+  ip_octet: number  // 0 = DHCP, otherwise the static last IP octet
   num_leds: number
   max_leds: number
   brightness: number
@@ -43,6 +44,7 @@ export interface NetworkSaveRequest {
   wifi_pass?: string
   ota_host?: string
   ota_pass?: string
+  ip_octet?: number
 }
 
 export interface LedSaveRequest {

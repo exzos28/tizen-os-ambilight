@@ -12,6 +12,7 @@ void Config::begin() {
     wifiPassword = _prefs.getString("wifi_pass",  "");
     otaHostname  = _prefs.getString("ota_host",   "ambilight");
     otaPassword  = _prefs.getString("ota_pass",   "123456");
+    preferredLastOctet = _prefs.getUChar("ip_octet", 245);
     numLeds      = _prefs.getUShort("num_leds",    300);
     brightness   = _prefs.getUChar ("brightness",  100);
     colorR       = _prefs.getUChar ("color_r",     255);
@@ -40,6 +41,7 @@ void Config::sanitize() {
     numLeds     = constrain(numLeds, (uint16_t)1, MAX_LEDS);
     if (startCorner > 3) startCorner = 0;
     if (ledMode > 1)     ledMode = 1;
+    if (preferredLastOctet == 1 || preferredLastOctet == 255) preferredLastOctet = 0;   // gateway / broadcast
 }
 
 void Config::reset() {
@@ -54,6 +56,7 @@ void Config::save() {
     _prefs.putString("wifi_pass",   wifiPassword);
     _prefs.putString("ota_host",    otaHostname);
     _prefs.putString("ota_pass",    otaPassword);
+    _prefs.putUChar ("ip_octet",    preferredLastOctet);
     _prefs.putUShort("num_leds",    numLeds);
     _prefs.putUChar ("brightness",  brightness);
     _prefs.putUChar ("color_r",     colorR);

@@ -48,7 +48,7 @@ void setup() {
 
     // 2. Connect to WiFi; fall back to AP mode if credentials are missing or wrong.
     auto& net = NetworkManager::instance();
-    if (net.connectSTA(cfg.wifiSSID, cfg.wifiPassword)) {
+    if (net.connectSTA(cfg.wifiSSID, cfg.wifiPassword, cfg.preferredLastOctet)) {
         Log.printf("[WiFi] Connected — IP: %s\n", net.ipAddress().c_str());
     } else {
         Log.println("[WiFi] Could not connect — starting AP 'ambilight-setup'");

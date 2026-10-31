@@ -7,7 +7,7 @@ NetworkManager& NetworkManager::instance() {
 }
 
 bool NetworkManager::connectSTA(const String& ssid, const String& password,
-                                uint32_t timeoutMs) {
+                                uint8_t preferredLastOctet, uint32_t timeoutMs) {
     if (ssid.isEmpty()) return false;
 
     WiFi.mode(WIFI_STA);
@@ -22,12 +22,12 @@ bool NetworkManager::connectSTA(const String& ssid, const String& password,
         delay(200);
     }
 
-    if (WiFi.status() == WL_CONNECTED && PREFERRED_IP_LAST_OCTET != 0) {
+    if (WiFi.status() == WL_CONNECTED && preferredLastOctet != 0) {
         // Build preferred IP from router's gateway prefix + our desired last octet.
         // e.g. gateway 192.168.1.1 → preferred IP 192.168.1.245
         IPAddress gw = WiFi.gatewayIP();
         IPAddress sn = WiFi.subnetMask();
-        IPAddress preferred(gw[0], gw[1], gw[2], PREFERRED_IP_LAST_OCTET);
+        IPAddress preferred(gw[0], gw[1], gw[2], preferredLastOctet);
         WiFi.config(preferred, gw, sn);
     }
 

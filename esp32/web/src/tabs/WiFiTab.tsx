@@ -7,7 +7,15 @@ interface WiFiTabProps {
   wifiPass: string; setWifiPass: (v: string) => void
   otaHost:  string; setOtaHost:  (v: string) => void
   otaPass:  string; setOtaPass:  (v: string) => void
-  preferredLastOct: number  // from firmware constant, 0 = disabled
+  ipOctet:  string; setIpOctet:  (v: string) => void
+  gateway?: string
+}
+
+// 0 = DHCP, otherwise 2–254 (1 is usually the router, 255 is broadcast).
+function parseOctet(v: string): number | null {
+  if (!/^\d{1,3}$/.test(v.trim())) return null
+  const n = Number(v)
+  return n === 0 || (n >= 2 && n <= 254) ? n : null
 }
 
 export function WiFiTab({
@@ -15,13 +23,19 @@ export function WiFiTab({
   wifiPass, setWifiPass,
   otaHost,  setOtaHost,
   otaPass,  setOtaPass,
-  preferredLastOct,
+  ipOctet,  setIpOctet,
+  gateway,
 }: WiFiTabProps) {
   const [saving,  setSaving]  = useState(false)
   const [message, setMessage] = useState<string | null>(null)
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
+    const octet = parseOctet(ipOctet)
+    if (octet === null) {
+      setMessage('IP last octet must be 0 (DHCP) or 2–254.')
+      return
+    }
     setSaving(true)
     setMessage(null)
     try {
@@ -30,6 +44,7 @@ export function WiFiTab({
         wifi_pass: wifiPass || undefined,
         ota_host:  otaHost,
         ota_pass:  otaPass  || undefined,
+        ip_octet:  octet,
       })
       setMessage(res.message)
     } catch {
@@ -45,11 +60,14 @@ export function WiFiTab({
         <h2>WiFi</h2>
         <Field label="SSID"     type="text"     value={wifiSSID} onChange={setWifiSSID} placeholder="Network name"                />
         <Field label="Password" type="password" value={wifiPass} onChange={setWifiPass} placeholder="Leave empty to keep current" />
-        {preferredLastOct > 0 && (
-          <p style={{ fontSize: '0.85em', opacity: 0.65, marginTop: '0.5rem' }}>
-            After connecting, device will request IP ending in <strong>.{preferredLastOct}</strong>
-          </p>
-        )}
+        <Field label="Static IP — last number (0 = DHCP)" type="number" min={0} max={254}
+               value={ipOctet} onChange={setIpOctet} placeholder="245" />
+        <p style={{ fontSize: '0.85em', opacity: 0.65, marginTop: '0.5rem' }}>
+          {parseOctet(ipOctet) === 0
+            ? 'The device keeps the address it gets from the router (DHCP).'
+            : <>After connecting, the device switches to <strong>{subnetPrefix(gateway)}{ipOctet}</strong>.
+               It doesn't check whether another device uses that address — give each controller its own number.</>}
+        </p>
       </section>
 
       <section className="card">
@@ -65,4 +83,10 @@ export function WiFiTab({
       {message && <div className="toast">{message}</div>}
     </form>
   )
+}
+
+// "192.168.1.1" → "192.168.1."; unknown → "x.x.x."
+function subnetPrefix(gateway?: string): string {
+  const parts = gateway?.split('.')
+  return parts && parts.length === 4 && gateway !== '0.0.0.0' ? parts.slice(0, 3).join('.') + '.' : 'x.x.x.'
 }
