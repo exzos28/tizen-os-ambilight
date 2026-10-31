@@ -13,6 +13,21 @@ static void sendJson(WebServer& server, const JsonDocument& doc) {
     server.send(200, "application/json", out);
 }
 
+// Returns the argument clamped to 0–255, or `current` if it is absent.
+static uint8_t parseByte(WebServer& server, const char* key, uint8_t current) {
+    if (!server.hasArg(key)) return current;
+    return static_cast<uint8_t>(constrain(server.arg(key).toInt(), 0L, 255L));
+}
+
+// Returns the argument clamped to [lo, hi], or `current` if it is absent or not a number.
+static float parseFloatInRange(WebServer& server, const char* key, float current,
+                               float lo, float hi) {
+    if (!server.hasArg(key)) return current;
+    float v = server.arg(key).toFloat();
+    if (isnan(v)) return current;
+    return constrain(v, lo, hi);
+}
+
 WebPortal& WebPortal::instance() {
     static WebPortal inst;
     return inst;
@@ -158,43 +173,39 @@ void WebPortal::handleSaveLeds() {
                _server.hasArg("num_leds") ? _server.arg("num_leds").c_str() : "(none)",
                _server.hasArg("brightness") ? _server.arg("brightness").c_str() : "(none)");
 
+    // Values are clamped to the ranges the web UI offers, so a malformed request
+    // can't push the strip into a broken state (e.g. gamma 0 → everything white).
     if (_server.hasArg("num_leds")) {
-        uint16_t n = static_cast<uint16_t>(_server.arg("num_leds").toInt());
+        long n = _server.arg("num_leds").toInt();
         if (n > 0) {
-            cfg.numLeds = n;
-            if (plain) leds.setNumLeds(n);
+            cfg.numLeds = static_cast<uint16_t>(min<long>(n, MAX_LEDS));
+            if (plain) leds.setNumLeds(cfg.numLeds);
         }
     }
 
     if (_server.hasArg("brightness")) {
-        cfg.brightness = static_cast<uint8_t>(_server.arg("brightness").toInt());
+        cfg.brightness = parseByte(_server, "brightness", cfg.brightness);
         leds.setBrightness(cfg.brightness);
     }
 
     if (_server.hasArg("color")) {
         String hex = _server.arg("color");
         if (hex.startsWith("#")) hex = hex.substring(1);
-        long val   = strtol(hex.c_str(), nullptr, 16);
-        cfg.colorR = (val >> 16) & 0xFF;
-        cfg.colorG = (val >>  8) & 0xFF;
-        cfg.colorB =  val        & 0xFF;
-        if (plain) leds.setColor(cfg.colorR, cfg.colorG, cfg.colorB);
+        char* end = nullptr;
+        long  val = strtol(hex.c_str(), &end, 16);
+        if (hex.length() == 6 && end && *end == '\0') {
+            cfg.colorR = (val >> 16) & 0xFF;
+            cfg.colorG = (val >>  8) & 0xFF;
+            cfg.colorB =  val        & 0xFF;
+            if (plain) leds.setColor(cfg.colorR, cfg.colorG, cfg.colorB);
+        }
     }
 
-    if (_server.hasArg("gamma"))
-        cfg.gamma = _server.arg("gamma").toFloat();
-
-    if (_server.hasArg("saturation"))
-        cfg.saturation = _server.arg("saturation").toFloat();
-
-    if (_server.hasArg("wb_r"))
-        cfg.whiteBalanceR = static_cast<uint8_t>(_server.arg("wb_r").toInt());
-
-    if (_server.hasArg("wb_g"))
-        cfg.whiteBalanceG = static_cast<uint8_t>(_server.arg("wb_g").toInt());
-
-    if (_server.hasArg("wb_b"))
-        cfg.whiteBalanceB = static_cast<uint8_t>(_server.arg("wb_b").toInt());
+    cfg.gamma         = parseFloatInRange(_server, "gamma",      cfg.gamma,      0.5f, 3.0f);
+    cfg.saturation    = parseFloatInRange(_server, "saturation", cfg.saturation, 0.0f, 2.0f);
+    cfg.whiteBalanceR = parseByte(_server, "wb_r", cfg.whiteBalanceR);
+    cfg.whiteBalanceG = parseByte(_server, "wb_g", cfg.whiteBalanceG);
+    cfg.whiteBalanceB = parseByte(_server, "wb_b", cfg.whiteBalanceB);
 
     cfg.save();
     Log.println("[Web] LED config applied.");
