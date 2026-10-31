@@ -64,7 +64,7 @@ An invalid section is disabled and reported as a `ConfigWarning` event in the se
 - **Reconnect**: after 1 s, then 2 s, 4 s and every 5 s while the server stays down. Pressing *Start* in the TV launcher reconnects immediately.
 - **Releasing the LEDs**: when the TV service stops or the connection drops, HyperHDR removes the source and falls back to its next one.
 - **ESP32 in parallel**: with `esp32.enabled` the ESP32 output keeps working at the same time; neither output can slow the other down.
-- **Diagnostics**: `HyperHdrConnected`, `HyperHdrDisconnected` (with the reason) and `HyperHdrReplyError` events go to the service log.
+- **Diagnostics**: `HyperHdrConnected`, `HyperHdrDisconnected` (with the reason; repeated failures are logged about once a minute) and `HyperHdrReplyError` events go to the service log. Events from before a log host was found (including `ConfigWarning`) are queued and delivered once `tools/server.py` is discovered.
 
 ## Limitations
 

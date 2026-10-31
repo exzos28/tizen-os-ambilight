@@ -135,7 +135,7 @@ If you change the package ID, update it in both manifests and `SERVICE_APP_ID` i
 
 Open **Ambilight** on the TV and press **Start**. The service waits 2 s, broadcasts a discovery probe and starts streaming to every ESP32 that answers. The strip should follow the picture within a few seconds.
 
-The service also starts on its own when the TV boots. It keeps looking for controllers in the background (new ones and IP changes are picked up within ~30 s); pressing **Start** while it is running probes immediately.
+The service also starts on its own when the TV boots. It keeps looking for controllers in the background (new ones and IP changes are picked up within ~30 s); pressing **Start** while it is running probes immediately, reconnects HyperHDR and restarts capture.
 
 ---
 

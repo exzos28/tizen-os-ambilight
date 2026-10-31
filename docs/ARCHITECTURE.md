@@ -57,8 +57,11 @@ wiring in [HARDWARE.md](HARDWARE.md).
    does **not** wait for discovery — frames go to whichever outputs have somewhere to send.
 4. If capture fails (library or symbols missing, invalid HW condition), retries after
    5 s, 10 s, then every 30 s.
-5. AppControl `command=start` (the launcher's *Start*) probes for hosts and reconnects
-   HyperHDR immediately; `command=stop` exits the service.
+5. AppControl `command=start` (the launcher's *Start*) probes for hosts, reconnects
+   HyperHDR and re-initialises capture (re-reading the hardware condition) immediately;
+   `command=stop` exits the service.
+6. Events logged before any log host is known (config, capture init) are queued — up to
+   100 — and sent once discovery finds one.
 
 ### Outputs
 
