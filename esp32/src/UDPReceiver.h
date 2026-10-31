@@ -1,6 +1,6 @@
 #pragma once
 #include <Arduino.h>
-#include <WiFiUDP.h>
+#include <WiFiUdp.h>
 
 constexpr uint16_t UDP_PORT = 9001;
 
