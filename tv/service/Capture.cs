@@ -1,6 +1,4 @@
 using System;
-using System.Net;
-using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using System.Threading;
 
@@ -60,13 +58,13 @@ namespace Service
         static readonly object _runLock = new object();
 
         // Returns true on clean stop (Stop() called or token cancelled), false on failure.
-        // Sends each captured frame to all hosts in serverHosts simultaneously.
-        public static bool Run(string[] serverHosts, Action<string, string> log, CancellationToken token)
+        // Hands every captured frame to onFrame (on this thread); onFrame must not block.
+        public static bool Run(Action<EdgeFrame> onFrame, Action<string, string> log, CancellationToken token)
         {
             lock (_runLock)
             {
                 _running = true;
-                log("CaptureStart", $"targets={string.Join(",", serverHosts)} loading libvideoenhance.so");
+                log("CaptureStart", "loading libvideoenhance.so");
 
                 var lib = dlopen("libvideoenhance.so", RTLD_NOW);
                 if (lib == IntPtr.Zero)
@@ -146,16 +144,8 @@ namespace Service
                 log("CaptureReady", $"points={totalPoints} h={hCount} v={vCount} " +
                     $"batches={numBatches} blocksPerCycle={blocksPerCycle} delay={delay}ms");
 
-                using var udp = new UdpClient();
-                var targets = new IPEndPoint[serverHosts.Length];
-                for (int i = 0; i < serverHosts.Length; i++)
-                    targets[i] = new IPEndPoint(IPAddress.Parse(serverHosts[i]), Config.UdpPort);
                 byte[] colors = new byte[totalPoints * 3];
-                byte[] packet = new byte[2 + totalPoints * 3];
-                packet[0] = (byte)hCount;
-                packet[1] = (byte)vCount;
                 int frameCount = 0;
-                int udpFailures = 0;
                 var sw = System.Diagnostics.Stopwatch.StartNew();
 
                 // Prime: set first batch positions
@@ -202,17 +192,8 @@ namespace Service
                     }
 
                     frameCount++;
-                    Buffer.BlockCopy(colors, 0, packet, 2, totalPoints * 3);
-                    foreach (var target in targets)
-                    {
-                        try { udp.Send(packet, packet.Length, target); }
-                        catch (Exception ex)
-                        {
-                            udpFailures++;
-                            if (udpFailures % 30 == 1)
-                                log("UdpSendError", $"target={target.Address} failures={udpFailures} err={ex.Message}");
-                        }
-                    }
+                    if (!_running || token.IsCancellationRequested) break;
+                    onFrame(new EdgeFrame(hCount, vCount, (byte[])colors.Clone()));
 
                     if (frameCount % 200 == 1)
                     {

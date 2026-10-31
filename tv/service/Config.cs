@@ -7,10 +7,17 @@ namespace Service
         public const int DiscoveryPort = 9003;
         public const string DiscoveryMagic = "AMBILIGHT_DISCOVER";
         public const int DiscoveryTimeoutMs = 2000;
-        // Quick attempts (one per DiscoveryTimeoutMs) before slowing down to
-        // one attempt per DiscoveryRetryDelayMs. Discovery never gives up.
+        // While no host is known: quick attempts (one per DiscoveryTimeoutMs), then one
+        // per DiscoveryRetryDelayMs. Once hosts are known: re-probe every DiscoveryRefreshMs
+        // to pick up new controllers and IP changes. Discovery runs in the background and
+        // never blocks capture.
         public const int DiscoveryMaxRetries = 30;
         public const int DiscoveryRetryDelayMs = 10_000;
+        public const int DiscoveryRefreshMs = 30_000;
+
+        // Output settings (ESP32 on/off, HyperHDR target) — see OutputConfig.cs.
+        // Bundled into the package from tv/service/res/; edit before building.
+        public const string OutputConfigFile = "ambilight.json";
 
         // Edge sample points: h per top/bottom, v per left/right
         public const int TargetCaptureW = 4;

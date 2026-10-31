@@ -1,0 +1,19 @@
+// Output settings for the TV service. Bundled into the package — edit, then rebuild
+// and reinstall. Comments and trailing commas are allowed.
+// Reference: docs/HYPERHDR.md and docs/ARCHITECTURE.md.
+{
+  // Stream to ESP32 controllers found by UDP broadcast (this project's firmware).
+  "esp32": {
+    "enabled": true
+  },
+
+  // Stream to a HyperHDR server (v20+) through its FlatBuffers input.
+  "hyperhdr": {
+    "enabled": false,
+    "host": "",            // IP address of the HyperHDR machine, e.g. "192.168.1.50"
+    "port": 19400,         // HyperHDR → Network services → Flatbuffers server port
+    "priority": 150,       // 50–250; lower wins. HyperHDR's own grabbers use 240/245
+    "imageWidth": 64,      // size of the image synthesised from the edge samples
+    "imageHeight": 36
+  }
+}
