@@ -82,7 +82,7 @@ private:
     // Sum of the calibrated side counts (Config::ledTop + ledRight + ledBottom + ledLeft).
     static uint16_t layoutTotal();
     void drawIdentify(LightOutput::Identify::Phase phase);   // phase over Identify::coverage()
-    void finishIdentify();   // clears what the blink lit, then repaint()s
+    void finishIdentify();   // clears what the blink lit and repaint()s, in one show
 
     // Apply saturation, white balance and gamma to a range of pixels.
     void processColors(CRGB* leds, uint16_t count);
@@ -118,6 +118,8 @@ private:
     bool        _identifyActive = false;
     uint32_t    _identifyStart  = 0;
     uint16_t    _identifyLit    = 0;   // LEDs the running blink has driven (may exceed _numLeds)
+    // LEDs the next showLeds() pushes at least: set by finishIdentify() around its repaint().
+    uint16_t    _pushAtLeast    = 0;
     // Phase last drawn by the blink; Done = nothing drawn yet or a redraw request since.
     LightOutput::Identify::Phase _identifyPhase = LightOutput::Identify::Phase::Done;
     float       _estimatedWatts = 0;

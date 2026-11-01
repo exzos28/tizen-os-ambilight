@@ -12,7 +12,8 @@ only runtime one; no CSS-in-JS, no webfonts.
 ```
 src/
   tokens.css            colors, status colors, strip side colors, type scale, spacing, radii;
-                        density presets [data-density="tv"] and [data-density="phone"] (default)
+                        density presets [data-density="tv"] and [data-density="phone"] (default);
+                        the TV keeps the browser's normal line height, body copy sets its own
   base.css              page base (background, font) and text classes: ui-label, ui-value-xl,
                         ui-value, ui-unit, ui-desc, ui-muted, ui-num, ui-sr (visually hidden)
   icons.tsx             Home, Picture, Layout, Chip, Pulse, Screen, Circle, Power, Warn, Error,
@@ -26,7 +27,8 @@ src/
   ColorSwatches.tsx     the six static colors (SWATCHES); buttons with onSelect, else plain + focusedIndex
   Option.tsx            one choice of a radio group (Follow the picture / Static color), visual only
   KeyHint.tsx           TV only: Kbd, KeyHint (remote key caps)
-  LivePreview.tsx       edge-color ring from a status `rgb` string (EdgeFrame order) + LED dots, SVG
+  LivePreview.tsx       edge-color ring from a status `rgb` string (EdgeFrame order) inside a 2 px
+                        screen frame + LED dots, SVG
   StripLayoutDiagram.tsx  the strip around the screen: sides red/green/yellow/blue as the
                         calibration preview lights them, LED 1 at the start corner, direction arrows
   geometry.ts           pure helpers: parseEdgeColors, interpolate, sideOrder, sideArrows (tested)
@@ -64,7 +66,7 @@ so the package is linked by path:
    kit's files resolve `preact` to the app's copy too:
    `"preact": ["./node_modules/preact/src/index.d.ts"], "preact/*": ["./node_modules/preact/*/src/index.d.ts"]`.
 
-`esp32/web` is the reference.
+Both `tv/app` and `esp32/web` are set up this way.
 
 ## Checks
 
@@ -75,29 +77,28 @@ npm run type-check     # tsc on src and test
 npm test               # node --test on geometry.ts (Node 24, type stripping)
 ```
 
-## Moving tv/app to the kit
+## Where the apps use it
 
-`tv/app` still has its own copy of these styles (`src/style.css`). The kit's TV density
-reproduces them, so the switch should not change a pixel. Map:
+Both apps are built on the kit and keep only their shell in their own stylesheet: the TV
+launcher (`tv/app`, `<html data-density="tv">`, focus from its focus manager through
+`focused` props) and the phone web app (`esp32/web`, `data-density="phone"`, native focus and
+inputs). The TV density is the launcher's design to the pixel; check a change to the kit with
+screenshots of the launcher's mock (`tv/app`, `?state=ok|lost|none|off|unsupported`) against
+`docs/media/tv-home*.png`, and of `esp32/web`'s `npm run build:mock`.
 
-| tv/app | Kit |
-|---|---|
-| `:root` variables in `style.css` (`--bg`, `--panel`, `--ok-text`, …) | `tokens.css` (`--ui-bg`, `--ui-panel`, `--ui-ok-text`, …) + `<html data-density="tv">`; keep only the shell (rail, header, footer, grids) in the app |
-| `font-family: SamsungOne…` on `html, body` | `--ui-font` of the TV density, applied by `base.css` |
-| `components/icons.tsx` (`HomeIcon` … `ErrorIcon`, `Logo`) | `icons.tsx`; pass `size` (28 in the rail, 26 in options, 46 in the banner). `PictureIcon` fills its knobs with `--ui-icon-bg` (defaults to `--ui-rail`) |
-| `components/Keys.tsx` `Kbd`, `Hint` | `Kbd`, `KeyHint` (`Footer` stays in the app) |
-| `.tile` / `.panel` divs, `.tile.focused`, `.adjusting` | `Card` with `focused`, `adjusting`; tile content uses `ui-label`, `ui-value-xl`, `ui-unit`, `ui-desc`, `ui-muted` |
-| `Home.tsx` `Switch` (`.switch`, `.accent`) | `Switch` (`accent`) |
-| `Home.tsx` `Bar` (`.bar`, `.bar-knob`, `.muted`) | `SliderBar` with `value` 0…1 (`pct / 100`), `knob`, `muted`; no `inset` on the TV |
-| `.modes` / `.mode.checked.focused` | `Option` with `checked`, `focused`, `icon` |
-| `SWATCHES` (`{ name, c }`) + `Swatches` | `SWATCHES` (`{ name, color }`) + `ColorSwatches` with `selected` (`led_mode === 0 ? color : null`), `focusedIndex`, `small`; no `onSelect`, so they stay plain elements |
-| `.pill.tone-*` | `StatusPill tone` (`off` is the neutral tone, as in `status.ts`) |
-| `StatusLine` (`.status-line`, `.card`), `.status-list` | `StatusLine` (`card`), `StatusList`; `Row` from `status.ts` maps 1:1 (`title`, `detail`, `value`, `tone`) |
-| `.banner` markup in `Home.tsx` | `ProblemBanner` (`tone`, `title`, `text`, `detail`, `hints`) with the buttons as `actions` |
-| `.btn-primary` / `.btn-secondary` divs with `.focused` | `Button variant focused` (a real `<button>`, never focused natively there; the focus manager keeps driving `focused`) |
-| `components/Preview.tsx` | `LivePreview` (`rgb`, `h`, `v`, `live`, `config`, `width={520}`); now one SVG instead of absolutely placed divs |
-| `screens/Placeholder.tsx` panel | `Card` |
-| Strip layout screen (to build) | `StripLayoutDiagram` with `focused` = `corner-0`…`corner-3` or a side name, no callbacks |
-
-Check after the switch: screenshots of `?state=ok|lost|none|off|unsupported` against the
-current ones (`docs/media/tv-home*.png`).
+| Kit | TV launcher (`tv/app`) | Phone (`esp32/web`) |
+|---|---|---|
+| `tokens.css`, `base.css` | Entry imports them; `style.css` has the rail, header, footer and the screens' grids | Same; `app.css` has the top bar, tab bar and forms |
+| Icons, `Logo` | Rail (`size` 28), mode options (26) | Tab bar, setup |
+| `Card` | Home tiles (`focused`, `adjusting`), live preview and status panels, placeholder screens | Every section |
+| `Switch` | Lighting tile (`accent`), compact tile (plain) | Inside a `<button role="switch">` |
+| `SliderBar` | Brightness (`knob`; `muted` in the compact tile); no `inset` | Under a transparent `<input type="range">` (`inset`) |
+| `Option` | *Follow the picture* / *Static color* (`checked`, `focused`) inside `role="radio"` wrappers | After a hidden radio input |
+| `ColorSwatches`, `SWATCHES` | Plain elements with `selected`, `focusedIndex`, `small` | Buttons with `onSelect` |
+| `StatusPill` | Header summary | Top bar, unsaved layout |
+| `StatusLine`, `StatusList` | Status panel; compact `card` row while a problem is shown | Home and Device status |
+| `ProblemBanner` | Top of Home, `Button`s as `actions` | Home, Wi-Fi setup |
+| `Button` | Banner and *Test pattern* (`focused`, `tabIndex={-1}`: never focused natively) | Forms and actions |
+| `Kbd`, `KeyHint` | Footer and tile hints, test pattern | — |
+| `LivePreview` | Home (`width={520}`, 1:1) | — |
+| `StripLayoutDiagram` | *Strip layout* screen (to build): `focused` = `corner-0`…`corner-3` or a side name, no callbacks | Layout screen with `onCorner`, `onSide` |

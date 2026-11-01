@@ -7,9 +7,9 @@
 import '@ambilight/ui/tokens.css';
 import type { ComponentChildren } from 'preact';
 import { useState } from 'preact/hooks';
-import { Button, Logo, StatusDot } from '@ambilight/ui';
+import { Button, KeyHint, Logo, StatusDot } from '@ambilight/ui';
 import type { ServiceStatus } from '@ambilight/protocol';
-import { Footer, Hint } from '../components/Keys';
+import { Footer } from '../components/Footer';
 import { EDGE_LEFT, type FocusGrid, step } from '../focus';
 import {
   type EditEnd, Field, type FieldId, type HyperHdrDraft, connectionLine, draftOf, outputsWith, settingsOf, useLastReply,
@@ -172,7 +172,7 @@ export function Setup(p: SetupProps) {
   const conn = connectionLine(link, lastReplyAt, Date.now() - appliedAt < TEST_MS);
 
   return (
-    <div class={`setup${p.inline ? ' inline' : ''}`} data-density="tv">
+    <div class={`setup${p.inline ? ' inline' : ''}`}>
       <header class="setup-header">
         <div class="setup-brand">
           <Logo size={52} />
@@ -259,21 +259,21 @@ export function Setup(p: SetupProps) {
       <Footer>
         {editing ? (
           <>
-            <Hint k="OK">Done</Hint>
-            <Hint k="↩">Cancel</Hint>
+            <KeyHint k="OK">Done</KeyHint>
+            <KeyHint k="↩">Cancel</KeyHint>
           </>
         ) : stepNo === 1 ? (
           <>
-            <Hint k="◀▶">Choose</Hint>
-            <Hint k="OK">Continue</Hint>
-            <Hint k="▼">Skip for now</Hint>
-            <Hint k="↩">{p.inline ? 'Back to Outputs' : 'Back to TV'}</Hint>
+            <KeyHint k="◀▶">Choose</KeyHint>
+            <KeyHint k="OK">Continue</KeyHint>
+            <KeyHint k="▼">Skip for now</KeyHint>
+            <KeyHint k="↩">{p.inline ? 'Back to Outputs' : 'Back to TV'}</KeyHint>
           </>
         ) : (
           <>
-            <Hint k="OK">{current.startsWith('f-') ? 'Edit' : 'Select'}</Hint>
-            <Hint k="▲▼">Move</Hint>
-            <Hint k="↩">Your lights</Hint>
+            <KeyHint k="OK">{current.startsWith('f-') ? 'Edit' : 'Select'}</KeyHint>
+            <KeyHint k="▲▼">Move</KeyHint>
+            <KeyHint k="↩">Your lights</KeyHint>
           </>
         )}
         <span class="footer-note">Shown once · run it again from Outputs</span>

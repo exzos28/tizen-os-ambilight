@@ -1,0 +1,157 @@
+/* Picture screen. Kit components (Card, SliderBar, Button, KeyHint) with the design's tighter
+   spacing; focus rings are outlines (no shadows). */
+
+.pic { --pic-well: #10151d; }
+
+.pic-saved {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  height: 48px;
+  padding: 0 20px;
+  border-radius: 24px;
+  background: var(--ui-panel);
+  border: 1px solid var(--ui-panel-line);
+  color: var(--ui-text-2);
+  font-size: 20px;
+  white-space: nowrap;
+}
+.pic-check { display: inline-flex; color: var(--ui-ok); }
+.pic-saving-dot { width: 10px; height: 10px; border-radius: 5px; background: var(--ui-muted); }
+
+.pic-grid {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+  gap: 28px;
+  margin-top: 36px;
+}
+.pic-col { display: flex; flex-direction: column; gap: 28px; min-width: 0; }
+
+.pic .ui-card { padding: 26px 32px; gap: 18px; border-radius: 22px; }
+.pic .ui-card-title { font-size: 26px; font-weight: 600; }
+.pic-aside { font-size: 18px; color: var(--ui-muted); }
+.pic .warn { color: var(--ui-warn-text); }
+
+/* ---------------------------------------------------------------- slider rows */
+
+.pic .ui-card.pic-color { gap: 4px; }
+.pic-color .ui-card-head { margin-bottom: 8px; }
+
+.pic-row {
+  display: grid;
+  grid-template-columns: 280px minmax(0, 1fr) 88px;
+  align-items: center;
+  column-gap: 36px;
+  min-height: 82px;
+  padding: 0 20px;
+  border-radius: 14px;
+  --ui-bar-h: 10px;
+  --ui-knob: 24px;
+}
+.pic-row.focused { background: var(--pic-well); outline: 4px solid var(--ui-accent); }
+.pic-row.focused .pic-track { --ui-knob: 28px; }
+
+.pic-label { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.pic-name { font-size: 23px; font-weight: 600; }
+.pic-desc { font-size: 17px; color: var(--ui-muted); }
+.pic-val { font-size: 24px; font-weight: 600; text-align: right; }
+.pic-row.focused .pic-val { font-size: 26px; }
+
+/* The ◀ ▶ hints sit in the column gaps, so the bar keeps its length when the row takes the focus. */
+.pic-track { position: relative; min-width: 0; }
+.pic-arrow { font-size: 20px; line-height: 1; color: var(--ui-accent); visibility: hidden; }
+.pic-arrow.on { visibility: visible; }
+.pic-track > .pic-arrow { position: absolute; top: 50%; transform: translateY(-50%); }
+.pic-track > .pic-arrow:first-child { left: -32px; }
+.pic-track > .pic-arrow:last-child { right: -32px; }
+.pic-bar { position: relative; }
+.pic .ui-bar-knob { border: 0; }
+.pic-default {
+  position: absolute;
+  top: 18px;
+  transform: translateX(-50%);
+  font-size: 15px;
+  color: var(--ui-muted);
+  white-space: nowrap;
+}
+
+/* White balance: one row, a line per channel. */
+.pic-row.pic-wb { align-items: start; padding: 14px 20px 10px; }
+.pic-wb-lines { grid-column: 2 / 4; display: flex; flex-direction: column; gap: 2px; --ui-bar-h: 8px; }
+.pic-wb-line {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr) 88px;
+  align-items: center;
+  column-gap: 36px;
+  min-height: 36px;
+}
+.pic-ch { font-size: 18px; font-weight: 600; }
+.pic-wb_r .pic-ch { color: #ff8a8a; }
+.pic-wb_g .pic-ch { color: var(--ui-ok-text); }
+.pic-wb_b .pic-ch { color: #7fb8ff; }
+.pic-wb-val { font-size: 20px; text-align: right; color: var(--ui-text-2); }
+.pic-wb-val.on { color: var(--ui-text); font-weight: 600; font-size: 22px; }
+
+/* ---------------------------------------------------------------- power */
+
+.pic-tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
+.pic-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 16px 20px;
+  border-radius: 14px;
+  background: var(--pic-well);
+  min-width: 0;
+}
+.pic-tile.focused { outline: 4px solid var(--ui-accent); }
+.pic-tile-label { font-size: 17px; color: var(--ui-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pic-tile-value { display: flex; align-items: center; gap: 12px; font-size: 30px; font-weight: 600; white-space: nowrap; }
+.pic-tile-value .pic-arrow { font-size: 18px; }
+.pic-tile:not(.focused) .pic-tile-value .pic-arrow { display: none; }
+
+.pic-meter { display: flex; align-items: center; gap: 16px; --ui-bar-h: 12px; }
+.pic-meter .ui-bar { flex: 1; }
+.pic-meter-text { font-size: 18px; color: var(--ui-muted); white-space: nowrap; }
+
+/* ---------------------------------------------------------------- presets */
+
+.pic-presets { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.pic-preset {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 16px 20px;
+  border-radius: 14px;
+  border: 1px solid var(--ui-border);
+  background: var(--pic-well);
+  min-width: 0;
+}
+.pic-preset.checked { border: 2px solid var(--ui-accent); padding: 15px 19px; background: var(--ui-accent-soft); }
+.pic-preset.focused { outline: 4px solid var(--ui-accent); outline-offset: 3px; }
+.pic-preset-save { border-style: dashed; background: none; }
+.pic-preset-name { font-size: 22px; font-weight: 600; }
+.pic-preset-desc { font-size: 17px; color: var(--ui-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pic-preset.checked .pic-preset-desc { color: var(--ui-text-2); }
+
+/* ---------------------------------------------------------------- before / after */
+
+.pic .ui-card.pic-compare { flex: 1; min-height: 0; }
+.pic-strip-block { display: flex; flex-direction: column; gap: 10px; }
+.pic-strip-label { font-size: 18px; color: var(--ui-muted); }
+.pic-strip { display: flex; height: 46px; border-radius: 10px; overflow: hidden; background: var(--ui-led-dark); }
+.pic-strip > span { flex: 1; }
+.pic-note { margin-top: auto; font-size: 18px; line-height: 1.45; color: var(--ui-muted); }
+.pic-buttons { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.pic-btn { width: 100%; background: #1a2230; border-color: var(--ui-border); font-size: 21px; }
+
+/* ---------------------------------------------------------------- empty state, footer */
+
+.pic-empty { margin-top: 36px; max-width: 1100px; }
+.pic .ui-card.pic-empty { padding: 44px 52px; gap: 22px; }
+.pic-empty .ui-card-title { font-size: 34px; font-weight: 700; }
+.pic-empty-text { font-size: 22px; line-height: 1.5; color: var(--ui-text-2); }
+
+.pic .footer .ui-kbd { min-width: 40px; height: 36px; border-color: var(--ui-border); }

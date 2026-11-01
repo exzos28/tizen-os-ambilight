@@ -46,10 +46,10 @@ wiring in [HARDWARE.md](HARDWARE.md).
 
 ### Lifecycle
 
-1. Loads the output settings: the ones the launcher saved with
-   [`set-outputs`](#commands) if there are valid ones, otherwise `res/ambilight.json`
-   (bundled at build time; see [Configuration](#4-configuration-reference)). A missing or
-   invalid `res/ambilight.json` falls back to ESP32 only.
+1. Loads the output settings: `res/ambilight.json` (bundled at build time; see
+   [Configuration](#4-configuration-reference)), with the ones the launcher saved with
+   [`set-outputs`](#commands) over it if there are valid ones. A missing or invalid
+   `res/ambilight.json` falls back to ESP32 only.
 2. Starts discovery (`Discovery.cs`) in the background: broadcasts `AMBILIGHT_DISCOVER` on
    UDP 9003 and collects **all** replies for 2 s. While nobody is known it retries — 30
    quick attempts, then every 10 s; once hosts are known it re-probes every 30 s, so new
@@ -174,11 +174,11 @@ avoids memory it doesn't need:
 Preact + TypeScript web app. The source is `tv/app/`; Vite (`npm run build` there) builds it into `tv/ui`, next to
 the tracked `config.xml`: one classic deferred script and one stylesheet (`assets/app.js`,
 `assets/app.css`) for Chromium M94, the web engine of Tizen 7.0 (2023 TVs), the oldest
-supported. `preact` is the only runtime dependency besides
-[`@ambilight/protocol`](../protocol/README.md#using-ambilightprotocol) (`packages/protocol`,
-linked with `file:`, no dependencies of its own): the wire types, ESP32 setting limits,
-constants (port names, app IDs), the ESP32 HTTP client and the service message helpers, all
-generated from or written against `protocol/`.
+supported. `preact` is the only runtime dependency besides two packages linked with `file:`
+(no dependencies of their own): [`@ambilight/protocol`](../protocol/README.md#using-ambilightprotocol)
+(`packages/protocol`): the wire types, ESP32 setting limits, constants (port names, app IDs),
+the ESP32 HTTP client and the service message helpers, all generated from or written against
+`protocol/`; and the UI kit [`@ambilight/ui`](../packages/ui/README.md) (`packages/ui`).
 
 The TV is short on memory, so the app stays small: only the current screen is mounted, system
 fonts only, no blur, shadows or transitions; the only animation is the *Test pattern*. The
@@ -195,10 +195,12 @@ widget is not preloaded (no `prelaunch.support`), and Back on Home exits it.
 | `src/controllers.ts` | The discovered controllers over HTTP: `/status` + `/config` once, `/metrics` every second while Home is shown; writes |
 | `src/data/` | Adapters: `service.ts` (Tizen message port and AppControl glue around the `@ambilight/protocol` message helpers), `index.ts` (picks the backend; one `createEsp32Client` per controller, 3 s timeout), `mock.ts` (desktop browser, `?state=ok\|lost\|none\|off\|unsupported`), `api.ts` (what the screens use) |
 
-Its look (tokens, icons, cards, switch, status pill and lines, problem banner, swatches, live
-preview) is shared with the controller's web app through the UI kit `@ambilight/ui`
-([`packages/ui`](../packages/ui/README.md)); the launcher still has its own copy in
-`src/style.css` and moves to the kit's TV density later.
+The launcher is drawn with the UI kit `@ambilight/ui` ([`packages/ui`](../packages/ui/README.md)),
+the same as the controller's web app: tokens, icons, cards, switch, slider, mode options,
+swatches, status pill and lines, problem banner, buttons, key hints and the live preview, at
+the kit's TV density (`<html data-density="tv">`). The launcher passes the focus to them as
+`focused` props; `src/style.css` keeps only the shell (rail, header, footer) and the screens'
+grids.
 
 Remote: ◀ ▶ ▲ ▼ move, OK activates, Back exits on Home (closes the test pattern, returns
 to Home from other sections). ◀ from the leftmost element moves to the rail.
@@ -215,6 +217,28 @@ form-urlencoded with a 3 s timeout. A change goes to every controller that answe
 | Brightness (◀ ▶ in 5% steps, after OK) | `POST /save/leds brightness=0..255`, sent 300 ms after the last key |
 | Follow the picture / Static color | `POST /save/mode led_mode=1\|0` |
 | Static color swatch | `POST /save/leds color=#rrggbb` (+ `led_mode=0`) |
+
+### Picture
+
+`src/screens/Picture.tsx`: the color correction and power settings of `POST /save/leds`, with
+the ranges and defaults of `limits` from `@ambilight/protocol`. ▲ ▼ move between rows, ◀ ▶
+change the focused value at once (brightness 5%, gamma and saturation 0.1, white balance 5,
+limit 5 W, LED power 0.01 W; the two long ranges move ten steps at a time while the key
+repeats). The screen shows the change right away and sends it 300 ms after the last key (also
+when the screen is left), one `saveLeds` with every changed field, to every controller that
+answers. With several controllers it shows the first one's values and *Mixed* where they
+differ; a change then sets all of them.
+
+| Part | What |
+|---|---|
+| Color | Brightness, gamma, saturation, white balance R / G / B |
+| Power | Limit (`power_limit_w`, 0 = off), one LED at full white (`pixel_watts`), *Using now* from `/metrics` `power_w` with a meter against the limit (no limit: against full white at this brightness) and whether `power_limited` reduced the frame |
+| Presets | *Natural* (the defaults), *Cinema* (gamma 2.4, saturation 1.2, white balance 255/236/214), *Vivid* (saturation 1.6); they set gamma, saturation and white balance only. *Save as preset* keeps the current ones as *My preset* in the TV's `localStorage` (this TV only) |
+| Before and after | The current frame's edge colors (`capture.rgb`) and an approximation of what the controller makes of them: saturation in HSV, then white balance. Gamma is left out (it shapes the LEDs' response, not the screen's) |
+| Reset to defaults | OK twice: brightness, gamma, saturation and white balance back to the defaults; the power settings stay (they describe the supply and the strip) |
+
+No answering controller: an empty state with *Open Outputs*; ◀ there moves to the rail. On the
+value rows ◀ ▶ adjust, so the rail is reached with Back (Home) or from there.
 
 ### Status
 
@@ -269,10 +293,16 @@ the next command; with ids the launcher can tell. A request without `id` (older 
 gets a reply without one. A longer id is not run and answered `ok: false` without an `id`.
 
 **Saved outputs.** `set-outputs` writes `outputs.json` to the app's data directory (Tizen
-`DirectoryInfo.Data`; atomically, through a temp file) before applying it, so `ok: true` means
-applied *and* kept. From the next start on it replaces `res/ambilight.json` entirely (with the
-HyperHDR image size in effect when it was saved); the status says `outputs.source: "saved"`.
-A saved file that can't be read or isn't valid is ignored: the service falls back to
+`DirectoryInfo.Data`) before applying it, so `ok: true` means applied *and* kept. The file is
+written to a temp file, flushed to the disk and renamed over the old one, so a power cut
+leaves either the old or the new settings, never half a file. It holds only what
+`set-outputs` sets — `esp32.enabled` and `hyperhdr.enabled` / `host` / `port` / `priority`.
+From the next start on it is merged over `res/ambilight.json`: those keys come from the
+saved file, everything else (the HyperHDR image size) from the package, so a newer package's
+values apply even after `set-outputs`; the status says `outputs.source: "saved"`. Problems
+of `res/ambilight.json` with the image size are still reported in `configWarnings`. Saved
+files from older versions also carry `hyperhdr.imageWidth` / `imageHeight`; those keys are
+ignored. A saved file that can't be read or isn't valid is ignored: the service falls back to
 `res/ambilight.json` and reports it as the first `configWarnings` entry / `ConfigWarning`
 event. The file goes away with the app's data (reinstalling after an uninstall, or clearing
 the app's data).
@@ -351,7 +381,8 @@ into equal on / off slots of ≈ 333 ms and ending on an off slot (timeline in
 `LightOutput::Identify`), driven from `update()` without blocking, at the configured
 brightness and power limit. It covers every LED that may be lit — the driven count, LEDs
 a longer calibration preview left lit and the calibrated layout (`Identify::coverage()`)
-— and clears them all when it ends, before `repaint()`. It works with the lighting off.
+— and clears them all when it ends, in the same `FastLED.show()` as the `repaint()` that
+restores the output (one show, no black frame in between). It works with the lighting off.
 While it runs, other redraws (`setNumLeds()`, `repaint()` after a mode, power or color
 change, brightness and power-limit updates, a new preview) only update state
 (`LightOutput::redrawsNow()`): the blink re-applies its current phase on the next update,
@@ -428,7 +459,7 @@ The firmware uses the `min_spiffs.csv` partition table: two 1.875 MB OTA app slo
 | `DiscoveryRetryDelayMs` | 10000 | Interval between attempts after that (discovery never gives up) |
 | `DiscoveryRefreshMs` | 30000 | Re-probe interval once hosts are known |
 | `OutputConfigFile` | `ambilight.json` | Output settings file in the package's `res/` folder |
-| `SavedOutputsFile` | `outputs.json` | Output settings saved by `set-outputs`, in the app's data directory; wins over `OutputConfigFile` |
+| `SavedOutputsFile` | `outputs.json` | Output settings saved by `set-outputs`, in the app's data directory; merged over `OutputConfigFile` (wins for the keys `set-outputs` sets) |
 | `TargetCaptureW` | 4 | Sample points per horizontal edge |
 | `TargetCaptureH` | 3 | Sample points per vertical edge |
 | `EdgeInsetPx` | 250 | Distance of sample points from the screen edge, in HW pixels (3840 × 2160 on 4K) |

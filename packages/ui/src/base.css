@@ -23,6 +23,12 @@ button, input, select { font: inherit; color: inherit; }
 .ui-desc { font-size: var(--ui-fs-body); color: var(--ui-text-2); }
 .ui-muted { font-size: var(--ui-fs-small); color: var(--ui-muted); }
 
+/* TV: normal line height (--ui-lh) except for body copy; the unit keeps the weight of its value. */
+[data-density='tv'] .ui-value { line-height: normal; }
+[data-density='tv'] .ui-desc { line-height: 1.45; }
+[data-density='tv'] .ui-muted { line-height: 1.5; }
+[data-density='tv'] .ui-unit { font-weight: inherit; }
+
 /* Visually hidden, still read by screen readers and focusable (native inputs under visuals). */
 .ui-sr {
   position: absolute;

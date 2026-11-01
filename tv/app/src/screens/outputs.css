@@ -1,11 +1,6 @@
 /* Outputs (and the HyperHDR fields / status row the setup wizard shares). 1920×1080 canvas,
    kit tokens of the TV density; no shadows or blur — the focus ring is an outline. */
 
-.outputs button,
-.outputs input,
-.setup button,
-.setup input { font-family: inherit; }
-
 .out-header-aside { display: flex; align-items: center; gap: 16px; }
 .out-chip {
   display: inline-flex;

@@ -5,9 +5,9 @@
 
 import '@ambilight/ui/tokens.css';
 import { useEffect, useState } from 'preact/hooks';
-import { BlinkIcon, Button, CheckIcon, ChipIcon, RefreshIcon, StatusDot, StatusPill, Switch } from '@ambilight/ui';
+import { BlinkIcon, Button, CheckIcon, ChipIcon, KeyHint, RefreshIcon, StatusDot, StatusPill, Switch } from '@ambilight/ui';
 import type { OutputsStatus, ServiceOutputs } from '@ambilight/protocol';
-import { Footer, Hint } from '../components/Keys';
+import { Footer } from '../components/Footer';
 import { type Controller, unreachable } from '../controllers';
 import type { ServiceLink } from '../data';
 import { EDGE_LEFT, type FocusGrid, step } from '../focus';
@@ -203,7 +203,7 @@ export function Outputs(p: ScreenProps) {
   const testLabel = busy === 'hdr-test' ? 'Applying…' : !hdrOn ? 'Turn on and test' : dirty ? 'Apply and test' : 'Test connection';
 
   return (
-    <main class="main outputs" data-density="tv">
+    <main class="main outputs">
       <header class="header">
         <div class="header-titles">
           <h1>Outputs</h1>
@@ -312,16 +312,16 @@ export function Outputs(p: ScreenProps) {
       <Footer>
         {editing ? (
           <>
-            <Hint k="OK">Done</Hint>
-            <Hint k="↩">Cancel</Hint>
-            <Hint k="▲▼">Done, next field</Hint>
+            <KeyHint k="OK">Done</KeyHint>
+            <KeyHint k="↩">Cancel</KeyHint>
+            <KeyHint k="▲▼">Done, next field</KeyHint>
           </>
         ) : (
           <>
-            <Hint k="OK">{OK_HINT[current] ?? 'Edit'}</Hint>
-            <Hint k="▲▼">Move</Hint>
-            <Hint k="◀▶">Other output</Hint>
-            <Hint k="↩">Back</Hint>
+            <KeyHint k="OK">{OK_HINT[current] ?? 'Edit'}</KeyHint>
+            <KeyHint k="▲▼">Move</KeyHint>
+            <KeyHint k="◀▶">Other output</KeyHint>
+            <KeyHint k="↩">Back</KeyHint>
           </>
         )}
         <span class="footer-note">Saved on the TV · used right away</span>

@@ -123,6 +123,16 @@ void test_identify_finishes_at_the_duration() {
     TEST_ASSERT_TRUE(Id::step(Id::DURATION_MS + 500, Id::Phase::On) == Id::Step::Finish);
 }
 
+// The repaint() after a blink shows once: that show pushes at least the LEDs the blink
+// cleared, even when the restored output draws fewer (or none), never past the buffer.
+void test_identify_finish_pushes_the_cleared_leds_in_the_repaints_show() {
+    TEST_ASSERT_EQUAL_UINT16(500, Id::pushCount(300, 500, 1500));    // repaint draws fewer
+    TEST_ASSERT_EQUAL_UINT16(500, Id::pushCount(0, 500, 1500));      // repaint draws none
+    TEST_ASSERT_EQUAL_UINT16(600, Id::pushCount(600, 500, 1500));    // a longer preview
+    TEST_ASSERT_EQUAL_UINT16(300, Id::pushCount(300, 0, 1500));      // any other show
+    TEST_ASSERT_EQUAL_UINT16(1000, Id::pushCount(1200, 1300, 1000)); // capped at the buffer
+}
+
 int main() {
     UNITY_BEGIN();
     RUN_TEST(test_power_on_follows_the_mode);
@@ -138,5 +148,6 @@ int main() {
     RUN_TEST(test_identify_draws_only_on_phase_changes);
     RUN_TEST(test_identify_reapplies_its_phase_after_another_redraw);
     RUN_TEST(test_identify_finishes_at_the_duration);
+    RUN_TEST(test_identify_finish_pushes_the_cleared_leds_in_the_repaints_show);
     return UNITY_END();
 }
