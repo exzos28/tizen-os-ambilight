@@ -7,7 +7,7 @@
 
 Both apps ship as one hybrid package — building `ui/` also builds `service/`. Build, signing and installation: [docs/INSTALL.md § TV apps](../docs/INSTALL.md#4-tv-apps).
 
-Releases attach the package as `ambilight-tv-vX.Y.Z.wgt`, built in CI by `scripts/make_package.sh` (`.github/workflows/tv-package.yml`): the service with `Tizen.NET.Sdk` (`scripts/Service.tizen-sdk.csproj`, same sources as `service/Service.csproj`), the hybrid `.wgt` with the Tizen Studio CLI, signed with a throwaway certificate for Apps2Samsung to re-sign.
+Releases attach the package as `ambilight-tv-vX.Y.Z.wgt`, built in CI by `scripts/make_package.sh` (`.github/workflows/tv-package.yml`): the service from `service/Service.csproj` with the Tizen .NET workload (as in VS Code), the hybrid `.wgt` with the Tizen Studio CLI, signed with a throwaway certificate for Apps2Samsung to re-sign.
 
 ## How it works
 
