@@ -8,29 +8,27 @@
 # with a certificate that embeds its own DUID, so it does NOT install as is: Apps2Samsung
 # re-signs it for the user's TV (or re-sign it with your own Samsung certificate).
 #
-# CI only (.github/workflows/tv-package.yml): it points the Tizen CLI at a throwaway signing
-# profile, which would replace your own profile in a local Tizen Studio. To install from
-# source, build tv/ui in VS Code instead (docs/INSTALL.md).
+# CI only (.github/workflows/tv-package.yml): it creates a throwaway signing profile with the
+# Tizen-Core CLI, which may also write to the CLI's global data next to a local SDK. To install
+# from source, build tv/ui in VS Code instead (docs/INSTALL.md).
 #
-# Needs: .NET SDK 8 with the Tizen workload (Samsung/Tizen.NET workload-install.sh), Tizen Studio CLI (web-cli is enough; $TIZEN_STUDIO, default ~/tizen-studio),
+# Needs: .NET SDK 8 with the Tizen workload (Samsung/Tizen.NET workload-install.sh), the Tizen-Core
+# CLI ($TIZEN_SDK/tools/tizen-core/tz, default ~/tizen-sdk),
 # expect, rsync, zip, unzip, python3, node.
 #
 # Usage: tv/scripts/make_package.sh [output-dir]   (default: tv/release)
 set -euo pipefail
 
-[ "${CI:-}" = true ] || { echo "make_package.sh changes the Tizen CLI's signing profile; it only runs in CI (CI=true)" >&2; exit 1; }
+[ "${CI:-}" = true ] || { echo "make_package.sh creates a throwaway Tizen signing profile; it only runs in CI (CI=true)" >&2; exit 1; }
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 OUT="${1:-$ROOT/tv/release}"
 mkdir -p "$OUT"
 OUT="$(cd "$OUT" && pwd)"
 
-STUDIO="${TIZEN_STUDIO:-$HOME/tizen-studio}"
-TIZEN="$STUDIO/tools/ide/bin/tizen"   # classic CLI: certificates
-TZ="$STUDIO/tools/tizen-core/tz"      # Tizen-Core CLI: hybrid packaging, as the VS Code extension
-for tool in "$TIZEN" "$TZ"; do
-    [ -x "$tool" ] || { echo "$tool not found (set TIZEN_STUDIO); $STUDIO/tools has:" >&2; ls "$STUDIO/tools" >&2 || true; exit 1; }
-done
+SDK="${TIZEN_SDK:-$HOME/tizen-sdk}"
+TZ="$SDK/tools/tizen-core/tz"   # Tizen-Core CLI, the packager the VS Code Tizen extension uses
+[ -x "$TZ" ] || { echo "$TZ not found (set TIZEN_SDK)" >&2; exit 1; }
 command -v expect >/dev/null || { echo "expect is required" >&2; exit 1; }
 command -v zip >/dev/null || { echo "zip is required" >&2; exit 1; }
 
@@ -62,10 +60,9 @@ export CERT_PASSWORD="${CERT_PASSWORD:-ambilight-ci}"
 PROFILE=ambilight-ci
 KEYS="$WORK/keys"
 mkdir -p "$KEYS"
-"$TIZEN" certificate -a "$PROFILE" -p "$CERT_PASSWORD" -c US -s CI -ct CI -o tizen-os-ambilight \
-    -n "$PROFILE" -e ci@example.org -f "$PROFILE" -- "$KEYS"
-P12="$(find "$KEYS" -name "$PROFILE.p12" | head -n 1)"
-[ -n "$P12" ] || { echo "the Tizen CLI did not create $KEYS/$PROFILE.p12" >&2; exit 1; }
+P12="$KEYS/$PROFILE.p12"
+"$TZ" cert -n "$PROFILE" -p "$CERT_PASSWORD" -e ci@example.org -o tizen-os-ambilight -c CI -s CI -C US -f "$P12"
+[ -f "$P12" ] || { echo "tz cert did not create $P12" >&2; exit 1; }
 PROFILES="$WORK/profiles.xml"
 "$TZ" security-profiles add -n "$PROFILE" -a "$P12" -p "$CERT_PASSWORD" -x "$PROFILES" -A
 
@@ -83,7 +80,7 @@ lassign [wait] pid spawnid os_error status
 exit $status
 EXP
     then
-        find "$STUDIO/.." "$HOME" -path '*tizen-studio-data*' -name '*.log' 2>/dev/null | while read -r log; do
+        find "$SDK/.." "$HOME" -path '*tizen-studio-data*' -name '*.log' 2>/dev/null | while read -r log; do
             echo "--- $log"; tail -n 60 "$log"
         done
         return 1
