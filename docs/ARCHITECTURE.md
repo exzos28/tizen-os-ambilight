@@ -190,7 +190,9 @@ widget is not preloaded (no `prelaunch.support`), and Back on Home exits it.
 | `src/focus.ts` | Focus manager: focusable elements as rows with column positions, explicit neighbours where needed |
 | `src/screens/Home.tsx` | Lighting on/off, brightness, mode + static colors, live preview, status, problem banner |
 | `src/screens/TestPattern.tsx` | Full-screen rotating color wheel (96×54 canvas, scaled) to check the strip follows the picture |
-| `src/screens/Placeholder.tsx` | *Picture*, *Strip layout*, *Controllers*, *Diagnostics*: not built yet |
+| `src/screens/Diagnostics.tsx` | Whether this TV supports capture, what its hardware reports, the outputs' counters, settings warnings, the QR code of a pre-filled TV report ([Diagnostics](#diagnostics)) |
+| `src/qr.ts` | QR code encoder (byte mode, level L) for the report link |
+| `src/screens/Placeholder.tsx` | Sections not built yet |
 | `src/status.ts` | Status lines, problems (most important first) and the header pill from the service status |
 | `src/controllers.ts` | The discovered controllers over HTTP: `/status` + `/config` once, `/metrics` every second while Home is shown; writes |
 | `src/data/` | Adapters: `service.ts` (Tizen message port and AppControl glue around the `@ambilight/protocol` message helpers), `index.ts` (picks the backend; one `createEsp32Client` per controller, 3 s timeout), `mock.ts` (desktop browser, `?state=ok\|lost\|none\|off\|unsupported`), `api.ts` (what the screens use) |
@@ -244,6 +246,28 @@ one that stops answering HTTP, shows *Search now* (`rediscover`).
 
 The test pattern's hint stays in the middle of the screen, away from the edges where the
 service samples.
+
+### Diagnostics
+
+The *Diagnostics* section shows the same status in full, for a TV compatibility report:
+
+| Section | Content |
+|---|---|
+| This TV | Verdict (same reading as Home's banner: *This TV is supported*, *does not expose the capture API* for a `library` / `symbols` failure, *hardware is not ready* for `hardware`, stalled / failing reads), model (`tizen.systeminfo` `model_name`), app and service versions, the capture library and whether it loaded, `hw` (`ret`, screen, slots, block size, delay in use and the one the hardware asks for), frame time and fps, failed reads per frame with `lastBadRet`; while `failed`, the attempts, the retry time and `error` |
+| Output settings | `outputs.source` and `configWarnings` |
+| Outputs | Per controller: its status line (as on Home), firmware and Wi-Fi from `/status`, uptime, heap (free, lowest, total), `frames_rx` and the last frame's age from `/metrics`; the service's `framesSent` / `sendErrors` / `lastError`; HyperHDR: connection, `replies`, `lastError` |
+| Report this TV | QR code of `issues/new?template=tv-compatibility.yml` with `title`, `model`, `result` (*Works* / *Partially works* / *Doesn't work* from the verdict; left out while the status can't tell) and `log` filled in: the `HwCondition` line in the service's event format, the capture state with `frameMs` / `reads` / `badReads` / `lastBadRet`, or the `CaptureError` with `failure` and `error` |
+
+The report is rebuilt only when the verdict, the hardware reply or the versions change, so the
+QR code holds still while a phone reads it (frame counts and retry times stay out of it).
+`src/qr.ts` encodes it (byte mode, level L, smallest version; about 1.6 kB gzipped); a typical
+report is version 13 (69×69 modules).
+
+There is no event log on this screen: the service keeps none, it only POSTs its events to
+`tools/server.py` ([Event log](#event-log)).
+
+Remote: ▲ ▼ move between the sections (left column, then right) and scroll a section that
+is taller than the screen; ◀ goes to the rail.
 
 ### Commands
 

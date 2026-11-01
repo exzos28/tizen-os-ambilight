@@ -43,7 +43,7 @@ const ago = (ms: number) => {
 const retry = (c: CaptureStatus) => (c.retryInMs != null ? `retry in ${Math.ceil(c.retryInMs / 1000)} s` : '');
 
 export const stalled = (c: CaptureStatus) => c.state === 'running' && (c.lastFrameAgoMs ?? 0) > STALL_MS;
-const allReadsFail = (c: CaptureStatus) => c.state === 'running' && c.reads != null && c.reads > 0 && (c.badReads ?? 0) >= c.reads;
+export const allReadsFail = (c: CaptureStatus) => c.state === 'running' && c.reads != null && c.reads > 0 && (c.badReads ?? 0) >= c.reads;
 
 /** Capture is producing colors right now. */
 export const live = (c: CaptureStatus) => c.state === 'running' && !stalled(c) && !allReadsFail(c);
