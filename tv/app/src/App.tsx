@@ -12,6 +12,7 @@ import { Diagnostics } from './screens/Diagnostics';
 import { Layout } from './screens/Layout';
 import { Outputs } from './screens/Outputs';
 import { Picture } from './screens/Picture';
+import { Setup, shouldShowSetup } from './screens/Setup';
 import { TestPattern } from './screens/TestPattern';
 import type { ScreenProps } from './screens/types';
 import { problems as findProblems } from './status';
@@ -35,6 +36,11 @@ export function App({ backend }: { backend: Backend }) {
   const keys = useRef<KeyHandler | null>(null);
   /** Where the focus goes when Home mounts again (after the test pattern). */
   const [homeFocus, setHomeFocus] = useState<string | null>(null);
+  /** First-run wizard: decided once, from the first status the service sends. */
+  const [setupOpen, setSetupOpen] = useState<boolean | null>(null);
+  useEffect(() => {
+    if (setupOpen === null && link.kind === 'up') setSetupOpen(shouldShowSetup(link.status));
+  }, [link]);
 
   // ---------------------------------------------------------------- status poll
   useEffect(() => backend.service.subscribe((l) => {
@@ -121,6 +127,7 @@ export function App({ backend }: { backend: Backend }) {
   const screenProps: ScreenProps = {
     backend, link, controllers, actions, problems, active: zone === 'content', bindKeys, open,
   };
+  if (setupOpen) return <Setup {...screenProps} onClose={() => setSetupOpen(false)} />;
 
   return (
     <div class="shell">
