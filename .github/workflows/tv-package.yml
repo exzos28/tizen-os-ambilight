@@ -51,6 +51,7 @@ jobs:
           done <<'EOF'
           tizen-core_10.0.18_ubuntu-64.zip 08b60e8f630fe0c3aafa5be9251a75d9ce173f2521375ddb803f9a3cb57f62ec
           web-privilege-checker_0.0.2_ubuntu-64.zip 5dce06d92b3f046303f3baabd1e8a4bb6cfb7724e051da5d83205fd6d88f7ccc
+          certificate-generator_0.1.4_ubuntu-64.zip 446aa52f249205f4ad573173b02c9c38aa5de0316028b77dd189e44fd5f75964
           EOF
           cp -R "$RUNNER_TEMP/pkg/data/." "$TIZEN_SDK/"
           # tz finds the SDK by the sdk.info an SDK installer writes into its root.
