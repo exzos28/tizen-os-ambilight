@@ -28,9 +28,6 @@ function tizenWidget(): Plugin {
 export default defineConfig({
   base: './',
   plugins: [tizenWidget()],
-  oxc: {
-    jsx: { runtime: 'automatic', importSource: 'preact' },
-  },
   resolve: {
     // @ambilight/ui is linked from packages/ui and may have its own node_modules/preact (its
     // devDependency): always use this app's copy, one Preact in the bundle.
@@ -38,6 +35,9 @@ export default defineConfig({
   },
   server: {
     fs: { allow: ['.', '../../packages/protocol', '../../packages/ui'] },
+  },
+  oxc: {
+    jsx: { runtime: 'automatic', importSource: 'preact' },
   },
   build: {
     outDir,

@@ -6,7 +6,6 @@
 // No event log here: the service only POSTs its events to tools/server.py (ARCHITECTURE.md,
 // Event log), the TV keeps none.
 
-import '@ambilight/ui/tokens.css';
 import { Card, CheckIcon, ErrorIcon, KeyHint, PulseIcon, StatusLine, StatusList, WarnIcon, type Tone } from '@ambilight/ui';
 import type { CaptureStatus, HwCondition, ServiceStatus } from '@ambilight/protocol';
 import type { ComponentChildren } from 'preact';
@@ -15,6 +14,7 @@ import type { Controller } from '../controllers';
 import type { ServiceLink } from '../data';
 import { qrEncode } from '../qr';
 import { allReadsFail, controllerRow, controllerTitle, fps, hyperHdrRow, stalled } from '../status';
+import { Footer } from '../components/Footer';
 import type { ScreenProps } from './types';
 import './diagnostics.css';
 
@@ -177,7 +177,7 @@ export function Diagnostics(p: ScreenProps) {
     : '—';
 
   return (
-    <main class="main diag" data-density="tv">
+    <main class="main diag">
       <header class="header">
         <div class="header-titles">
           <h1>Diagnostics</h1>
@@ -242,12 +242,12 @@ export function Diagnostics(p: ScreenProps) {
         </div>
       </div>
 
-      <footer class="footer">
+      <Footer>
         <KeyHint k="▲▼">Sections, scroll</KeyHint>
         <KeyHint k="◀">Menu</KeyHint>
         <KeyHint k="↩">Home</KeyHint>
         <span class="footer-note">Updates every second · the event log is in tools/server.py</span>
-      </footer>
+      </Footer>
     </main>
   );
 }

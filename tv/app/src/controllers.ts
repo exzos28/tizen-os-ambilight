@@ -1,7 +1,8 @@
 // The ESP32 controllers the service discovered, as seen over their HTTP API. The launcher
-// reads /status and /config once per controller (and again after a failed write), then
-// /metrics on every poll while Home is shown. /config is read again when the metrics'
-// config_rev changes, i.e. when another client (the controller's web app) saved a setting.
+// reads /status, /metrics and /config once per controller (and again after a failed write),
+// then /metrics on every status poll while a screen is shown. /config is read again when the
+// metrics' config_rev changes, i.e. when a setting was saved — by another client (the
+// controller's web app) or by our own write, which then confirms what we show.
 
 import { useCallback, useEffect, useRef, useState } from 'preact/hooks';
 import { configChanged, type Esp32Config, type Esp32Metrics, type Esp32Status, type LedMode } from '@ambilight/protocol';
@@ -44,7 +45,7 @@ const BRIGHTNESS_DEBOUNCE_MS = 300;
 
 /**
  * hosts: status.esp32.hosts (null while the service status is unknown).
- * active: poll /metrics (Home is shown and the page is visible).
+ * active: poll /metrics (a screen is shown and the page is visible).
  * tick: increments on every status poll; drives the HTTP polling.
  */
 export function useControllers(backend: Backend, hosts: string[] | null, active: boolean, tick: number) {
@@ -53,6 +54,10 @@ export function useControllers(backend: Backend, hosts: string[] | null, active:
   ref.current = list;
   const inFlight = useRef(new Set<string>());
   const brightnessTimer = useRef<number>(0);
+  // Our own writes: `seq` grows with every change shown optimistically, `inFlight` counts the
+  // requests not answered yet. A config read is only taken while neither moved, so a read
+  // answered before our write landed can't put the old value back on the screen.
+  const writes = useRef({ seq: 0, inFlight: 0 });
   const { esp32 } = backend;
 
   const patch = useCallback((host: string, p: Partial<Controller> | ((c: Controller) => Partial<Controller>)) => {
@@ -84,17 +89,20 @@ export function useControllers(backend: Backend, hosts: string[] | null, active:
     if (inFlight.current.has(c.host)) return;
     inFlight.current.add(c.host);
     try {
+      const esp = esp32(c.host);
+      const idle = () => !brightnessTimer.current && writes.current.inFlight === 0;
       if (!c.config || !c.status) {
-        const esp = esp32(c.host);
-        const [status, config] = await Promise.all([esp.getStatus(), esp.getConfig()]);
-        ok(c.host, { status, config });
-      } else {
-        const esp = esp32(c.host);
+        // The revision is read before the config, so a change in between is caught next time.
+        const status = await esp.getStatus();
         const metrics = await esp.getMetrics();
-        // Changed elsewhere: re-read, unless a brightness change of ours is still on its way
-        // (it is sent shortly and bumps the revision again; last write wins).
-        if (configChanged(c.configRev ?? null, metrics) && !brightnessTimer.current) {
-          ok(c.host, { metrics, config: await esp.getConfig(), configRev: metrics.config_rev });
+        ok(c.host, { status, metrics, config: await esp.getConfig(), configRev: metrics.config_rev ?? null });
+      } else {
+        const metrics = await esp.getMetrics();
+        if (configChanged(c.configRev ?? null, metrics) && idle()) {
+          const seq = writes.current.seq;
+          const config = await esp.getConfig();
+          // Dropped if we changed something meanwhile: the next poll reads it again.
+          ok(c.host, writes.current.seq === seq ? { metrics, config, configRev: metrics.config_rev } : { metrics });
         } else {
           ok(c.host, { metrics });
         }
@@ -118,10 +126,14 @@ export function useControllers(backend: Backend, hosts: string[] | null, active:
       if (!c.present || !c.config) continue;
       const host = c.host;
       patch(host, (cur) => (cur.config ? { config: { ...cur.config, ...apply(cur.config) } } : {}));
-      send(host).catch((e) => {
-        failed(host, e);
-        patch(host, { config: undefined }); // re-read on the next poll
-      });
+      writes.current.seq++;
+      writes.current.inFlight++;
+      send(host)
+        .catch((e) => {
+          failed(host, e);
+          patch(host, { config: undefined }); // re-read on the next poll
+        })
+        .finally(() => { writes.current.inFlight--; });
     }
   };
 
@@ -135,6 +147,7 @@ export function useControllers(backend: Backend, hosts: string[] | null, active:
       for (const c of ref.current) {
         if (c.present && c.config) patch(c.host, (cur) => (cur.config ? { config: { ...cur.config, brightness: value } } : {}));
       }
+      writes.current.seq++;
       clearTimeout(brightnessTimer.current);
       brightnessTimer.current = window.setTimeout(() => {
         brightnessTimer.current = 0;

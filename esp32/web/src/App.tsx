@@ -74,14 +74,20 @@ export function App() {
         const m = await esp.getMetrics()
         if (!alive) return
         setMetrics(m)
-        // Re-read the settings when another client changed them — but not over an edit of
-        // ours that is still waiting to be sent (last write wins once it is saved).
-        const changedElsewhere = configChanged(revRef.current, m) && !Object.keys(pending.current).length
+        // Re-read the settings when the revision changed (another client — or our own save,
+        // which then confirms what we show). Not while an edit of ours is waiting or on its
+        // way, and a read answered after we changed something is dropped: an older answer
+        // must never put the old value back on the screen. The next poll catches up.
+        const idle = !Object.keys(pending.current).length && writes.current.inFlight === 0
+        const changed = configChanged(revRef.current, m) && idle
         const jobs: Promise<unknown>[] = []
-        if (!cfgRef.current || wasOffline || reloadRef.current || changedElsewhere) {
+        if (!cfgRef.current || wasOffline || reloadRef.current || changed) {
           reloadRef.current = false
           const rev = typeof m.config_rev === 'number' ? m.config_rev : null
-          jobs.push(esp.getConfig().then((c) => { if (alive) { setCfg(c); revRef.current = rev } }))
+          const seq = writes.current.seq
+          jobs.push(esp.getConfig().then((c) => {
+            if (alive && writes.current.seq === seq) { setCfg(c); revRef.current = rev }
+          }))
         }
         if (!statusRef.current || wasOffline || i % STATUS_EVERY === 0) jobs.push(esp.getStatus().then((s) => alive && setStatus(s)))
         await Promise.all(jobs)
@@ -100,6 +106,13 @@ export function App() {
 
   // ---------------------------------------------------------------- writes
   const pending = useRef<SaveLedsRequest>({})
+  // Our own writes: `seq` grows with every change shown optimistically, `inFlight` counts the
+  // requests not answered yet (see the poll above).
+  const writes = useRef({ seq: 0, inFlight: 0 })
+  const track = <T,>(p: Promise<T>) => {
+    writes.current.inFlight++
+    return p.finally(() => { writes.current.inFlight-- })
+  }
   const saveTimer = useRef(0)
 
   const notify = (text: string, tone: 'ok' | 'bad' = 'ok') => setToast({ text, tone, id: Date.now() })
@@ -117,12 +130,15 @@ export function App() {
     notify(`Not saved: ${errorText(e)}`, 'bad')
     reload()
   }
-  const patch = (p: Partial<Esp32Config>) => setCfg((c) => (c ? { ...c, ...p } : c))
+  const patch = (p: Partial<Esp32Config>) => {
+    writes.current.seq++
+    setCfg((c) => (c ? { ...c, ...p } : c))
+  }
 
   const flush = () => {
     const body = pending.current
     pending.current = {}
-    if (Object.keys(body).length) esp.saveLeds(body).catch(failed)
+    if (Object.keys(body).length) track(esp.saveLeds(body)).catch(failed)
   }
 
   const ctl: Ctl = {
@@ -135,11 +151,11 @@ export function App() {
     },
     setPower(on) {
       patch({ power: on })
-      esp.savePower({ power: on ? 1 : 0 }).catch(failed)
+      track(esp.savePower({ power: on ? 1 : 0 })).catch(failed)
     },
     setMode(mode) {
       patch({ led_mode: mode })
-      esp.saveMode({ led_mode: mode }).catch(failed)
+      track(esp.saveMode({ led_mode: mode })).catch(failed)
     },
     setColor(color, delayMs = 0) {
       ctl.saveLeds({ color }, delayMs)

@@ -1,4 +1,4 @@
-/* Diagnostics screen. Kit tokens come from the [data-density="tv"] root of the screen. */
+/* Diagnostics screen: two columns of cards that scroll to the focused one. */
 
 .diag-body {
   position: relative; /* offsetParent of the sections: scrolling to the focused one */
@@ -76,5 +76,4 @@
 .diag-report-text p { font-size: 18px; line-height: 1.5; color: var(--ui-muted); }
 .diag-url { font-family: monospace; font-size: 17px; color: var(--ui-text-2); }
 
-.diag .footer .ui-kbd { min-width: 40px; height: 36px; border-color: var(--ui-border); }
 .diag-muted { font-size: 18px; color: var(--ui-muted); }

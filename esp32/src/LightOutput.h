@@ -83,6 +83,15 @@ inline Step step(uint32_t elapsedMs, Phase drawn) {
     return p == drawn ? Step::Keep : Step::Draw;
 }
 
+// LEDs the show of the repaint() after a blink pushes: what the repaint asks for
+// (`requested`, possibly fewer than the blink lit, or none), but at least `cleared` — the
+// LEDs the blink covered, cleared in the buffer beforehand — so that one show both draws the
+// restored output and darkens the rest; capped at maxLeds.
+inline uint16_t pushCount(uint16_t requested, uint16_t cleared, uint16_t maxLeds) {
+    uint16_t n = requested > cleared ? requested : cleared;
+    return n < maxLeds ? n : maxLeds;
+}
+
 }  // namespace Identify
 
 }  // namespace LightOutput

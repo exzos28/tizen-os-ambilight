@@ -3,6 +3,7 @@
 // the only animation in the app, and only while this screen is open.
 
 import { useEffect, useRef } from 'preact/hooks';
+import { Kbd } from '@ambilight/ui';
 
 const W = 96, H = 54;
 
@@ -56,7 +57,7 @@ export function TestPattern() {
   return (
     <div class="test-pattern">
       <canvas ref={canvas} width={W} height={H} />
-      <div class="test-hint">The strip should follow the colors at the screen edges · <span class="kbd">↩</span> Close</div>
+      <div class="test-hint">The strip should follow the colors at the screen edges · <Kbd>↩</Kbd> Close</div>
     </div>
   );
 }
