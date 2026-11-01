@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
-import { Esp32Error, createEsp32Client, formBody } from '../src/index.ts'
+import { Esp32Error, configChanged, createEsp32Client, formBody } from '../src/index.ts'
 import type { Esp32Config, Esp32Metrics, Esp32Status } from '../src/index.ts'
 import { fixture, fixtureText } from './fixtures.ts'
 
@@ -135,6 +135,30 @@ describe('createEsp32Client', () => {
     await assert.rejects(createEsp32Client('http://esp', { fetch: down }).getConfig(), {
       reason: 'network', status: null, message: 'Request to /config failed: fetch failed',
     })
+  })
+})
+
+describe('configChanged', () => {
+  const metrics = fixture<Esp32Metrics>('esp32/metrics-response')
+
+  it('is false while the revision stays the same', () => {
+    assert.equal(configChanged(metrics.config_rev, metrics), false)
+  })
+
+  it('is true for any other revision, including a lower one (reboot)', () => {
+    assert.equal(configChanged(metrics.config_rev + 1, metrics), true)
+    assert.equal(configChanged(metrics.config_rev - 1, metrics), true)
+    assert.equal(configChanged(0, { ...metrics, config_rev: 4294967295 }), true)
+  })
+
+  it('is true when no revision is known yet', () => {
+    assert.equal(configChanged(null, metrics), true)
+  })
+
+  it('is false for firmware without config_rev', () => {
+    const { config_rev: _, ...old } = metrics
+    assert.equal(configChanged(null, old as Esp32Metrics), false)
+    assert.equal(configChanged(5, old as Esp32Metrics), false)
   })
 })
 

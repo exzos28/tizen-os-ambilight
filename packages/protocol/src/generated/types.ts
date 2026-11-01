@@ -304,6 +304,14 @@ export interface Esp32Metrics {
    * @unit ms
    */
   last_frame_ms: number
+  /**
+   * Settings revision: changes after every saved settings change (/save/*), starts at a random
+   * value at boot; compare for equality only — any difference means re-read GET /config.
+   *
+   * @minimum 0
+   * @maximum 4294967295
+   */
+  config_rev: number
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -572,6 +580,12 @@ export interface EventLogEntry {
 export interface ServiceCommandReply {
   /** ServiceCommandResult as a JSON string. */
   result: string
+  /**
+   * The request's `id`, echoed; absent when the request had none (or one that was too long).
+   *
+   * @maxLength 64
+   */
+  id?: string
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -581,23 +595,53 @@ export interface ServiceCommandReply {
  * Command the UI sends to the service's local message port `ambilight.status`, with `ambilight.ui`
  * as the reply port. A bundle of string key/values. The service replies with ServiceCommandReply.
  */
-export interface ServiceCommandRequest {
-  request: 'command'
-  /**
-   * `pause`: stop capture (state `paused`) until `resume`. `resume`: restart capture after
-   * `pause`. `rediscover`: probe for controllers now.
-   */
-  command: ServiceCommand
-}
+export type ServiceCommandRequest = ServiceSimpleCommandRequest | ServiceSetOutputsRequest
 
 /**
- * `pause`: stop capture (state `paused`) until `resume`. `resume`: restart capture after `pause`.
- * `rediscover`: probe for controllers now.
+ * Commands without arguments. `pause`: stop capture (state `paused`) until `resume`. `resume`:
+ * restart capture after `pause`. `rediscover`: probe for controllers now.
  */
 export type ServiceCommand = 'pause' | 'resume' | 'rediscover'
 
 /** Every ServiceCommand, in schema order. */
 export const ServiceCommandValues = ['pause', 'resume', 'rediscover'] as const
+
+/** A command without arguments. */
+export interface ServiceSimpleCommandRequest {
+  request: 'command'
+  /**
+   * Commands without arguments. `pause`: stop capture (state `paused`) until `resume`. `resume`:
+   * restart capture after `pause`. `rediscover`: probe for controllers now.
+   */
+  command: ServiceCommand
+  /**
+   * Optional request id, chosen by the UI; the service echoes it as `id` in the reply, so a late
+   * reply can't be taken for the answer to another command. Without it the reply has no `id`
+   * (older UIs). A longer id is answered with ok: false and no `id`, without running the command.
+   *
+   * @maxLength 64
+   */
+  id?: string
+}
+
+/**
+ * `set-outputs`: turn the ESP32 and HyperHDR outputs on or off and set the HyperHDR target, live,
+ * and save that for the next start.
+ */
+export interface ServiceSetOutputsRequest {
+  request: 'command'
+  command: 'set-outputs'
+  /** ServiceOutputs as a JSON string. */
+  outputs: string
+  /**
+   * Optional request id, chosen by the UI; the service echoes it as `id` in the reply, so a late
+   * reply can't be taken for the answer to another command. Without it the reply has no `id`
+   * (older UIs). A longer id is answered with ok: false and no `id`, without running the command.
+   *
+   * @maxLength 64
+   */
+  id?: string
+}
 
 // ------------------------------------------------------------------------------------------------
 // service/command-result.schema.json
@@ -611,6 +655,62 @@ export interface ServiceCommandResult {
   ok: boolean
   /** Why it wasn't; null when `ok`. */
   error: string | null
+}
+
+// ------------------------------------------------------------------------------------------------
+// service/outputs.schema.json
+
+/**
+ * Which outputs the service streams to: the JSON carried as a string in the `outputs` value of the
+ * `set-outputs` command (see command-request.schema.json). The service rejects the whole command
+ * (ok: false) if anything is invalid; otherwise it applies the settings right away and saves them,
+ * so they replace res/ambilight.json from the next start on. The HyperHDR image size isn't part of
+ * it and stays as it was.
+ */
+export interface ServiceOutputs {
+  /**
+   * UDP output to the ESP32 controllers found by discovery. Discovery itself keeps running when
+   * this is off (it also finds tools/server.py for the event log).
+   */
+  esp32: Esp32OutputSettings
+  /** TCP output to a HyperHDR server's FlatBuffers input. */
+  hyperhdr: HyperHdrOutputSettings
+}
+
+/**
+ * UDP output to the ESP32 controllers found by discovery. Discovery itself keeps running when this
+ * is off (it also finds tools/server.py for the event log).
+ */
+export interface Esp32OutputSettings {
+  /** Stream to the discovered controllers. */
+  enabled: boolean
+}
+
+/** TCP output to a HyperHDR server's FlatBuffers input. */
+export interface HyperHdrOutputSettings {
+  /** Stream to HyperHDR. */
+  enabled: boolean
+  /**
+   * IP address or host name of the HyperHDR machine; surrounding spaces are ignored. Must not be
+   * empty while `enabled` is true (not expressible in the schema; the service checks it).
+   */
+  host: string
+  /**
+   * HyperHDR's Flatbuffers server port.
+   *
+   * @minimum 1
+   * @maximum 65535
+   * @default 19400
+   */
+  port: number
+  /**
+   * HyperHDR shows the source with the lowest number; its own grabbers use 240/245.
+   *
+   * @minimum 50
+   * @maximum 250
+   * @default 150
+   */
+  priority?: number
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -659,8 +759,72 @@ export interface ServiceStatus {
   esp32: Esp32OutputStatus
   /** TCP output to HyperHDR. */
   hyperhdr: HyperHdrOutputStatus
-  /** Problems found in ambilight.json (the affected outputs are disabled). */
+  /**
+   * The output settings in effect (what `set-outputs` sets), for showing and editing them. An
+   * invalid HyperHDR section in res/ambilight.json shows here as `enabled: false`.
+   */
+  outputs: OutputsStatus
+  /**
+   * Problems found in the output settings in effect: res/ambilight.json (the affected outputs are
+   * disabled), or saved settings that could not be used. Empty after a successful `set-outputs`.
+   */
   configWarnings: string[]
+}
+
+/**
+ * `package`: res/ambilight.json, bundled into the TV package. `saved`: set with the `set-outputs`
+ * command and saved on the TV; replaces res/ambilight.json until the app's data is cleared.
+ */
+export type OutputsSource = 'package' | 'saved'
+
+/** Every OutputsSource, in schema order. */
+export const OutputsSourceValues = ['package', 'saved'] as const
+
+/**
+ * The output settings in effect (what `set-outputs` sets), for showing and editing them. An
+ * invalid HyperHDR section in res/ambilight.json shows here as `enabled: false`.
+ */
+export interface OutputsStatus {
+  /**
+   * `package`: res/ambilight.json, bundled into the TV package. `saved`: set with the
+   * `set-outputs` command and saved on the TV; replaces res/ambilight.json until the app's data is
+   * cleared.
+   */
+  source: OutputsSource
+  /**
+   * UDP output to the ESP32 controllers found by discovery. Discovery itself keeps running when
+   * this is off (it also finds tools/server.py for the event log).
+   */
+  esp32: Esp32OutputSettings
+  /** HyperHdrOutputSettings with every value filled in. */
+  hyperhdr: HyperHdrOutputSettingsInEffect
+}
+
+/** HyperHdrOutputSettings with every value filled in. */
+export interface HyperHdrOutputSettingsInEffect {
+  /** HyperHDR output is on. */
+  enabled: boolean
+  /**
+   * IP address or host name of the HyperHDR machine; surrounding spaces are ignored. Must not be
+   * empty while `enabled` is true (not expressible in the schema; the service checks it).
+   */
+  host: string
+  /**
+   * HyperHDR's Flatbuffers server port.
+   *
+   * @minimum 1
+   * @maximum 65535
+   * @default 19400
+   */
+  port: number
+  /**
+   * HyperHDR shows the source with the lowest number; its own grabbers use 240/245.
+   *
+   * @minimum 50
+   * @maximum 250
+   * @default 150
+   */
+  priority: number
 }
 
 /**
@@ -811,7 +975,7 @@ export interface CaptureStatus {
   rgb?: string
 }
 
-/** The output is turned off in ambilight.json. */
+/** The output is turned off (see `outputs`). */
 export interface OutputDisabled {
   enabled: false
 }

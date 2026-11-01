@@ -35,5 +35,17 @@
   "hyperhdr": {
     "enabled": false
   },
+  "outputs": {
+    "source": "package",
+    "esp32": {
+      "enabled": true
+    },
+    "hyperhdr": {
+      "enabled": false,
+      "host": "",
+      "port": 19400,
+      "priority": 150
+    }
+  },
   "configWarnings": []
 }

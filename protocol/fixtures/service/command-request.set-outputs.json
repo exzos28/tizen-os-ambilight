@@ -1,0 +1,6 @@
+{
+  "request": "command",
+  "command": "set-outputs",
+  "outputs": "{\"esp32\":{\"enabled\":true},\"hyperhdr\":{\"enabled\":true,\"host\":\"192.168.1.50\",\"port\":19400,\"priority\":150}}",
+  "id": "7"
+}

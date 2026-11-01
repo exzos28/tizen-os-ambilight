@@ -35,5 +35,17 @@
   "hyperhdr": {
     "enabled": false
   },
-  "configWarnings": ["hyperhdr: \"port\" must be 1-65535 (got 70000); HyperHDR output disabled"]
+  "outputs": {
+    "source": "package",
+    "esp32": {
+      "enabled": true
+    },
+    "hyperhdr": {
+      "enabled": false,
+      "host": "192.168.1.20",
+      "port": 19400,
+      "priority": 150
+    }
+  },
+  "configWarnings": ["hyperhdr.port must be an integer 1..65535", "HyperHDR output disabled because of the errors above"]
 }

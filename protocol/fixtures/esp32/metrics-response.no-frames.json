@@ -7,5 +7,6 @@
   "power_w": 0,
   "power_limited": false,
   "frames_rx": 0,
-  "last_frame_ms": -1
+  "last_frame_ms": -1,
+  "config_rev": 91027
 }

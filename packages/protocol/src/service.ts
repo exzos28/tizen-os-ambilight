@@ -6,8 +6,8 @@
 //     .requestRemoteMessagePort(constants.tvApp.serviceAppId, constants.messagePort.servicePort)
 //     .sendMessage(buildStatusRequest(), local)
 import { constants } from './generated/constants.ts'
-import { CaptureFailureValues, CaptureStateValues, ServiceCommandValues } from './generated/types.ts'
-import type { ServiceCommand, ServiceCommandResult, ServiceStatus } from './generated/types.ts'
+import { CaptureFailureValues, CaptureStateValues, OutputsSourceValues, ServiceCommandValues } from './generated/types.ts'
+import type { ServiceCommand, ServiceCommandResult, ServiceOutputs, ServiceStatus } from './generated/types.ts'
 
 /** One entry of a MessagePort message, as tizen.messageport sends and delivers it. */
 export interface MessagePortDataItem {
@@ -17,7 +17,20 @@ export interface MessagePortDataItem {
 
 export type ServiceReply =
   | { kind: 'status'; status: ServiceStatus }
-  | { kind: 'result'; result: ServiceCommandResult }
+  /** `id`: the command request's id, echoed by the service; null if the request had none. */
+  | { kind: 'result'; id: string | null; result: ServiceCommandResult }
+
+/** Options of a command request. */
+export interface CommandRequestOptions {
+  /**
+   * Request id (at most 64 characters), echoed in the reply's `id`, so a reply that arrives
+   * late can be matched to its request. Left out: the reply has no id either.
+   */
+  id?: string
+}
+
+/** Longest request id the service accepts (command-request.schema.json `commandId`). */
+export const MAX_COMMAND_ID_LENGTH = 64
 
 /** A reply that doesn't match protocol/schemas/service. */
 export class ServiceReplyError extends Error {
@@ -41,15 +54,57 @@ export function buildStatusRequest(): MessagePortDataItem[] {
   return [{ key: mp.requestKey, value: 'status' }]
 }
 
-/** {request: "command", command} — the service answers with a `result` reply. */
-export function buildCommandRequest(command: ServiceCommand): MessagePortDataItem[] {
+/** {request: "command", command, id?} — the service answers with a `result` reply. */
+export function buildCommandRequest(command: ServiceCommand, options: CommandRequestOptions = {}): MessagePortDataItem[] {
   if (!(ServiceCommandValues as readonly string[]).includes(command)) {
     throw new TypeError(`Unknown service command: ${String(command)}`)
   }
   return [
     { key: mp.requestKey, value: 'command' },
     { key: mp.commandKey, value: command },
+    ...idItem(options.id),
   ]
+}
+
+/**
+ * {request: "command", command: "set-outputs", outputs: "<JSON>", id?} — turns the outputs on or
+ * off and sets the HyperHDR target, live, and saves it on the TV. Only the keys of
+ * ServiceOutputs are sent (extra properties of the object are left out). The service checks
+ * the values (e.g. a host while HyperHDR is enabled) and answers ok: false if one is invalid;
+ * this throws TypeError only for what isn't ServiceOutputs at all.
+ */
+export function buildSetOutputsRequest(outputs: ServiceOutputs, options: CommandRequestOptions = {}): MessagePortDataItem[] {
+  const { esp32, hyperhdr } = outputs ?? ({} as Partial<ServiceOutputs>)
+  if (typeof esp32?.enabled !== 'boolean') throw new TypeError('outputs.esp32.enabled must be a boolean')
+  if (typeof hyperhdr?.enabled !== 'boolean') throw new TypeError('outputs.hyperhdr.enabled must be a boolean')
+  if (typeof hyperhdr.host !== 'string') throw new TypeError('outputs.hyperhdr.host must be a string')
+  if (typeof hyperhdr.port !== 'number') throw new TypeError('outputs.hyperhdr.port must be a number')
+  if (hyperhdr.priority !== undefined && typeof hyperhdr.priority !== 'number') {
+    throw new TypeError('outputs.hyperhdr.priority must be a number')
+  }
+  const payload: ServiceOutputs = {
+    esp32: { enabled: esp32.enabled },
+    hyperhdr: {
+      enabled: hyperhdr.enabled,
+      host: hyperhdr.host,
+      port: hyperhdr.port,
+      ...(hyperhdr.priority !== undefined ? { priority: hyperhdr.priority } : {}),
+    },
+  }
+  return [
+    { key: mp.requestKey, value: 'command' },
+    { key: mp.commandKey, value: 'set-outputs' },
+    { key: mp.outputsKey, value: JSON.stringify(payload) },
+    ...idItem(options.id),
+  ]
+}
+
+function idItem(id: string | undefined): MessagePortDataItem[] {
+  if (id === undefined) return []
+  if (typeof id !== 'string' || id.length > MAX_COMMAND_ID_LENGTH) {
+    throw new TypeError(`Command id must be a string of at most ${MAX_COMMAND_ID_LENGTH} characters`)
+  }
+  return [{ key: mp.idKey, value: id }]
 }
 
 /**
@@ -61,7 +116,11 @@ export function parseServiceReply(data: readonly MessagePortDataItem[]): Service
   const result = data.find((item) => item.key === mp.resultKey)
   if (status && result) throw new ServiceReplyError(`Reply has both "${mp.statusKey}" and "${mp.resultKey}"`)
   if (status) return { kind: 'status', status: tagged('status', () => parseServiceStatus(stringValue(status))) }
-  if (result) return { kind: 'result', result: tagged('result', () => parseCommandResult(stringValue(result))) }
+  if (result) {
+    const idEntry = data.find((item) => item.key === mp.idKey)
+    const id = idEntry ? tagged('result', () => stringValue(idEntry)) : null
+    return { kind: 'result', id, result: tagged('result', () => parseCommandResult(stringValue(result))) }
+  }
   return null
 }
 
@@ -101,6 +160,13 @@ function checkServiceStatus(s: Json): ServiceStatus {
   if (h.enabled) {
     expect(typeof h.endpoint === 'string' && typeof h.connected === 'boolean', 'status.hyperhdr')
   }
+
+  const o = object(s.outputs, 'status.outputs')
+  expect(oneOf(o.source, OutputsSourceValues), 'status.outputs.source')
+  expect(typeof object(o.esp32, 'status.outputs.esp32').enabled === 'boolean', 'status.outputs.esp32.enabled')
+  const oh = object(o.hyperhdr, 'status.outputs.hyperhdr')
+  expect(typeof oh.enabled === 'boolean' && typeof oh.host === 'string', 'status.outputs.hyperhdr')
+  expect(typeof oh.port === 'number' && typeof oh.priority === 'number', 'status.outputs.hyperhdr port / priority')
   return s as unknown as ServiceStatus
 }
 

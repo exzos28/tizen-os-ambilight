@@ -120,6 +120,10 @@ export const constants = {
     requestKey: 'request',
     /** Command of a `command` request. */
     commandKey: 'command',
+    /** ServiceOutputs JSON of a `set-outputs` command. */
+    outputsKey: 'outputs',
+    /** Optional request id of a `command` request, echoed in its reply. */
+    idKey: 'id',
     /** Reply value with the ServiceStatus JSON. */
     statusKey: 'status',
     /** Reply value with the ServiceCommandResult JSON. */

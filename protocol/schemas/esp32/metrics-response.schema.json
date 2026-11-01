@@ -7,7 +7,7 @@
   "additionalProperties": false,
   "required": [
     "heap_free", "heap_total", "heap_min", "uptime_s", "cpu_mhz",
-    "power_w", "power_limited", "frames_rx", "last_frame_ms"
+    "power_w", "power_limited", "frames_rx", "last_frame_ms", "config_rev"
   ],
   "properties": {
     "heap_free": { "type": "integer", "minimum": 0, "x-unit": "bytes", "description": "Free heap." },
@@ -23,6 +23,12 @@
       "minimum": -1,
       "x-unit": "ms",
       "description": "Time since the last valid UDP frame; -1 if none was received yet."
+    },
+    "config_rev": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 4294967295,
+      "description": "Settings revision: changes after every saved settings change (/save/*), starts at a random value at boot; compare for equality only — any difference means re-read GET /config."
     }
   }
 }

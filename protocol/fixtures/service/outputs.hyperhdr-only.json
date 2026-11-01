@@ -1,0 +1,4 @@
+{
+  "esp32": { "enabled": false },
+  "hyperhdr": { "enabled": true, "host": "hyperhdr.local", "port": 19401 }
+}

@@ -4,7 +4,7 @@
 //   1. regenerates into a temp dir and fails if a committed generated file differs (or a stale
 //      file lies in packages/protocol/src/generated);
 //   2. validates constants.json and every fixture against its schema (ajv, strict mode),
-//      including JSON carried in strings (contentMediaType + contentSchema);
+//      including JSON carried in strings (contentMediaType + contentSchema) — see validate.mjs;
 //   3. requires at least one fixture per message schema;
 //   4. compiles the C++ header on the host (C++11 and C++17), when a compiler is available.
 //
@@ -13,9 +13,9 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { Ajv2020 } from 'ajv/dist/2020.js';
 import { generate, outputs, writeOutputs } from './gen.mjs';
-import { fixturesDir, isMessageSchema, listFiles, loadSchemas, protocolDir, readJson, repoRoot } from './schemas.mjs';
+import { fixturesDir, isMessageSchema, listFiles, protocolDir, readJson, repoRoot } from './schemas.mjs';
+import { createValidator } from './validate.mjs';
 
 const problems = [];
 const fail = (msg) => problems.push(msg);
@@ -68,11 +68,7 @@ try {
 
 // --------------------------------------------------------------------- 2./3. validation
 
-// Strict, except that "type": ["string", "null"] is how the schemas spell nullable fields.
-const ajv = new Ajv2020({ strict: true, allowUnionTypes: true, allErrors: true });
-ajv.addVocabulary(['x-unit']);
-const schemas = loadSchemas();
-for (const schema of schemas.values()) ajv.addSchema(schema);
+const { ajv, schemas, check } = createValidator();
 
 const constantsSchema = readJson(join(protocolDir, 'constants.schema.json'));
 const validateConstants = ajv.compile(constantsSchema);
@@ -98,27 +94,10 @@ for (const [file, schema] of schemas) {
   if (!isMessageSchema(schema)) continue;
   const fixtures = fixturesBySchema.get(file) ?? [];
   if (!fixtures.length) fail(`schemas/${file}: no fixture in fixtures/${file.replace('.schema.json', '.json')}`);
-  const validate = ajv.getSchema(schema.$id);
   for (const fixture of fixtures) {
-    const data = readJson(join(fixturesDir, fixture));
-    if (!validate(data)) {
-      fail(`fixtures/${fixture}: ${ajv.errorsText(validate.errors, { dataVar: 'fixture' })}`);
-      continue;
-    }
-    // Strings that carry JSON (MessagePort replies): validate the decoded value too.
-    for (const [prop, ps] of Object.entries(schema.properties ?? {})) {
-      if (ps.contentMediaType !== 'application/json' || !ps.contentSchema?.$ref || typeof data[prop] !== 'string') continue;
-      const inner = ajv.getSchema(new URL(ps.contentSchema.$ref, schema.$id).href);
-      let decoded;
-      try {
-        decoded = JSON.parse(data[prop]);
-      } catch (e) {
-        fail(`fixtures/${fixture}: "${prop}" is not JSON: ${e.message}`);
-        continue;
-      }
-      if (!inner(decoded)) fail(`fixtures/${fixture}: "${prop}": ${ajv.errorsText(inner.errors, { dataVar: prop })}`);
-    }
-    validated++;
+    const found = check(schema.$id, readJson(join(fixturesDir, fixture)), `fixtures/${fixture}`);
+    for (const p of found) fail(p);
+    if (!found.length) validated++;
   }
 }
 
