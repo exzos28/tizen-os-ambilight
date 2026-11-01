@@ -1,0 +1,19 @@
+{
+  "name": "@ambilight/protocol",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Types, limits, constants and clients for the Tizen OS Ambilight protocol, generated from protocol/. Consumed as TypeScript source; no runtime dependencies.",
+  "license": "MIT",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "test": "node --test \"test/*.test.ts\"",
+    "type-check": "tsc -p ."
+  }
+}
