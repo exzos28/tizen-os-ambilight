@@ -208,8 +208,9 @@ the kit's TV density (`<html data-density="tv">`). The launcher passes the focus
 `focused` props; `src/style.css` keeps only the shell (rail, header, footer) and the screens'
 grids.
 
-Remote: ◀ ▶ ▲ ▼ move, OK activates, Back exits on Home (closes the test pattern, as does OK; returns
-to Home from other sections). ◀ from the leftmost element moves to the rail.
+Remote: ◀ ▶ ▲ ▼ move, OK activates. ◀ from the leftmost element, or Back in any section but Home,
+moves the focus to the rail; there ▲ ▼ switch sections at once (the focus stays on the rail), OK or
+▶ go into the section, Back goes to Home. Back on Home exits (it closes the test pattern, as does OK).
 
 ### Controls
 
@@ -271,7 +272,7 @@ differ; a change then sets all of them.
 | Reset to defaults | OK twice: brightness, gamma, saturation and white balance back to the defaults; the power settings stay (they describe the supply and the strip) |
 
 No answering controller: an empty state with *Open Outputs*; ◀ there moves to the rail. On the
-value rows ◀ ▶ adjust, so the rail is reached with Back (Home) or from there.
+value rows ◀ ▶ adjust, so the rail is reached with Back.
 
 ### Strip layout
 
