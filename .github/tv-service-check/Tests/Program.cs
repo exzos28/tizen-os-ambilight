@@ -23,10 +23,14 @@ namespace Service
             if (args.Length >= 1 && args[0] == "-e2e")
                 return EndToEnd(args[1], int.Parse(args[2]), int.Parse(args[3]));
 
+            LazyLoadTests();   // first: before anything else touches Google.FlatBuffers
             EdgeImageTests();
             ProtocolTests();
             ConfigTests();
             StatusTests();
+            ServiceStatusTests();
+            CommandTests();
+            CaptureLoopTests();
             WriteSamples("out");
 
             Console.WriteLine(_failures == 0 ? "ALL TESTS PASSED" : $"{_failures} FAILURE(S)");
@@ -37,6 +41,28 @@ namespace Service
         {
             Console.WriteLine($"{(ok ? "ok  " : "FAIL")} {what}");
             if (!ok) _failures++;
+        }
+
+        // ---------------------------------------------------------------- Lazy loading
+
+        private static bool IsLoaded(string assemblyName)
+        {
+            foreach (var a in AppDomain.CurrentDomain.GetAssemblies())
+                if (a.GetName().Name == assemblyName) return true;
+            return false;
+        }
+
+        // The service must not load Google.FlatBuffers unless HyperHDR is enabled: config
+        // parsing (which validates the HyperHDR section), the status JSON with HyperHDR off and
+        // the edge image must all work without it.
+        private static void LazyLoadTests()
+        {
+            var cfg = OutputConfig.Parse(@"{ ""hyperhdr"": { ""enabled"": true, ""host"": ""10.0.0.5"", ""priority"": 100 } }");
+            var status = new CaptureStatus();
+            status.Frame(DistinctFrame(), 140, 14, 0, 0);
+            StatusJson.Build(w => StatusJson.WriteService(w, "1.0.0", status, null, null, cfg.Warnings));
+            EdgeImage.Render(DistinctFrame(), 16, 9);
+            Check(!IsLoaded("Google.FlatBuffers"), "config, status JSON and edge image don't load Google.FlatBuffers");
         }
 
         // ---------------------------------------------------------------- EdgeImage
@@ -93,6 +119,12 @@ namespace Service
             bool between = true;
             for (int c = 0; c < 3; c++) between &= mid[c] >= Math.Min(a[c], b[c]) && mid[c] <= Math.Max(a[c], b[c]);
             Check(between, "top-centre pixel is interpolated between the two middle top samples");
+
+            // Rendering into a reused buffer gives the same image, whatever was in it before.
+            var reused = new byte[w * h * 3];
+            for (int i = 0; i < reused.Length; i++) reused[i] = 0xAB;
+            Check(ReferenceEquals(EdgeImage.Render(f, w, h, reused), reused) && reused.AsSpan().SequenceEqual(img),
+                "rendering into a reused buffer overwrites it with the same image");
 
             // Uniform frame → uniform image.
             var red = new byte[2 * (4 + 3) * 3];
@@ -230,11 +262,194 @@ namespace Service
             status.Frame(frame, 140, 14, 0, 0);
             Check(Json().GetProperty("lastBadRet").GetInt32() == -1, "lastBadRet keeps the last error code after a clean frame");
 
+            status.SetPaused(true);
+            j = Json();
+            Check(j.GetProperty("state").GetString() == "paused" && j.GetProperty("frames").GetInt64() == 2, "paused → state paused, last frame kept");
+            status.Frame(frame, 140, 14, 0, 0);   // a frame still in flight when the pause came
+            Check(Json().GetProperty("state").GetString() == "paused", "a late frame doesn't end the pause");
+            status.Starting();
+            status.Failed(CaptureFailure.Hardware, "invalid HW condition");
+            status.RetryIn(5000);
+            j = Json();
+            Check(j.GetProperty("state").GetString() == "paused" && !j.TryGetProperty("retryInMs", out _), "paused hides a failure's retry countdown (no retries while paused)");
+            status.SetPaused(false);
+            j = Json();
+            Check(j.GetProperty("state").GetString() == "failed" && j.TryGetProperty("retryInMs", out _), "unpaused → the real state again");
+
             var hh = new HyperHdrOutput(OutputConfig.Parse(@"{ ""hyperhdr"": { ""enabled"": true, ""host"": ""10.0.0.5"" } }").HyperHdr, (e, d) => { });
             var hj = JsonDocument.Parse(StatusJson.Build(hh.WriteStatus)).RootElement;
             Check(hj.GetProperty("enabled").GetBoolean() && hj.GetProperty("endpoint").GetString() == "10.0.0.5:19400"
                   && !hj.GetProperty("connected").GetBoolean() && hj.GetProperty("lastError").ValueKind == JsonValueKind.Null,
                 "HyperHDR status before connecting");
+        }
+
+        // ---------------------------------------------------------------- Whole status reply
+
+        private static JsonElement ServiceJson(string version, CaptureStatus capture, Action<Utf8JsonWriter> esp32, Action<Utf8JsonWriter> hyperHdr, List<string> warnings) =>
+            JsonDocument.Parse(StatusJson.Build(w => StatusJson.WriteService(w, version, capture, esp32, hyperHdr, warnings))).RootElement;
+
+        private static void ServiceStatusTests()
+        {
+            var capture = new CaptureStatus();
+            capture.SetPaused(true);
+            var j = ServiceJson("1.2.3", capture, null, null, new List<string> { "hyperhdr.host must be a string" });
+            Check(j.GetProperty("version").GetString() == "1.2.3", "status carries the package version");
+            Check(j.GetProperty("capture").GetProperty("state").GetString() == "paused", "status capture.state is paused");
+            Check(!j.GetProperty("esp32").GetProperty("enabled").GetBoolean() && !j.GetProperty("hyperhdr").GetProperty("enabled").GetBoolean(),
+                "disabled outputs report enabled: false");
+            var warnings = j.GetProperty("configWarnings");
+            Check(warnings.GetArrayLength() == 1 && warnings[0].GetString() == "hyperhdr.host must be a string", "config warnings are listed");
+
+            j = ServiceJson(null, new CaptureStatus(), null, null, new List<string>());
+            Check(j.TryGetProperty("version", out var v) && v.ValueKind == JsonValueKind.Null, "unknown version is null, not missing");
+            Check(j.GetProperty("capture").GetProperty("state").GetString() == "waiting", "capture.state starts as waiting");
+
+            var hh = new HyperHdrOutput(OutputConfig.Parse(@"{ ""hyperhdr"": { ""enabled"": true, ""host"": ""10.0.0.5"" } }").HyperHdr, (e, d) => { });
+            j = ServiceJson("1.2.3", new CaptureStatus(), null, hh.WriteStatus, new List<string>());
+            Check(j.GetProperty("hyperhdr").GetProperty("endpoint").GetString() == "10.0.0.5:19400", "an enabled output writes its own section");
+        }
+
+        // ---------------------------------------------------------------- Launcher commands
+
+        private sealed class FakeTarget : ICommandTarget
+        {
+            public readonly List<string> Calls = new List<string>();
+            public Exception Throw;
+            private void Call(string name) { if (Throw != null) throw Throw; Calls.Add(name); }
+            public void Pause() => Call("pause");
+            public void Resume() => Call("resume");
+            public void Rediscover() => Call("rediscover");
+        }
+
+        private static (bool ok, JsonElement error) Result(string json)
+        {
+            var r = JsonDocument.Parse(json).RootElement;
+            return (r.GetProperty("ok").GetBoolean(), r.GetProperty("error"));
+        }
+
+        private static void CommandTests()
+        {
+            foreach (var name in new[] { "pause", "resume", "rediscover" })
+            {
+                var t = new FakeTarget();
+                var (ok, error) = Result(ServiceCommands.Execute(name, t));
+                Check(ok && error.ValueKind == JsonValueKind.Null && t.Calls.Count == 1 && t.Calls[0] == name, $"command {name} → ok, error null, dispatched once");
+            }
+
+            var target = new FakeTarget();
+            var r = Result(ServiceCommands.Execute("reboot", target));
+            Check(!r.ok && r.error.GetString().Contains("reboot") && target.Calls.Count == 0, "unknown command → ok false with the name in the error, nothing called");
+            r = Result(ServiceCommands.Execute("PAUSE", target));
+            Check(!r.ok && target.Calls.Count == 0, "command names are case-sensitive");
+            r = Result(ServiceCommands.Execute(null, target));
+            Check(!r.ok && r.error.GetString().Contains("missing"), "missing command → ok false");
+            r = Result(ServiceCommands.Execute("", target));
+            Check(!r.ok && r.error.GetString().Contains("missing"), "empty command → ok false");
+
+            target.Throw = new InvalidOperationException("capture is not set up");
+            r = Result(ServiceCommands.Execute("pause", target));
+            Check(!r.ok && r.error.GetString().Contains("capture is not set up"), "a failing command → ok false with the reason");
+
+            Check(ServiceCommands.ResultJson(null) == "{\"ok\":true,\"error\":null}", "result JSON has exactly ok and error");
+        }
+
+        // ---------------------------------------------------------------- Capture loop
+
+        private static bool WaitFor(Func<bool> condition, int timeoutMs = 3000)
+        {
+            long deadline = Environment.TickCount64 + timeoutMs;
+            while (Environment.TickCount64 < deadline)
+            {
+                if (condition()) return true;
+                Thread.Sleep(10);
+            }
+            return condition();
+        }
+
+        private static void CaptureLoopTests()
+        {
+            var logs = new List<string>();
+            Action<string, string> log = (e, d) => { lock (logs) logs.Add(e); };
+
+            // A fake capture: runs until cancelled, or fails right away while fail != 0.
+            var status = new CaptureStatus();
+            string State() => JsonDocument.Parse(StatusJson.Build(status.WriteJson)).RootElement.GetProperty("state").GetString();
+            int runs = 0, active = 0, fail = 0;
+            CaptureLoop.RunCapture run = token =>
+            {
+                Interlocked.Increment(ref runs);
+                status.Starting();
+                if (Volatile.Read(ref fail) != 0) { status.Failed(CaptureFailure.Library, "no library"); return false; }
+                Interlocked.Increment(ref active);
+                token.WaitHandle.WaitOne();
+                Interlocked.Decrement(ref active);
+                return true;
+            };
+
+            using (var loop = new CaptureLoop(run, status, log, 50, new[] { 100 }))
+            {
+                loop.Start();
+                Check(WaitFor(() => Volatile.Read(ref active) == 1) && Volatile.Read(ref runs) == 1, "capture starts after the start delay");
+
+                loop.Pause();
+                Check(loop.IsPaused && State() == "paused", "pause → state paused right away");
+                Check(WaitFor(() => Volatile.Read(ref active) == 0), "pause stops the running capture");
+                Thread.Sleep(300);
+                Check(Volatile.Read(ref runs) == 1, "paused capture is not started again");
+
+                loop.Restart();
+                Check(WaitFor(() => Volatile.Read(ref active) == 1) && Volatile.Read(ref runs) == 2 && !loop.IsPaused && State() == "starting",
+                    "resume starts capture again right away");
+
+                Volatile.Write(ref fail, 1);
+                loop.Restart();   // re-init: this run fails, then retries every 100 ms
+                Check(WaitFor(() => Volatile.Read(ref runs) >= 5), "a failed capture is retried after the backoff");
+                lock (logs) Check(logs.Contains("CaptureRetry"), "retries are logged");
+
+                loop.Pause();
+                Thread.Sleep(50);   // a retry that was already running finishes
+                int pausedRuns = Volatile.Read(ref runs);
+                Thread.Sleep(400);
+                Check(Volatile.Read(ref runs) == pausedRuns && State() == "paused", "no retries while paused");
+
+                Volatile.Write(ref fail, 0);
+                loop.Restart();
+                Check(WaitFor(() => Volatile.Read(ref active) == 1), "resume after failures starts capture");
+            }
+            Check(WaitFor(() => Volatile.Read(ref active) == 0), "Dispose stops capture");
+            int disposedRuns = Volatile.Read(ref runs);
+            Thread.Sleep(200);
+            Check(Volatile.Read(ref runs) == disposedRuns, "nothing runs after Dispose");
+
+            // Restart (AppControl start / resume) skips a pending retry delay.
+            var status2 = new CaptureStatus();
+            int runs2 = 0;
+            using (var loop = new CaptureLoop(token => { Interlocked.Increment(ref runs2); return false; }, status2, log, 0, new[] { 60_000 }))
+            {
+                loop.Start();
+                Check(WaitFor(() => Volatile.Read(ref runs2) == 1), "first run without start delay");
+                Thread.Sleep(100);
+                Check(Volatile.Read(ref runs2) == 1, "next retry waits for the backoff");
+                loop.Restart();
+                Check(WaitFor(() => Volatile.Read(ref runs2) == 2, 1000), "restart skips the retry delay");
+            }
+
+            // An exception from capture is treated like a failure: reported and retried.
+            var status3 = new CaptureStatus();
+            int runs3 = 0;
+            using (var loop = new CaptureLoop(token =>
+            {
+                if (Interlocked.Increment(ref runs3) == 1) throw new InvalidOperationException("boom");
+                token.WaitHandle.WaitOne();
+                return true;
+            }, status3, log, 0, new[] { 50 }))
+            {
+                loop.Start();
+                Check(WaitFor(() => Volatile.Read(ref runs3) == 2), "a capture that throws is retried");
+                var j = JsonDocument.Parse(StatusJson.Build(status3.WriteJson)).RootElement;
+                Check(j.GetProperty("state").GetString() == "failed" && j.GetProperty("failure").ValueKind == JsonValueKind.Null
+                      && j.GetProperty("error").GetString().Contains("boom"), "…and reported as failed with no failure kind");
+            }
         }
 
         // ---------------------------------------------------------------- Samples for flatc

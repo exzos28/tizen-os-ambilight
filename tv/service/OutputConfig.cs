@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
+using static System.FormattableString;
 
 namespace Service
 {
@@ -75,7 +76,7 @@ namespace Service
         {
             if (!obj.TryGetProperty(name, out var v)) return fallback;
             if (v.ValueKind == JsonValueKind.Number && v.TryGetInt32(out int n) && n >= min && n <= max) return n;
-            warnings.Add($"{section}.{name} must be an integer {min}..{max}");
+            warnings.Add(Invariant($"{section}.{name} must be an integer {min}..{max}"));
             valid = false;
             return fallback;
         }

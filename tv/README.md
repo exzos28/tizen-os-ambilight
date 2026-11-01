@@ -68,11 +68,13 @@ Sample point counts, edge inset and capture delay are compile-time constants in 
 
 ```
 service/
-  Service_App.cs      App lifecycle, outputs, capture retries, HTTP event log
+  Service_App.cs      App lifecycle, outputs, HTTP event log
   Capture.cs          HW PPI capture loop via libvideoenhance.so → EdgeFrame
+  CaptureLoop.cs      Runs capture on its own thread: retries, pause / resume, re-init
   Discovery.cs        Background UDP discovery of ESP32s / tools/server.py
   ServiceStatus.cs    Capture state + JSON for the launcher's status panel
-  StatusPort.cs       Local message port the launcher polls for status
+  ServiceCommands.cs  Launcher commands: pause, resume, rediscover
+  StatusPort.cs       Local message port the launcher polls for status and sends commands to
   Esp32Output.cs      UDP frames to discovered ESP32s
   HyperHdrOutput.cs   HyperHDR FlatBuffers client (untested on a TV, see docs/HYPERHDR.md)
   HyperHdrProtocol.cs FlatBuffers messages, written by hand against HyperHDR's schema

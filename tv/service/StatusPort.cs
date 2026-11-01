@@ -4,25 +4,29 @@ using Tizen.Applications.Messages;
 
 namespace Service
 {
-    // Answers the launcher's (tv/ui) status requests over a local Tizen message port. This is
-    // IPC between the two apps of the package on the TV — nothing leaves the device.
+    // Answers the launcher's (tv/ui) requests over a local Tizen message port. This is IPC
+    // between the two apps of the package on the TV — nothing leaves the device. Every
+    // request carries the launcher's own port as reply port; the reply goes there.
     //
-    //   request: { "request": "status" }, sent with the launcher's own port as reply port
-    //   reply:   { "status": "<JSON>" } to that port (format: CaptureStatus.WriteJson and
-    //            App.BuildStatusJson)
+    //   { "request": "status" }
+    //       → { "status": "<JSON>" }   (format: StatusJson.WriteService, CaptureStatus.WriteJson)
+    //   { "request": "command", "command": "pause" | "resume" | "rediscover" }
+    //       → { "result": "{\"ok\": bool, \"error\": string|null}" }   (ServiceCommands)
     //
-    // Not a trusted port: the status holds nothing secret, and an untrusted port works no
-    // matter how the package was signed.
+    // Other requests get no reply. Not a trusted port: nothing here is secret or harmful, and
+    // an untrusted port works no matter how the package was signed.
     sealed class StatusPort : IDisposable
     {
         public const string PortName = "ambilight.status";
 
         private readonly MessagePort _port;
         private readonly Func<string> _buildStatus;
+        private readonly Func<string, string> _runCommand;
 
-        private StatusPort(Func<string> buildStatus)
+        private StatusPort(Func<string> buildStatus, Func<string, string> runCommand)
         {
             _buildStatus = buildStatus;
+            _runCommand = runCommand;
             _port = new MessagePort(PortName, false);
             _port.MessageReceived += OnMessage;
             _port.Listen();
@@ -30,9 +34,11 @@ namespace Service
 
         // Must be called on the main thread (messages are delivered on its loop). Returns
         // null if the port can't be opened — the service then runs without the panel.
-        public static StatusPort TryStart(Func<string> buildStatus, Action<string, string> log)
+        // runCommand gets the "command" value (null if missing or not a string) and returns
+        // the result JSON.
+        public static StatusPort TryStart(Func<string> buildStatus, Func<string, string> runCommand, Action<string, string> log)
         {
-            try { return new StatusPort(buildStatus); }
+            try { return new StatusPort(buildStatus, runCommand); }
             catch (Exception ex)
             {
                 log("StatusPortError", ex.Message);
@@ -46,10 +52,19 @@ namespace Service
             {
                 var remote = e.Remote;
                 if (remote == null || string.IsNullOrEmpty(remote.AppId) || string.IsNullOrEmpty(remote.PortName)) return;
-                if (!e.Message.TryGetItem("request", out string request) || request != "status") return;
+                if (!e.Message.TryGetItem("request", out string request)) return;
 
-                var reply = new Bundle();
-                reply.AddItem("status", _buildStatus());
+                using var reply = new Bundle();
+                if (request == "status")
+                {
+                    reply.AddItem("status", _buildStatus());
+                }
+                else if (request == "command")
+                {
+                    if (!e.Message.TryGetItem("command", out string command)) command = null;
+                    reply.AddItem("result", _runCommand(command));
+                }
+                else return;
                 _port.Send(reply, remote.AppId, remote.PortName);
             }
             catch (Exception ex)

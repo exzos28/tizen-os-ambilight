@@ -1,7 +1,8 @@
 <!--
   Tests for the parts of tv/service that don't depend on Tizen: edge-image synthesis,
-  HyperHDR FlatBuffers encoding, output config parsing, and (with -e2e) a live session
-  against a real HyperHDR server. Run by CI; see .github/workflows/build.yml.
+  HyperHDR FlatBuffers encoding, output config parsing, status JSON, launcher commands,
+  capture pause / resume / retries, and (with -e2e) a live session against a real HyperHDR
+  server. Run by CI; see .github/workflows/build.yml.
 -->
 <Project Sdk="Microsoft.NET.Sdk">
 
@@ -22,6 +23,8 @@
     <Compile Include="../../../tv/service/HyperHdrOutput.cs" />
     <Compile Include="../../../tv/service/OutputConfig.cs" />
     <Compile Include="../../../tv/service/ServiceStatus.cs" />
+    <Compile Include="../../../tv/service/ServiceCommands.cs" />
+    <Compile Include="../../../tv/service/CaptureLoop.cs" />
   </ItemGroup>
 
   <ItemGroup>

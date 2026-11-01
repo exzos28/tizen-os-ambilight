@@ -3,6 +3,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text.Json;
 using System.Threading;
+using static System.FormattableString;
 
 namespace Service
 {
@@ -52,7 +53,7 @@ namespace Service
                     _lastError = $"{endpoint.Address}: {ex.Message}";
                     int failures = Interlocked.Increment(ref _failures);
                     if (failures % 30 == 1)
-                        _log("UdpSendError", $"target={endpoint.Address} failures={failures} err={ex.Message}");
+                        _log("UdpSendError", Invariant($"target={endpoint.Address} failures={failures} err={ex.Message}"));
                 }
             }
             if (sent) Interlocked.Increment(ref _framesSent);
