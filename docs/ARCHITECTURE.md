@@ -190,10 +190,11 @@ widget is not preloaded (no `prelaunch.support`), and Back on Home exits it.
 | `src/focus.ts` | Focus manager: focusable elements as rows with column positions, explicit neighbours where needed |
 | `src/screens/Home.tsx` | Lighting on/off, brightness, mode + static colors, live preview, status, problem banner |
 | `src/screens/TestPattern.tsx` | Full-screen rotating color wheel (96×54 canvas, scaled) to check the strip follows the picture |
-| `src/screens/Placeholder.tsx` | *Picture*, *Strip layout*, *Controllers*, *Diagnostics*: not built yet |
+| `src/screens/Layout.tsx` | Strip layout: start corner, direction, LEDs per side; preview and save ([Strip layout](#strip-layout)) |
+| `src/screens/Placeholder.tsx` | *Picture*, *Controllers*, *Diagnostics*: not built yet |
 | `src/status.ts` | Status lines, problems (most important first) and the header pill from the service status |
 | `src/controllers.ts` | The discovered controllers over HTTP: `/status` + `/config` once, `/metrics` every second while Home is shown; writes |
-| `src/data/` | Adapters: `service.ts` (Tizen message port and AppControl glue around the `@ambilight/protocol` message helpers), `index.ts` (picks the backend; one `createEsp32Client` per controller, 3 s timeout), `mock.ts` (desktop browser, `?state=ok\|lost\|none\|off\|unsupported`), `api.ts` (what the screens use) |
+| `src/data/` | Adapters: `service.ts` (Tizen message port and AppControl glue around the `@ambilight/protocol` message helpers), `index.ts` (picks the backend; one `createEsp32Client` per controller, 3 s timeout), `mock.ts` (desktop browser, `?state=ok\|lost\|none\|off\|unsupported\|two`), `api.ts` (what the screens use) |
 
 The launcher is drawn with the UI kit `@ambilight/ui` ([`packages/ui`](../packages/ui/README.md)),
 the same as the controller's web app: tokens, icons, cards, switch, slider, mode options,
@@ -239,6 +240,33 @@ differ; a change then sets all of them.
 
 No answering controller: an empty state with *Open Outputs*; ◀ there moves to the rail. On the
 value rows ◀ ▶ adjust, so the rail is reached with Back (Home) or from there.
+
+### Strip layout
+
+`src/screens/Layout.tsx`, the same flow as the web app's *Layout* tab: a step indicator (Start
+corner · Direction · LEDs per side · Check on the strip, following the focus), the
+`StripLayoutDiagram` seen from the front (sides in the colors the calibration preview lights:
+top red, right green, bottom yellow, left blue; LED 1 at the start corner; arrows for the
+direction), a stepper per side (0–255, `limits.led_*`) with the total, *Light up the strip* and
+*Save layout*.
+
+Edits change a local draft. 400 ms after the last change (so a held key sends once) the draft
+goes to `POST /preview/calibration` (10 s on the strip, not saved); *Light up the strip* sends
+it at once. Only *Save layout* stores it (`POST /save/calibration`, which also sets `num_leds`
+to the sum of the sides); the draft then follows `/config` again when `config_rev` changes.
+Back with unsaved changes asks first (*Keep editing* / *Discard*, inline in the screen); leaving
+through the rail keeps the draft for the next visit in this session.
+
+Remote: on the diagram the arrows move between the corners and sides, OK on a corner starts
+the strip there, OK on a side reverses the direction; ▶ from the right edge goes to the
+steppers. There ▲ ▼ pick the side, ◀ ▶ remove / add one LED, and the number keys type a count
+(digits within 1.5 s make one number; on the TV only once `tvinputdevice.registerKeyBatch`
+succeeds, which needs the `tv.inputdevice` privilege, otherwise the hint is hidden). ◀ from
+*Light up the strip* returns to the diagram.
+
+The layout is stored on each controller, so the screen edits one: the first that answers.
+With several, a picker above the diagram chooses which (switching with unsaved changes asks
+first). No controller with its settings read: an empty state with *Open Outputs*.
 
 ### Status
 
