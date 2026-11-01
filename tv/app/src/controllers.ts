@@ -1,9 +1,10 @@
 // The ESP32 controllers the service discovered, as seen over their HTTP API. The launcher
 // reads /status and /config once per controller (and again after a failed write), then
-// /metrics on every poll while Home is shown.
+// /metrics on every poll while Home is shown. /config is read again when the metrics'
+// config_rev changes, i.e. when another client (the controller's web app) saved a setting.
 
 import { useCallback, useEffect, useRef, useState } from 'preact/hooks';
-import type { Esp32Config, Esp32Metrics, Esp32Status, LedMode } from '@ambilight/protocol';
+import { configChanged, type Esp32Config, type Esp32Metrics, type Esp32Status, type LedMode } from '@ambilight/protocol';
 import type { Backend } from './data';
 
 export interface Controller {
@@ -13,6 +14,8 @@ export interface Controller {
   status?: Esp32Status;
   config?: Esp32Config;
   metrics?: Esp32Metrics;
+  /** config_rev the shown config was read at; null = unknown (read it again on the next metrics). */
+  configRev?: number | null;
   /** Consecutive failed requests. */
   failures: number;
   /** Last successful HTTP answer (Date.now()), 0 = never. */
@@ -81,7 +84,15 @@ export function useControllers(backend: Backend, hosts: string[] | null, active:
         const [status, config] = await Promise.all([esp.getStatus(), esp.getConfig()]);
         ok(c.host, { status, config });
       } else {
-        ok(c.host, { metrics: await esp32(c.host).getMetrics() });
+        const esp = esp32(c.host);
+        const metrics = await esp.getMetrics();
+        // Changed elsewhere: re-read, unless a brightness change of ours is still on its way
+        // (it is sent shortly and bumps the revision again; last write wins).
+        if (configChanged(c.configRev ?? null, metrics) && !brightnessTimer.current) {
+          ok(c.host, { metrics, config: await esp.getConfig(), configRev: metrics.config_rev });
+        } else {
+          ok(c.host, { metrics });
+        }
       }
     } catch (e) {
       failed(c.host, e);
@@ -120,6 +131,7 @@ export function useControllers(backend: Backend, hosts: string[] | null, active:
       }
       clearTimeout(brightnessTimer.current);
       brightnessTimer.current = window.setTimeout(() => {
+        brightnessTimer.current = 0;
         write(() => ({ brightness: value }), (h) => esp32(h).saveLeds({ brightness: value }));
       }, BRIGHTNESS_DEBOUNCE_MS);
     },

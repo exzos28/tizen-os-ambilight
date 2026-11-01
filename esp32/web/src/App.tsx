@@ -2,7 +2,7 @@
 // the controller runs its setup hotspot, otherwise the four tabs.
 
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks'
-import { type Esp32Config, type Esp32Metrics, type Esp32Status, LedMode, type SaveLedsRequest } from '@ambilight/protocol'
+import { configChanged, type Esp32Config, type Esp32Metrics, type Esp32Status, LedMode, type SaveLedsRequest } from '@ambilight/protocol'
 import { Logo } from '@ambilight/ui'
 import { errorText, esp } from './api'
 import { Header, TABS, TabBar, type TabId } from './components/chrome'
@@ -46,6 +46,8 @@ export function App() {
   const failuresRef = useRef(failures)
   failuresRef.current = failures
   const reloadRef = useRef(false)
+  // config_rev of the /config we show: another client (the TV app) changing a setting bumps it.
+  const revRef = useRef<number | null>(null)
 
   // ---------------------------------------------------------------- poll
   useEffect(() => {
@@ -69,10 +71,17 @@ export function App() {
       const i = n++
       const wasOffline = failuresRef.current >= OFFLINE_AFTER
       try {
-        const jobs: Promise<unknown>[] = [esp.getMetrics().then((m) => alive && setMetrics(m))]
-        if (!cfgRef.current || wasOffline || reloadRef.current) {
+        const m = await esp.getMetrics()
+        if (!alive) return
+        setMetrics(m)
+        // Re-read the settings when another client changed them — but not over an edit of
+        // ours that is still waiting to be sent (last write wins once it is saved).
+        const changedElsewhere = configChanged(revRef.current, m) && !Object.keys(pending.current).length
+        const jobs: Promise<unknown>[] = []
+        if (!cfgRef.current || wasOffline || reloadRef.current || changedElsewhere) {
           reloadRef.current = false
-          jobs.push(esp.getConfig().then((c) => alive && setCfg(c)))
+          const rev = typeof m.config_rev === 'number' ? m.config_rev : null
+          jobs.push(esp.getConfig().then((c) => { if (alive) { setCfg(c); revRef.current = rev } }))
         }
         if (!statusRef.current || wasOffline || i % STATUS_EVERY === 0) jobs.push(esp.getStatus().then((s) => alive && setStatus(s)))
         await Promise.all(jobs)

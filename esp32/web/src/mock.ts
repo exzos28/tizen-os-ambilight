@@ -25,6 +25,8 @@ const delay = <T>(value: T, ms = 80) => new Promise<T>((r) => setTimeout(() => r
 export function createMockClient(scenario: MockScenario): Esp32Client {
   const t0 = Date.now()
   const ap = scenario === 'ap'
+  // Settings revision like the firmware's: random start, bumped by every save.
+  let configRev = 0x5eed0001
   const config: Esp32Config = {
     wifi_ssid: ap ? '' : 'HomeNet', ota_host: 'ambilight', ip_octet: 245,
     num_leds: 32, max_leds: limits.num_leds.max, brightness: 200, color: '#ffd9a8', led_mode: LedMode.dynamic,
@@ -51,6 +53,7 @@ export function createMockClient(scenario: MockScenario): Esp32Client {
       power_limited: limited,
       frames_rx: ap ? 0 : streaming ? Math.round(1_928_400 + s * 7) : 1_928_400,
       last_frame_ms: ap ? -1 : streaming ? 40 + Math.round(Math.random() * 100) : Math.round(372_000 + s * 1000),
+      config_rev: configRev,
     }
   }
 
@@ -63,21 +66,22 @@ export function createMockClient(scenario: MockScenario): Esp32Client {
     getStatus: () => answer('/status', () => ({ ...status })),
     getConfig: () => answer('/config', () => ({ ...config })),
     getMetrics: () => answer('/metrics', metrics),
-    saveLeds: (b) => { Object.assign(config, b); return ok('LED settings saved.') },
+    saveLeds: (b) => { Object.assign(config, b); configRev++; return ok('LED settings saved.') },
     saveCalibration: (b) => {
       Object.assign(config, { ...b, clockwise: b.clockwise === undefined ? config.clockwise : b.clockwise === 1 })
       config.num_leds = config.led_top + config.led_right + config.led_bottom + config.led_left
+      configRev++
       return ok('Calibration saved.')
     },
     previewCalibration: () => ok('Preview shown for 10 s.'),
-    saveMode: (b) => { config.led_mode = b.led_mode; return ok('Mode saved.') },
+    saveMode: (b) => { config.led_mode = b.led_mode; configRev++; return ok('Mode saved.') },
     saveNetwork: (b) => {
       if (b.wifi_ssid) config.wifi_ssid = b.wifi_ssid
       if (b.ota_host) config.ota_host = b.ota_host
       if (b.ip_octet !== undefined) config.ip_octet = b.ip_octet
       return ok('Network settings saved. Restarting…')
     },
-    savePower: (b) => { config.power = b.power === 1; return ok('Power saved.') },
+    savePower: (b) => { config.power = b.power === 1; configRev++; return ok('Power saved.') },
     identify: () => ok('Blinking.'),
     restart: () => ok('Restarting…'),
   }

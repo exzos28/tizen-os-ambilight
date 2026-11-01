@@ -6,7 +6,7 @@
 // Requests carry the launcher's own port (constants.messagePort.uiPort) as the reply port.
 
 import {
-  type ServiceCommand, type ServiceCommandResult, type ServiceReply, ServiceReplyError,
+  type ServiceCommand, type ServiceCommandResult, type ServiceReply,
   buildCommandRequest, buildStatusRequest, constants, parseServiceReply,
 } from '@ambilight/protocol';
 import type { ServiceApi, ServiceLink } from './api';
@@ -18,6 +18,7 @@ const NO_REPLY_MS = 3000;
 const COMMAND_TIMEOUT_MS = 3000;
 
 interface PendingCommand {
+  id: string;
   resolve: (r: ServiceCommandResult) => void;
   timer: number;
 }
@@ -25,16 +26,20 @@ interface PendingCommand {
 export function createServiceClient(tz: TizenApi.Tizen): ServiceApi {
   const listeners = new Set<(link: ServiceLink) => void>();
   const pending: PendingCommand[] = [];
+  let nextId = 1;
   let localPort: TizenApi.LocalMessagePort | null = null;
   let portError = '';
   let waitingSince = 0; // first unanswered status request, 0 when the last one was answered
 
   const emit = (link: ServiceLink) => listeners.forEach((cb) => cb(link));
 
-  // Replies come in request order; the port has no request ids.
-  const settle = (result: ServiceCommandResult) => {
-    const p = pending.shift();
-    if (!p) return;
+  // A reply carries the id of its request. A reply without one comes from a service that
+  // predates ids and answers in request order: it settles the oldest command. A reply whose
+  // id is no longer pending (it timed out) is dropped instead of answering another command.
+  const settle = (id: string | null, result: ServiceCommandResult) => {
+    const i = id === null ? 0 : pending.findIndex((p) => p.id === id);
+    if (i < 0 || i >= pending.length) return;
+    const [p] = pending.splice(i, 1);
     clearTimeout(p.timer);
     p.resolve(result);
   };
@@ -47,14 +52,14 @@ export function createServiceClient(tz: TizenApi.Tizen): ServiceApi {
         reply = parseServiceReply(data);
       } catch (e) {
         console.warn('Bad reply from the service', e);
-        if (e instanceof ServiceReplyError && e.reply === 'result') settle({ ok: false, error: 'Bad reply from the service' });
+        // A malformed result can't be matched to its command; that command times out.
         return;
       }
       if (reply?.kind === 'status') {
         waitingSince = 0;
         emit({ kind: 'up', status: reply.status });
       } else if (reply?.kind === 'result') {
-        settle(reply.result);
+        settle(reply.id, reply.result);
       }
     });
   } catch (e) {
@@ -104,6 +109,7 @@ export function createServiceClient(tz: TizenApi.Tizen): ServiceApi {
           return resolve({ ok: false, error: 'The service is not running' });
         }
         const entry: PendingCommand = {
+          id: String(nextId++),
           resolve,
           timer: window.setTimeout(() => {
             const i = pending.indexOf(entry);
@@ -113,7 +119,7 @@ export function createServiceClient(tz: TizenApi.Tizen): ServiceApi {
         };
         pending.push(entry);
         try {
-          port.sendMessage(buildCommandRequest(command), localPort);
+          port.sendMessage(buildCommandRequest(command, { id: entry.id }), localPort);
         } catch (e) {
           clearTimeout(entry.timer);
           pending.splice(pending.indexOf(entry), 1);

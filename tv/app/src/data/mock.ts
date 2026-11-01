@@ -54,6 +54,8 @@ export function createMock(state: MockState): Backend {
   let framesSent = 0;
   const listeners = new Set<(l: ServiceLink) => void>();
 
+  // Settings revision like the firmware's: random start, bumped by every save.
+  let configRev = 0x5eed0001;
   const config: Esp32Config = {
     wifi_ssid: 'Home', ota_host: 'ambilight', ip_octet: 245,
     num_leds: 32, max_leds: limits.num_leds.max, brightness: 200, color: '#ffd9a8', led_mode: LedMode.dynamic,
@@ -98,6 +100,11 @@ export function createMock(state: MockState): Backend {
       capture: capture(now),
       esp32: { enabled: true, hosts, framesSent, sendErrors: 0, lastError: null },
       hyperhdr: { enabled: false },
+      outputs: {
+        source: 'package',
+        esp32: { enabled: true },
+        hyperhdr: { enabled: false, host: '', port: 19400, priority: 150 },
+      },
       configWarnings: [],
     };
   }
@@ -113,6 +120,7 @@ export function createMock(state: MockState): Backend {
       uptime_s: Math.floor((Date.now() - t0) / 1000) + 86400, cpu_mhz: 240,
       power_w: config.power ? Math.round(config.num_leds * config.pixel_watts * config.brightness / limits.brightness.max * 10) / 10 : 0,
       power_limited: false,
+      config_rev: configRev,
       frames_rx: Math.floor(framesSent / 7),
       last_frame_ms: streaming ? 40 : -1,
     };
@@ -154,9 +162,9 @@ export function createMock(state: MockState): Backend {
       getStatus: () => esp(espStatus),
       getConfig: () => esp(() => ({ ...config })),
       getMetrics: () => esp(metrics),
-      savePower: ({ power }) => esp(() => { config.power = power === 1; return { message: 'saved' }; }),
-      saveLeds: (form) => esp(() => { Object.assign(config, form); return { message: 'saved' }; }),
-      saveMode: ({ led_mode }) => esp(() => { config.led_mode = led_mode; return { message: 'saved' }; }),
+      savePower: ({ power }) => esp(() => { config.power = power === 1; configRev++; return { message: 'saved' }; }),
+      saveLeds: (form) => esp(() => { Object.assign(config, form); configRev++; return { message: 'saved' }; }),
+      saveMode: ({ led_mode }) => esp(() => { config.led_mode = led_mode; configRev++; return { message: 'saved' }; }),
     }),
     platform: {
       appVersion: () => '1.2.0',
