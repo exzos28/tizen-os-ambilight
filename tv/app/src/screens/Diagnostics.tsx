@@ -245,7 +245,7 @@ export function Diagnostics(p: ScreenProps) {
       <Footer>
         <KeyHint k="▲▼">Sections, scroll</KeyHint>
         <KeyHint k="◀">Menu</KeyHint>
-        <KeyHint k="↩">Home</KeyHint>
+        <KeyHint k="↩">Menu</KeyHint>
         <span class="footer-note">Updates every second · the event log is in tools/server.py</span>
       </Footer>
     </main>

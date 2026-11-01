@@ -271,8 +271,9 @@ differ; a change then sets all of them.
 | Before and after | The current frame's edge colors (`capture.rgb`) and an approximation of what the controller makes of them: saturation in HSV, then white balance. Gamma is left out (it shapes the LEDs' response, not the screen's) |
 | Reset to defaults | OK twice: brightness, gamma, saturation and white balance back to the defaults; the power settings stay (they describe the supply and the strip) |
 
-No answering controller: an empty state with *Open Outputs*; ◀ there moves to the rail. On the
-value rows ◀ ▶ adjust, so the rail is reached with Back.
+No answering controller: an empty state with *Open Outputs*; ◀ there moves to the rail. A value
+(slider or power tile) is edited only after OK: then ◀ ▶ change it, OK or Back end editing
+(▲ ▼ end it and move on), and ◀ ▶ move between the elements again.
 
 ### Strip layout
 
