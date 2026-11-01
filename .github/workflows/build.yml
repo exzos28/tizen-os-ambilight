@@ -90,6 +90,10 @@ jobs:
     env:
       HYPERHDR_TAG: v22.0.0.0
 
+  tv-package:
+    name: TV package
+    uses: ./.github/workflows/tv-package.yml
+
   hyperhdr-e2e:
     name: HyperHDR end-to-end
     runs-on: ubuntu-24.04

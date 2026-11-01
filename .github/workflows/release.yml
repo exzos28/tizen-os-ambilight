@@ -1,10 +1,11 @@
 name: Release
 
-# Builds the firmware images and attaches them to the GitHub release of a tag.
+# Builds the firmware images and the TV package and attaches them to the GitHub release of a tag.
 #  - Normal path: called by the Changesets workflow after it tagged vX.Y.Z and created the
 #    release from CHANGELOG.md (tags pushed by GITHUB_TOKEN don't trigger workflows).
 #  - Manual path: push a tag like v1.2.0 yourself; the release is created here.
-# The TV apps are not attached: they must be signed with a certificate for each TV.
+# The TV package is signed with a throwaway certificate: Apps2Samsung re-signs it for each TV
+# (a TV only accepts a certificate bound to its own DUID).
 on:
   push:
     tags: ['v*']
@@ -59,3 +60,10 @@ jobs:
           else
             gh release create "$TAG" --title "$TAG" --generate-notes $files
           fi
+
+  # After firmware: that job creates the release when it doesn't exist yet.
+  tv:
+    needs: firmware
+    uses: ./.github/workflows/tv-package.yml
+    with:
+      tag: ${{ inputs.tag || github.ref_name }}

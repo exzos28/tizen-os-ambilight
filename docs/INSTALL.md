@@ -128,6 +128,19 @@ The TV side is one **hybrid package** (package ID `fCAYP0k0uD`) with two apps:
 
 `tv/ui/tizen_web_project.yaml` lists `../service` as a dependency, so building the launcher also builds the service and packs both into one package.
 
+Two ways to install: with **Apps2Samsung** from a release, without build tools ([4.0](#40-install-with-apps2samsung)), or **from source** with your own certificate (4.1–4.3).
+
+### 4.0 Install with Apps2Samsung
+
+Every release has the package attached as `ambilight-tv-vX.Y.Z.wgt`. It is signed with a throwaway certificate — a TV only accepts a certificate bound to its own DUID — so it has to be re-signed for your TV. [Apps2Samsung](https://github.com/Apps2Samsung/Apps2Samsung) does that.
+
+1. Turn on Developer Mode with your PC's IP as *Host PC IP* ([4.1](#41-enable-developer-mode-on-the-tv), steps 1–3).
+2. Download `ambilight-tv-vX.Y.Z.wgt` from the [latest release](https://github.com/exzos28/tizen-os-ambilight/releases/latest) and install it in Apps2Samsung as a custom `.wgt`. On the first install it creates a certificate for your TV (Samsung account sign-in in the browser).
+3. If the app is already installed from VS Code, delete it on the TV first: a package signed with another certificate can't be installed over it.
+4. Continue with [4.4 Start](#44-start).
+
+Not tested on a TV yet. Apps2Samsung may pick a Partner certificate because the service starts on boot (`on-boot="true"`). The package is not in the Apps2Samsung catalog yet; the entry is prepared in [packaging/apps2samsung](../packaging/apps2samsung/).
+
 ### 4.1 Enable Developer Mode on the TV
 
 1. Open **Apps**, then press **1 2 3 4 5** on the remote (on newer models: Apps → App Settings → 1 2 3 4 5).

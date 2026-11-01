@@ -7,6 +7,8 @@
 
 Both apps ship as one hybrid package — building `ui/` also builds `service/`. Build, signing and installation: [docs/INSTALL.md § TV apps](../docs/INSTALL.md#4-tv-apps).
 
+Releases attach the package as `ambilight-tv-vX.Y.Z.wgt`, built in CI by `scripts/make_package.sh` (`.github/workflows/tv-package.yml`): the service with `Tizen.NET.Sdk` (`scripts/Service.tizen-sdk.csproj`, same sources as `service/Service.csproj`), the hybrid `.wgt` with the Tizen Studio CLI, signed with a throwaway certificate for Apps2Samsung to re-sign.
+
 ## How it works
 
 Samsung TVs have a hardware **PPI (Pixel Processing Interface)** inside the video enhancement engine. The native library `libvideoenhance.so` exposes three functions that allow reading average RGB values at arbitrary screen positions:

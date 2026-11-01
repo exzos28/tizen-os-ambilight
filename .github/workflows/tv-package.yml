@@ -1,0 +1,70 @@
+name: TV package
+
+# Builds the TV hybrid package (launcher + service) with tv/scripts/make_package.sh.
+#  - build.yml calls it on every PR and push to main: the package is a workflow artifact.
+#  - release.yml calls it with a tag: the package is also attached to that release, where
+#    Apps2Samsung finds it (packaging/apps2samsung/).
+# The package is signed with a throwaway certificate and must be re-signed for each TV.
+on:
+  workflow_call:
+    inputs:
+      tag:
+        description: Release tag to build and attach the package to; empty = artifact only
+        type: string
+        default: ''
+
+jobs:
+  package:
+    name: Hybrid .wgt
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      TIZEN_STUDIO_VERSION: '6.1'
+      TIZEN_STUDIO: ${{ github.workspace }}/../tizen-studio
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      # ~280 MB installer; cached so only the first run downloads it.
+      - name: Restore Tizen Studio CLI
+        id: tizen-cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.TIZEN_STUDIO }}
+          key: tizen-web-cli-${{ env.TIZEN_STUDIO_VERSION }}-ubuntu-24.04
+
+      - name: Install Tizen Studio CLI
+        if: steps.tizen-cache.outputs.cache-hit != 'true'
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/web-cli.bin" \
+            "https://download.tizen.org/sdk/Installer/tizen-studio_${TIZEN_STUDIO_VERSION}/web-cli_Tizen_Studio_${TIZEN_STUDIO_VERSION}_ubuntu-64.bin"
+          chmod +x "$RUNNER_TEMP/web-cli.bin"
+          "$RUNNER_TEMP/web-cli.bin" --accept-license "$TIZEN_STUDIO"
+          rm "$RUNNER_TEMP/web-cli.bin"
+
+      - name: Install expect
+        timeout-minutes: 8
+        run: |
+          export DEBIAN_FRONTEND=noninteractive
+          sudo apt-get -o DPkg::Lock::Timeout=120 install -y -qq --no-install-recommends expect \
+            || { sudo apt-get -o DPkg::Lock::Timeout=120 update -qq && sudo apt-get install -y -qq --no-install-recommends expect; }
+
+      - name: Build the package
+        run: tv/scripts/make_package.sh tv/release
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tv-package
+          path: tv/release/
+
+      - name: Attach to the release
+        if: inputs.tag != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        run: gh release upload "$TAG" tv/release/*.wgt tv/release/SHA256SUMS-tv.txt --clobber
