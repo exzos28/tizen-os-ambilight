@@ -25,6 +25,13 @@ jobs:
         with:
           ref: ${{ inputs.tag || github.ref }}
 
+      # Builds the launcher (tv/app) and runs scripts/sync-versions.mjs.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: tv/app/package-lock.json
+
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 8.0.x

@@ -9,7 +9,7 @@ Build the hardware first — see [HARDWARE.md](HARDWARE.md).
 | What | Why |
 |------|-----|
 | [PlatformIO](https://platformio.org/install) (CLI or VS Code extension) | Builds and flashes the ESP32 firmware |
-| [Node.js](https://nodejs.org/) 18+ and npm | The firmware build compiles the React web UI and embeds it into the binary (`esp32/scripts/embed_web.py` runs `npm run build`) |
+| [Node.js](https://nodejs.org/) 18+ and npm (24 for the TV launcher) | The firmware build compiles the React web UI and embeds it into the binary (`esp32/scripts/embed_web.py` runs `npm run build`); the TV launcher is built from `tv/app` |
 | [Tizen Studio](https://developer.samsung.com/smarttv/develop/getting-started/setting-up-sdk/installing-tv-sdk.html) or VS Code with the Tizen extension, plus *TV Extensions* and *Samsung Certificate Extension* | Builds, signs and installs the TV apps |
 | A Samsung account | Required to issue the Samsung certificate for your TV |
 | TV, ESP32 and PC on the same LAN | Discovery uses UDP broadcast; guest networks and AP/client isolation block it |
@@ -123,7 +123,7 @@ The TV side is one **hybrid package** (package ID `fCAYP0k0uD`) with two apps:
 
 | App | Path | Type | Purpose |
 |-----|------|------|---------|
-| Ambilight | `tv/ui/` | Web app | Launcher with *Start* / *Stop* buttons and a status panel (is this TV supported?) |
+| Ambilight | `tv/ui/` (source: `tv/app/`) | Web app | Launcher: lighting on/off, brightness, mode, live preview and status (is this TV supported?) |
 | Service | `tv/service/` | .NET service | Captures edge colors and streams them to the ESP32. Declared with `on-boot="true"` |
 
 `tv/ui/tizen_web_project.yaml` lists `../service` as a dependency, so building the launcher also builds the service and packs both into one package.
@@ -165,18 +165,23 @@ A regular Samsung account and a **Public** distributor certificate are enough. T
 
 The projects use the VS Code Tizen extension format (`tizen_web_project.yaml`, `tizen_dotnet_project.yaml`).
 
-1. Open the `tv/` folder in VS Code with the Tizen extension and select your Samsung certificate profile as the active signing profile.
-2. Build the **`tv/ui`** project — this produces the hybrid package with both apps — and run it on the connected TV.
+1. Build the launcher: `cd tv/app && npm ci && npm run build` — again after every change in `tv/app` or after updating the repository. It writes `index.html` and `assets/` into `tv/ui`, next to `config.xml`; without this step `tv/ui` has no `index.html` and the app won't start.
+2. Open the `tv/` folder in VS Code with the Tizen extension and select your Samsung certificate profile as the active signing profile.
+3. Build the **`tv/ui`** project — this produces the hybrid package with both apps — and run it on the connected TV.
 
 Don't install a launcher-only `.wgt` (e.g. built with `tizen build-web` + `tizen package -t wgt`): it has the same package ID, so it replaces the hybrid package and removes the service.
 
-If you change the package ID, update it in both manifests and `SERVICE_APP_ID` in `tv/ui/main.js`.
+If you change the package ID, update it in both manifests and `SERVICE_APP_ID` in `tv/app/src/data/service.ts`.
+
+To work on the launcher without a TV, run `npm run dev` in `tv/app` and open the printed URL: outside the TV it runs against a built-in mock (`?state=ok|lost|none|off|unsupported`).
 
 ### 4.4 Start
 
-Open **Ambilight** on the TV and press **Start**. The service waits 2 s, broadcasts a discovery probe and starts streaming to every ESP32 that answers. The strip should follow the picture within a few seconds.
+The service starts on its own when the TV boots. After the first install, open **Ambilight** on the TV and press **Start** in the banner. The service waits 2 s, broadcasts a discovery probe and starts streaming to every ESP32 that answers. The strip should follow the picture within a few seconds.
 
-The service also starts on its own when the TV boots. It keeps looking for controllers in the background (new ones and IP changes are picked up within ~30 s); pressing **Start** while it is running probes immediately, reconnects HyperHDR and restarts capture.
+Home in **Ambilight** shows whether everything works, turns the lighting on and off, sets the brightness and switches between following the picture and a static color — on every controller at once. If something is wrong, a banner on top says what and offers the fix when there is one (*Start*, *Search now*). *Test pattern* shows a rotating color wheel the strip should follow. Back exits the app.
+
+The service keeps looking for controllers in the background (new ones and IP changes are picked up within ~30 s); *Search now* probes immediately.
 
 ---
 
@@ -203,7 +208,7 @@ Hold the **BOOT** button (GPIO 0) on the ESP32 for 3 seconds. All settings, incl
 
 **The TV doesn't find the ESP32.**
 - TV and ESP32 must be in the same subnet, with broadcast allowed (no guest network, no client isolation).
-- The service keeps probing: every 2 s for the first minute, then every 10 s (every 30 s once something answered). Once the ESP32 is reachable it is picked up automatically; press *Start* to retry immediately.
+- The service keeps probing: every 2 s for the first minute, then every 10 s (every 30 s once something answered). Once the ESP32 is reachable it is picked up automatically; press *Search now* in the launcher to retry immediately.
 - In the ESP32 Telnet log, look for `[Discovery] Replied to …`.
 
 **The strip doesn't react to the picture on some models.** The hardware color-measurement block is missing on some processors (e.g. Q6F, [#2](https://github.com/exzos28/tizen-os-ambilight/issues/2)). The TV service log shows `CaptureError invalid HW condition`. Please report your model — see [CONTRIBUTING.md](CONTRIBUTING.md).

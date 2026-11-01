@@ -60,3 +60,7 @@ node_modules/
 
 # === TV package (tv/scripts/make_package.sh) ===
 tv/release/
+
+# === TV launcher, built by tv/app (npm run build) into tv/ui ===
+tv/ui/index.html
+tv/ui/assets/
