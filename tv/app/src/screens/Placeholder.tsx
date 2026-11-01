@@ -1,4 +1,5 @@
-import { Footer, Hint } from '../components/Keys';
+import { Card, KeyHint } from '@ambilight/ui';
+import { Footer } from '../components/Footer';
 
 const ABOUT: Record<string, string> = {
   picture: 'Gamma, saturation, white balance and the power limit of the strip.',
@@ -16,13 +17,13 @@ export function Placeholder({ title, id }: { title: string; id: string }) {
           <p class="subtitle">{ABOUT[id] ?? ''}</p>
         </div>
       </header>
-      <section class="panel placeholder">
+      <Card class="placeholder">
         <h2>Coming soon</h2>
-        <p class="muted-s">This screen is not in this version of the app yet. Home has the lighting controls and the status.</p>
-      </section>
+        <p class="ui-muted">This screen is not in this version of the app yet. Home has the lighting controls and the status.</p>
+      </Card>
       <Footer>
-        <Hint k="▲▼">Sections</Hint>
-        <Hint k="↩">Home</Hint>
+        <KeyHint k="▲▼">Sections</KeyHint>
+        <KeyHint k="↩">Home</KeyHint>
       </Footer>
     </main>
   );

@@ -1,9 +1,9 @@
 import type { JSX } from 'preact';
-import { ChipIcon, HomeIcon, LayoutIcon, Logo, PictureIcon, PulseIcon } from './icons';
+import { ChipIcon, HomeIcon, type IconProps, LayoutIcon, Logo, PictureIcon, PulseIcon } from '@ambilight/ui';
 
 export type ScreenId = 'home' | 'picture' | 'layout' | 'controllers' | 'diagnostics';
 
-export const RAIL: { id: ScreenId; label: string; icon: () => JSX.Element }[] = [
+export const RAIL: { id: ScreenId; label: string; icon: (p: IconProps) => JSX.Element }[] = [
   { id: 'home', label: 'Home', icon: HomeIcon },
   { id: 'picture', label: 'Picture', icon: PictureIcon },
   { id: 'layout', label: 'Strip layout', icon: LayoutIcon },
@@ -32,7 +32,7 @@ export function Rail({ current, focused, problems, version }: Props) {
       <div class="rail-items">
         {RAIL.map((it, i) => (
           <div key={it.id} class={`rail-item${it.id === current ? ' current' : ''}${i === focused ? ' focused' : ''}`} aria-current={it.id === current ? 'page' : undefined}>
-            <it.icon />
+            <it.icon size={28} />
             {it.label}
             {it.id === 'home' && problems > 0 && <span class="badge" aria-label={`${problems} problems`}>{problems}</span>}
           </div>

@@ -2,25 +2,18 @@
 // something is wrong a problem banner with the fix (if there is one) comes first.
 
 import { useEffect, useState } from 'preact/hooks';
-import { Preview } from '../components/Preview';
-import { Footer, Hint, Kbd } from '../components/Keys';
-import { CircleIcon, ErrorIcon, ScreenIcon, WarnIcon } from '../components/icons';
+import {
+  Button, Card, CircleIcon, ColorSwatches, Kbd, KeyHint, LivePreview, Option, ProblemBanner, SWATCHES, ScreenIcon,
+  SliderBar, StatusLine, StatusList, StatusPill, Switch,
+} from '@ambilight/ui';
+import { Footer } from '../components/Footer';
 import { type Controller, type ControllerActions, unreachable } from '../controllers';
-import { type Esp32Config, LedMode, type ServiceStatus, limits } from '@ambilight/protocol';
+import { LedMode, type ServiceStatus, limits } from '@ambilight/protocol';
 import type { Backend, ServiceLink } from '../data';
 import { EDGE_LEFT, type FocusGrid, type Key, step } from '../focus';
 import {
   type Problem, type Row, captureRow, controllerRow, controllerTitle, fps, hyperHdrRow, live, summary,
 } from '../status';
-
-export const SWATCHES = [
-  { name: 'Warm white', c: '#ffd9a8' },
-  { name: 'Cool white', c: '#eaf2ff' },
-  { name: 'Amber', c: '#f2a13b' },
-  { name: 'Red', c: '#e5484d' },
-  { name: 'Blue', c: '#3e7fd9' },
-  { name: 'Purple', c: '#8e6ad8' },
-];
 
 /** The screen handles a key: true = consumed, 'rail' = move the focus to the rail. */
 export type KeyHandler = (key: Key) => boolean | 'rail';
@@ -131,7 +124,7 @@ export function Home(p: Props) {
     else if (id === 'mode-static') setMode(LedMode.plain);
     else if (id.startsWith('swatch-')) {
       if (!canControl) return;
-      actions.setColor(SWATCHES[+id.slice(7)].c);
+      actions.setColor(SWATCHES[+id.slice(7)].color);
       if (lead?.led_mode !== LedMode.plain) setMode(LedMode.plain);
     } else if (id === 'test-pattern') p.onTestPattern();
     else if (id === 'banner-primary') runBanner();
@@ -152,7 +145,7 @@ export function Home(p: Props) {
     return true;
   });
 
-  const f = (id: string) => (p.active && current === id ? ' focused' : '');
+  const f = (id: string) => p.active && current === id;
 
   // ---------------------------------------------------------------- view
   const pill = summary(link, problems);
@@ -176,6 +169,10 @@ export function Home(p: Props) {
         : lead.led_mode === LedMode.plain ? 'Showing a static color'
           : capture && !capturing ? 'No picture to follow' : 'Following the picture';
   const modeText = !lead ? '—' : mixed((c) => c.led_mode) ? 'Mixed' : lead.led_mode === LedMode.dynamic ? 'Follow the picture' : 'Static color';
+  const swatches = (
+    <ColorSwatches selected={lead?.led_mode === LedMode.plain ? lead.color : null}
+      focusedIndex={SWATCHES.findIndex((_, i) => f(`swatch-${i}`))} small={compact} />
+  );
 
   return (
     <main class="main">
@@ -184,146 +181,111 @@ export function Home(p: Props) {
           <h1>Home</h1>
           <p class="subtitle">{p.model ? `Samsung ${p.model}` : 'Samsung TV'}{capture?.hw ? ` · ${capture.hw.fullW}×${capture.hw.fullH}` : ''}</p>
         </div>
-        <span class={`pill tone-${pill.tone}`}><span class="pill-dot" />{pill.text}</span>
+        <StatusPill tone={pill.tone}>{pill.text}</StatusPill>
       </header>
 
       {problem && (
-        <section class={`banner banner-${problem.tone}`} role="alert">
-          <span class="banner-icon">{problem.tone === 'bad' ? <ErrorIcon /> : <WarnIcon />}</span>
-          <div class="banner-body">
-            <h2>{problem.title}</h2>
-            <p>{problem.text}</p>
-            {problem.detail && <p class="banner-detail">{problem.detail}</p>}
-            {problem.hints && <ul class="banner-hints">{problem.hints.map((h) => <li key={h}>{h}</li>)}</ul>}
-          </div>
-          {(problem.action || problem.controller) && (
-            <div class="banner-actions">
+        <ProblemBanner tone={problem.tone} title={problem.title} text={problem.text} detail={problem.detail} hints={problem.hints}
+          actions={(problem.action || problem.controller) && (
+            <>
+              {/* Real buttons, never focused natively: the focus manager drives `focused`. */}
               {problem.action && (
-                <div class={`btn btn-primary${f('banner-primary')}`}>
+                <Button variant="primary" tabIndex={-1} focused={f('banner-primary')}>
                   {busy ?? (problem.action === 'start' ? 'Start' : 'Search now')}
-                </div>
+                </Button>
               )}
-              {problem.controller && <div class={`btn btn-secondary${f('banner-secondary')}`}>Controller details</div>}
-            </div>
-          )}
-        </section>
+              {problem.controller && <Button tabIndex={-1} focused={f('banner-secondary')}>Controller details</Button>}
+            </>
+          )} />
       )}
 
       {compact ? (
         <section class="tiles tiles-compact" aria-label="Main controls">
-          <div class={`tile tile-row${f('lighting')}`}>
-            <Switch on={on} accent={false} />
-            <span class="stack"><span class="value-m">{cfgs.length ? (on ? 'On' : 'Off') : '—'}</span><span class="muted-s">{lightingText}</span></span>
-          </div>
-          <div class={`tile tile-center${f('brightness')}${adjusting ? ' adjusting' : ''}`}>
-            <div class="spread"><span class="label">Brightness</span><span class="value-m num">{pct == null ? '—' : `${pct}%`}</span></div>
-            <Bar pct={pct ?? 0} muted={!adjusting} />
-          </div>
-          <div class={`tile tile-center${f('mode')}`}>
-            <div class="spread"><span class="label">Mode</span><span class="muted-s">OK switches</span></div>
-            <span class="value-s">{modeText}</span>
-            <Swatches lead={lead} f={f} small />
-          </div>
+          <Card class="tile-row" focused={f('lighting')}>
+            <Switch on={on} />
+            <span class="stack"><span class="ui-value">{cfgs.length ? (on ? 'On' : 'Off') : '—'}</span><span class="ui-muted">{lightingText}</span></span>
+          </Card>
+          <Card class="tile-center" focused={f('brightness')} adjusting={adjusting}>
+            <div class="spread"><span class="ui-label">Brightness</span><span class="ui-value ui-num">{pct == null ? '—' : `${pct}%`}</span></div>
+            <SliderBar value={(pct ?? 0) / 100} muted={!adjusting} />
+          </Card>
+          <Card class="tile-center" focused={f('mode')}>
+            <div class="spread"><span class="ui-label">Mode</span><span class="ui-muted">OK switches</span></div>
+            <span class="ui-value-s">{modeText}</span>
+            {swatches}
+          </Card>
         </section>
       ) : (
         <section class="tiles" aria-label="Main controls">
-          <div class={`tile tile-big tile-lighting${f('lighting')}`}>
-            <div class="spread"><span class="label">Lighting</span><Switch on={on} accent /></div>
-            <span class="value-xl">{cfgs.length ? (on ? 'On' : 'Off') : '—'}</span>
-            <span class="desc">{lightingText}</span>
+          <Card class="tile-big" focused={f('lighting')}>
+            <div class="spread"><span class="ui-label">Lighting</span><Switch on={on} accent /></div>
+            <span class="ui-value-xl">{cfgs.length ? (on ? 'On' : 'Off') : '—'}</span>
+            <span class="ui-desc">{lightingText}</span>
             <span class="tile-hint"><Kbd>OK</Kbd>{on ? 'Turn off' : 'Turn on'}</span>
-          </div>
-          <div class={`tile tile-big${f('brightness')}${adjusting ? ' adjusting' : ''}`}>
-            <span class="label">Brightness</span>
-            <span class="value-xl num">{pct == null ? '—' : pct}<span class="unit">%</span></span>
-            <Bar pct={pct ?? 0} knob />
-            {mixed((c) => c.brightness) && <span class="muted-s">Controllers differ · ◀▶ sets all</span>}
+          </Card>
+          <Card class="tile-big" focused={f('brightness')} adjusting={adjusting}>
+            <span class="ui-label">Brightness</span>
+            <span class="ui-value-xl ui-num">{pct == null ? '—' : pct}<span class="ui-unit">%</span></span>
+            <SliderBar value={(pct ?? 0) / 100} knob />
+            {mixed((c) => c.brightness) && <span class="ui-muted">Controllers differ · ◀▶ sets all</span>}
             <span class="tile-hint">{adjusting ? <><Kbd>◀▶</Kbd>5% steps · OK done</> : <><Kbd>OK</Kbd>Adjust in 5% steps</>}</span>
-          </div>
-          <div class="tile tile-big tile-mode">
-            <span class="label">Mode</span>
+          </Card>
+          <Card class="tile-big tile-mode">
+            <span class="ui-label">Mode</span>
             <div class="modes" role="radiogroup" aria-label="Lighting mode">
-              <div class={`mode${lead?.led_mode === LedMode.dynamic ? ' checked' : ''}${f('mode-follow')}`} role="radio" aria-checked={lead?.led_mode === LedMode.dynamic}><ScreenIcon />Follow the picture</div>
-              <div class={`mode${lead?.led_mode === LedMode.plain ? ' checked' : ''}${f('mode-static')}`} role="radio" aria-checked={lead?.led_mode === LedMode.plain}><CircleIcon />Static color</div>
+              <div role="radio" aria-checked={lead?.led_mode === LedMode.dynamic}>
+                <Option checked={lead?.led_mode === LedMode.dynamic} focused={f('mode-follow')} icon={<ScreenIcon size={26} />}>Follow the picture</Option>
+              </div>
+              <div role="radio" aria-checked={lead?.led_mode === LedMode.plain}>
+                <Option checked={lead?.led_mode === LedMode.plain} focused={f('mode-static')} icon={<CircleIcon size={26} />}>Static color</Option>
+              </div>
             </div>
-            <Swatches lead={lead} f={f} />
-          </div>
+            {swatches}
+          </Card>
         </section>
       )}
 
       {compact ? (
         <section class="status-cards" aria-label="Status">
-          {rows.map((r) => <StatusLine key={r.title} row={r} card />)}
-          <div class={`btn btn-secondary btn-card${f('test-pattern')}`}>Test pattern</div>
+          {rows.map((r) => <StatusLine key={r.title} tone={r.tone} title={r.title} detail={r.detail} value={r.value} card />)}
+          <Button tabIndex={-1} focused={f('test-pattern')}>Test pattern</Button>
         </section>
       ) : (
         <div class="lower">
-          <section class="panel preview-panel" aria-label="Live preview">
-            <Preview rgb={capture?.rgb} h={capture?.h} v={capture?.v} live={capturing} config={lead} />
+          <Card class="preview-panel" label="Live preview">
+            <LivePreview rgb={capture?.rgb} h={capture?.h} v={capture?.v} live={capturing} config={lead} width={520} />
             <div class="preview-text">
               <h2>Live preview</h2>
-              <p class="muted-s">Inner bands: what the TV samples. Dots: what the {lead ? `${lead.num_leds} ` : ''}LEDs show.</p>
-              <span class="num fps">{capture && capturing ? `${fps(capture)} fps` : '—'}</span>
-              <div class={`btn btn-secondary${f('test-pattern')}`}>Test pattern</div>
+              <p class="ui-muted">Inner bands: what the TV samples. Dots: what the {lead ? `${lead.num_leds} ` : ''}LEDs show.</p>
+              <span class="ui-num fps">{capture && capturing ? `${fps(capture)} fps` : '—'}</span>
+              <Button tabIndex={-1} focused={f('test-pattern')}>Test pattern</Button>
             </div>
-          </section>
-          <section class="panel status-list" aria-label="Status">
-            {rows.map((r) => <StatusLine key={r.title} row={r} />)}
-          </section>
+          </Card>
+          <Card class="status-panel" label="Status">
+            <StatusList>
+              {rows.map((r) => <StatusLine key={r.title} tone={r.tone} title={r.title} detail={r.detail} value={r.value} />)}
+            </StatusList>
+          </Card>
         </div>
       )}
 
       <Footer>
         {problem?.action ? (
           <>
-            <Hint k="OK">{problem.action === 'start' ? 'Start the service' : 'Search now'}</Hint>
-            <Hint k="▼">Lighting controls</Hint>
-            <Hint k="↩">Back to TV</Hint>
+            <KeyHint k="OK">{problem.action === 'start' ? 'Start the service' : 'Search now'}</KeyHint>
+            <KeyHint k="▼">Lighting controls</KeyHint>
+            <KeyHint k="↩">Back to TV</KeyHint>
             <span class="footer-note">The banner leaves by itself once the problem is gone</span>
           </>
         ) : (
           <>
-            <Hint k="OK">Lighting on / off</Hint>
-            <Hint k="▶">Brightness, mode</Hint>
-            <Hint k="◀">Menu</Hint>
-            <Hint k="↩">Back to TV</Hint>
+            <KeyHint k="OK">Lighting on / off</KeyHint>
+            <KeyHint k="▶">Brightness, mode</KeyHint>
+            <KeyHint k="◀">Menu</KeyHint>
+            <KeyHint k="↩">Back to TV</KeyHint>
           </>
         )}
       </Footer>
     </main>
-  );
-}
-
-function Switch({ on, accent }: { on: boolean; accent: boolean }) {
-  return <span class={`switch${on ? ' on' : ''}${accent ? ' accent' : ''}`} aria-hidden="true"><span class="knob" /></span>;
-}
-
-function Bar({ pct, knob, muted }: { pct: number; knob?: boolean; muted?: boolean }) {
-  return (
-    <div class={`bar${muted ? ' muted' : ''}`}>
-      <div class="bar-fill" style={`width:${pct}%`} />
-      {knob && <div class="bar-knob" style={`left:calc(${pct}% - 16px)`} />}
-    </div>
-  );
-}
-
-function Swatches({ lead, f, small }: { lead?: Esp32Config; f: (id: string) => string; small?: boolean }) {
-  return (
-    <div class={`swatches${small ? ' small' : ''}`} aria-label="Static colors">
-      {SWATCHES.map((s, i) => (
-        <div key={s.c} aria-label={s.name} style={`background:${s.c}`}
-          class={`swatch${lead?.led_mode === LedMode.plain && lead.color.toLowerCase() === s.c ? ' selected' : ''}${f(`swatch-${i}`)}`} />
-      ))}
-    </div>
-  );
-}
-
-function StatusLine({ row, card }: { row: Row; card?: boolean }) {
-  return (
-    <div class={`status-line${card ? ' card' : ''} tone-${row.tone}`}>
-      <span class="dot-s" />
-      <span class="stack"><span class="status-title">{row.title}</span><span class="status-detail">{row.detail}</span></span>
-      <span class="status-value">{row.value}</span>
-    </div>
   );
 }
