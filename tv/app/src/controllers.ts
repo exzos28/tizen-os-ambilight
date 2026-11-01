@@ -33,6 +33,11 @@ export interface ControllerActions {
   setBrightness(value: number): void;
   setMode(mode: LedMode): void;
   setColor(color: string): void;
+  /**
+   * Any other setting: `apply` patches the shown config of every present controller at once,
+   * `send` writes it to one controller; a controller that rejects it is read again.
+   */
+  update(apply: (c: Esp32Config) => Partial<Esp32Config>, send: (host: string) => Promise<unknown>): void;
 }
 
 const BRIGHTNESS_DEBOUNCE_MS = 300;
@@ -124,6 +129,7 @@ export function useControllers(backend: Backend, hosts: string[] | null, active:
     setPower: (on) => write(() => ({ power: on }), (h) => esp32(h).savePower({ power: on ? 1 : 0 })),
     setMode: (mode) => write(() => ({ led_mode: mode }), (h) => esp32(h).saveMode({ led_mode: mode })),
     setColor: (color) => write(() => ({ color }), (h) => esp32(h).saveLeds({ color })),
+    update: write,
     setBrightness(value) {
       // Shown at once; sent once the remote stops repeating.
       for (const c of ref.current) {
