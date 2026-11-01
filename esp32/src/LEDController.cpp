@@ -134,17 +134,30 @@ void LEDController::drawIdentify(LightOutput::Identify::Phase phase) {
 
 void LEDController::finishIdentify() {
     // The blink ends on a dark slot, but a busy loop may have skipped drawing it: clear
-    // everything the blink lit, including LEDs beyond the current count.
+    // everything the blink lit, including LEDs beyond the current count. Cleared in the
+    // buffer only; the strip changes with the one show below.
     uint16_t n = max(_identifyLit,
                      LightOutput::Identify::coverage(_numLeds, _previewLit, layoutTotal(), MAX_LEDS));
     _identifyActive = false;
     _identifyPhase  = LightOutput::Identify::Phase::Done;
     _identifyLit    = 0;
     fill_solid(_leds, n, CRGB::Black);
-    showLeds(n);
-    _previewLit = 0;   // covered by the clear above; a running preview sets it again
-    // A preview that expired meanwhile is cleared (and repainted) by update() right after.
-    if (!_previewShown || previewActive()) repaint();
+    _previewLit = 0;   // covered by the clear; a running preview sets it again
+
+    // A preview that expired meanwhile is cleared (and repainted) by update() right after;
+    // its clear may not reach every LED the blink lit, so push the dark frame here.
+    if (_previewShown && !previewActive()) {
+        showLeds(n);
+        return;
+    }
+
+    // repaint() draws the restored output over the start of the buffer and shows once; that
+    // show pushes at least the n cleared LEDs (showLeds), so the LEDs past what it draws go
+    // dark in the same frame — no separate black frame (a flash in plain mode) and no second
+    // full-strip show. If it showed nothing (an empty preview), push the dark frame here.
+    _pushAtLeast = n;
+    repaint();
+    if (_pushAtLeast != 0) showLeds(n);
 }
 
 // ---------------------------------------------------------------------------
@@ -169,7 +182,10 @@ void LEDController::show() {
 
 void LEDController::showLeds(uint16_t count) {
     auto& cfg = Config::instance();
-    count = min(count, static_cast<uint16_t>(MAX_LEDS));
+    // After an identify blink the repaint's show also pushes the LEDs the blink lit (see
+    // finishIdentify()); for one show only.
+    count = LightOutput::Identify::pushCount(count, _pushAtLeast, static_cast<uint16_t>(MAX_LEDS));
+    _pushAtLeast = 0;
     uint32_t sum = 0;
     for (uint16_t i = 0; i < count; i++) sum += _leds[i].r + _leds[i].g + _leds[i].b;
 
