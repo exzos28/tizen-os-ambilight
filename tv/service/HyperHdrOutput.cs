@@ -54,6 +54,7 @@ namespace Service
             _log = log;
         }
 
+        public HyperHdrSettings Settings => _settings;
         public string Endpoint => Invariant($"{_settings.Host}:{_settings.Port}");
 
         // Number of replies received so far (for tests and diagnostics).
