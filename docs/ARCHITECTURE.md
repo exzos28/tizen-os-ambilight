@@ -59,7 +59,8 @@ wiring in [HARDWARE.md](HARDWARE.md).
    restarted by `CaptureLoop.cs` on its own thread). Capture does **not** wait for
    discovery — frames go to whichever outputs have somewhere to send.
 4. If capture fails (library or symbols missing, invalid HW condition), retries after
-   5 s, 10 s, then every 30 s.
+   1, 2, 3, 5 and 10 s (the video processor is often not ready right after the TV boots), then
+   every 30 s.
 5. AppControl `command=start` (the launcher's *Start*, shown while the service is not
    running) probes for hosts, reconnects HyperHDR and re-initialises capture (re-reading the
    hardware condition) immediately, also ending a pause; `command=stop` exits the service.

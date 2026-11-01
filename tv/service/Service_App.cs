@@ -129,10 +129,11 @@ namespace Service
             // sends its commands (pause / resume / rediscover / set-outputs).
             _statusPort = StatusPort.TryStart(BuildStatusJson, this, (e, d) => SendLog(e, d));
 
-            // First run after 2 s; failures retried after 5 s, 10 s, then every 30 s.
+            // First run after 2 s. Right after the TV boots the video processor often isn't ready
+            // yet, so failures are retried quickly at first (1, 2, 3, 5, 10 s), then every 30 s.
             _capture = new CaptureLoop(
                 token => Capture.Run(OnFrame, (evt, data) => SendLog(evt, data), _captureStatus, token),
-                _captureStatus, (e, d) => SendLog(e, d), 2000, new[] { 5_000, 10_000, 30_000 });
+                _captureStatus, (e, d) => SendLog(e, d), 2000, new[] { 1_000, 2_000, 3_000, 5_000, 10_000, 30_000 });
             _capture.Start();
         }
 
