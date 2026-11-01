@@ -162,7 +162,9 @@ export function problems(link: ServiceLink, controllers: Controller[]): Problem[
     out.push({ tone: 'bad', title: 'Capture does not work on this TV', text: `Every read of the screen colors fails (ret=${c.lastBadRet}).` });
   }
 
-  if (s.esp32.enabled) {
+  // The ESP32 output switched off (Outputs, or res/ambilight.json): a HyperHDR-only setup must
+  // never hear about a missing controller.
+  if (s.esp32.enabled && s.outputs.esp32.enabled) {
     const present = controllers.filter((x) => x.present);
     if (!s.esp32.hosts.length) {
       const lost = controllers.filter((x) => !x.present).sort((a, b) => b.lastSeenAt - a.lastSeenAt)[0];
