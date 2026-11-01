@@ -6,9 +6,16 @@
 // ?state=none         no controller found at all
 // ?state=off          the service is not running ("Start" starts it)
 // ?state=unsupported  the TV has no capture API (libvideoenhance.so missing)
+//
+// Outputs (set-outputs), on top of any state:
+// ?outputs=package    never configured: ESP32 on, HyperHDR off, from res/ambilight.json (default)
+// ?outputs=both       saved: ESP32 and HyperHDR at 192.168.50.20 (connected)
+// ?outputs=hyperhdr   saved: HyperHDR only
+// A HyperHDR host connects 1 s after set-outputs if it starts with 192.168. or ends in .local;
+// any other host is refused.
 
 import {
-  type CaptureStatus, type Esp32Config, type Esp32Metrics, type Esp32Status, LedMode, type ServiceCommandResult,
+  type CaptureStatus, type HyperHdrOutputStatus, type OutputsStatus, type ServiceOutputs, type Esp32Config, type Esp32Metrics, type Esp32Status, LedMode, type ServiceCommandResult,
   type ServiceStatus, limits,
 } from '@ambilight/protocol';
 import type { Backend, ServiceLink } from './api';
@@ -16,6 +23,7 @@ import type { Backend, ServiceLink } from './api';
 export type MockState = 'ok' | 'lost' | 'none' | 'off' | 'unsupported';
 
 const HOST = '192.168.50.245';
+const HYPERHDR_HOST = '192.168.50.20';
 const FRAME_MS = 140;
 
 // A sunset scene, EdgeFrame order: top L→R (4), right T→B (3), bottom R→L (4), left B→T (3).
@@ -44,7 +52,14 @@ export function readMockState(search: string): MockState {
   return s === 'lost' || s === 'none' || s === 'off' || s === 'unsupported' ? s : 'ok';
 }
 
-export function createMock(state: MockState): Backend {
+export type MockOutputs = 'package' | 'both' | 'hyperhdr';
+
+function readMockOutputs(search: string): MockOutputs {
+  const o = new URLSearchParams(search).get('outputs');
+  return o === 'both' || o === 'hyperhdr' ? o : 'package';
+}
+
+export function createMock(state: MockState, preset: MockOutputs = readMockOutputs(location.search)): Backend {
   const t0 = Date.now();
   let serviceUp = state !== 'off';
   let paused = false;
@@ -52,6 +67,14 @@ export function createMock(state: MockState): Backend {
   let lostAt = state === 'lost' ? t0 + 2000 : Infinity;
   let controllerBackAt = Infinity;
   let framesSent = 0;
+  const outputs: OutputsStatus = {
+    source: preset === 'package' ? 'package' : 'saved',
+    esp32: { enabled: preset !== 'hyperhdr' },
+    hyperhdr: { enabled: preset !== 'package', host: preset === 'package' ? '' : HYPERHDR_HOST, port: 19400, priority: 150 },
+  };
+  /** When the HyperHDR target was last set (it connects a moment later). */
+  let hyperHdrSince = t0 - 60000;
+  let hyperHdrReplies = 0;
   const listeners = new Set<(l: ServiceLink) => void>();
 
   // Settings revision like the firmware's: random start, bumped by every save.
@@ -91,20 +114,49 @@ export function createMock(state: MockState): Backend {
     };
   }
 
+  function hyperHdr(now: number): HyperHdrOutputStatus {
+    const h = outputs.hyperhdr;
+    if (!h.enabled) return { enabled: false };
+    const endpoint = `${h.host}:${h.port}`;
+    if (now - hyperHdrSince < 1000) return { enabled: true, endpoint, connected: false, replies: 0, lastError: null };
+    if (!/^192\.168\.|\.local$/.test(h.host)) {
+      return { enabled: true, endpoint, connected: false, replies: 0, lastError: `Connection refused (${endpoint})` };
+    }
+    if (captureRuns()) hyperHdrReplies += 7;
+    return { enabled: true, endpoint, connected: true, replies: hyperHdrReplies, lastError: null };
+  }
+
+  // Checks like the service's (OutputConfig.cs): the whole command fails on the first problem.
+  function setOutputs(o: ServiceOutputs): Promise<ServiceCommandResult> {
+    if (!serviceUp) return delay({ ok: false, error: 'The service is not running' });
+    const host = o.hyperhdr.host.trim();
+    const priority = o.hyperhdr.priority ?? 150;
+    const errors: string[] = [];
+    if (!Number.isInteger(o.hyperhdr.port) || o.hyperhdr.port < 1 || o.hyperhdr.port > 65535) errors.push('hyperhdr.port must be an integer from 1 to 65535');
+    if (!Number.isInteger(priority) || priority < 50 || priority > 250) errors.push('hyperhdr.priority must be an integer from 50 to 250');
+    if (o.hyperhdr.enabled && !host) errors.push('hyperhdr.host is required when hyperhdr.enabled is true');
+    if (errors.length) return delay({ ok: false, error: errors.join('; ') });
+    const h = outputs.hyperhdr;
+    if (host !== h.host || o.hyperhdr.port !== h.port || priority !== h.priority || (o.hyperhdr.enabled && !h.enabled)) {
+      hyperHdrSince = Date.now();
+      hyperHdrReplies = 0;
+    }
+    outputs.source = 'saved';
+    outputs.esp32 = { enabled: o.esp32.enabled };
+    outputs.hyperhdr = { enabled: o.hyperhdr.enabled, host, port: o.hyperhdr.port, priority };
+    return delay({ ok: true, error: null }, 150);
+  }
+
   function status(): ServiceStatus {
     const now = Date.now();
     const hosts = controllerPresent() ? [HOST] : [];
-    if (hosts.length && captureRuns()) framesSent += 7;
+    if (hosts.length && captureRuns() && outputs.esp32.enabled) framesSent += 7;
     return {
       version: '1.2.0',
       capture: capture(now),
-      esp32: { enabled: true, hosts, framesSent, sendErrors: 0, lastError: null },
-      hyperhdr: { enabled: false },
-      outputs: {
-        source: 'package',
-        esp32: { enabled: true },
-        hyperhdr: { enabled: false, host: '', port: 19400, priority: 150 },
-      },
+      esp32: outputs.esp32.enabled ? { enabled: true, hosts, framesSent, sendErrors: 0, lastError: null } : { enabled: false },
+      hyperhdr: hyperHdr(now),
+      outputs: { ...outputs, esp32: { ...outputs.esp32 }, hyperhdr: { ...outputs.hyperhdr } },
       configWarnings: [],
     };
   }
@@ -152,6 +204,7 @@ export function createMock(state: MockState): Backend {
         setTimeout(() => listeners.forEach((cb) => cb(link)), 20);
       },
       command,
+      setOutputs,
       start() {
         setTimeout(() => { serviceUp = true; }, 800);
         return delay(undefined, 100);
@@ -165,6 +218,7 @@ export function createMock(state: MockState): Backend {
       savePower: ({ power }) => esp(() => { config.power = power === 1; configRev++; return { message: 'saved' }; }),
       saveLeds: (form) => esp(() => { Object.assign(config, form); configRev++; return { message: 'saved' }; }),
       saveMode: ({ led_mode }) => esp(() => { config.led_mode = led_mode; configRev++; return { message: 'saved' }; }),
+      identify: () => esp(() => { console.info('[mock] identify: the strip blinks'); return { message: 'blinking' }; }),
     }),
     platform: {
       appVersion: () => '1.2.0',
