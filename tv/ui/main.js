@@ -421,6 +421,9 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     } catch (e) {}
 
-    log('UI application started');
+    var version = '';
+    try { version = tizen.application.getCurrentApplication().appInfo.version; } catch (e) {}
+    if (version) document.getElementById('version').textContent = 'v' + version;
+    log('UI application started' + (version ? ' (v' + version + ')' : ''));
     initStatus();
 });

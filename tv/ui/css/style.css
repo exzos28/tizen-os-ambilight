@@ -95,6 +95,13 @@ h1 {
     background-color: #e94560;
 }
 
+#version {
+    margin-left: 16px;
+    font-size: 22px;
+    font-weight: normal;
+    color: #8a8fa8;
+}
+
 /* Status panel. Keep the whole column within ~125 px of the screen edges free: that is
    where the service samples colors, and in Debug mode the color wheel must show there. */
 #check {
