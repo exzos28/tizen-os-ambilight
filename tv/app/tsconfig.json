@@ -16,7 +16,12 @@
     "noEmit": true,
     // @ambilight/protocol is TypeScript source that imports with .ts extensions.
     "allowImportingTsExtensions": true,
-    "types": ["vite/client", "node"]
+    "types": ["vite/client", "node"],
+    // @ambilight/ui is TypeScript source too: its files resolve preact to this app's copy.
+    "paths": {
+      "preact": ["./node_modules/preact/src/index.d.ts"],
+      "preact/*": ["./node_modules/preact/*/src/index.d.ts"]
+    }
   },
   "include": ["src", "vite.config.ts"]
 }

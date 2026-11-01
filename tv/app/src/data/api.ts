@@ -24,7 +24,10 @@ export interface ServiceApi {
 }
 
 /** The ESP32 HTTP API endpoints the launcher uses. */
-export type Esp32Controller = Pick<Esp32Client, 'getStatus' | 'getConfig' | 'getMetrics' | 'savePower' | 'saveLeds' | 'saveMode'>;
+export type Esp32Controller = Pick<
+  Esp32Client,
+  'getStatus' | 'getConfig' | 'getMetrics' | 'savePower' | 'saveLeds' | 'saveMode' | 'saveCalibration' | 'previewCalibration'
+>;
 
 /** The controller at `host` (an IPv4 address from status.esp32.hosts). */
 export type Esp32Api = (host: string) => Esp32Controller;

@@ -1,0 +1,163 @@
+/* Strip layout screen. Kit tokens (--ui-*) at TV density; .main, .header, .footer come from the
+   app shell. Focus rings are outlines (no shadows on the TV). */
+
+.lay button { font-family: inherit; }
+.lay-body, .lay-steps { line-height: 1.25; }
+
+/* ---------------------------------------------------------------- steps */
+
+.lay-steps { display: flex; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.lay-steps li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 48px;
+  padding: 0 18px;
+  border-radius: 24px;
+  background: var(--ui-panel);
+  border: 1px solid var(--ui-panel-line);
+  font-size: 19px;
+  color: var(--ui-muted);
+  white-space: nowrap;
+}
+.lay-steps li.done { color: var(--ui-text-2); }
+.lay-steps li.done .ui-icon { color: var(--ui-ok); stroke-width: 2.6; }
+.lay-steps li.current { padding: 0 17px; border: 2px solid var(--ui-accent); background: var(--ui-accent-soft); color: #fff; font-weight: 600; }
+.lay-step-n { font-variant-numeric: tabular-nums; }
+
+/* ---------------------------------------------------------------- panels */
+
+.lay-body {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+  gap: 28px;
+  margin-top: 36px;
+}
+.lay .ui-card { padding: 28px 32px; border-radius: 22px; gap: 18px; }
+.lay .ui-card-head { align-items: center; }
+.lay .ui-card-title { font-weight: 600; }
+.lay .ui-card-head .ui-pill { height: 38px; padding: 0 16px; font-size: 18px; }
+.lay-side { display: flex; flex-direction: column; gap: 28px; min-width: 0; }
+.lay-aside { font-size: 18px; color: var(--ui-muted); }
+.lay-text { font-size: 20px; line-height: 1.5; color: var(--ui-text-2); }
+.lay-text.ok { color: var(--ui-ok-text); }
+.lay-text.bad { color: var(--ui-bad-text); }
+
+/* ---------------------------------------------------------------- diagram */
+
+.lay .lay-front { gap: 20px; }
+
+.lay-picker { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.lay-pick {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  height: 52px;
+  padding: 0 20px;
+  border-radius: 14px;
+  border: 1px solid var(--ui-border);
+  font-size: 20px;
+  color: var(--ui-text-2);
+  white-space: nowrap;
+}
+.lay-pick.checked { padding: 0 19px; border: 2px solid var(--ui-text); background: var(--ui-raised); color: #fff; font-weight: 600; }
+.lay-pick.focused { outline: var(--ui-focus-width) solid var(--ui-focus-color); outline-offset: 2px; }
+.lay-pick.silent { color: var(--ui-muted); }
+.lay-pick-host { color: var(--ui-muted); font-weight: 400; font-variant-numeric: tabular-nums; }
+.lay-picker-note { flex-basis: 100%; font-size: 18px; color: var(--ui-muted); }
+
+/* Room above and below the strip for the LED 1 tag at the start corner. */
+.lay-diagram { position: relative; width: 740px; align-self: center; margin: auto 0; padding: 56px 0; }
+.lay-diagram.compact { width: 660px; padding: 50px 0; }
+.lay-led1 {
+  position: absolute;
+  padding: 6px 14px;
+  border-radius: 10px;
+  background: #fff;
+  color: var(--ui-bg);
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+.lay-diagram.start-0 .lay-led1 { top: 4px; left: 0; }
+.lay-diagram.start-1 .lay-led1 { top: 4px; right: 0; }
+.lay-diagram.start-2 .lay-led1 { bottom: 4px; right: 0; }
+.lay-diagram.start-3 .lay-led1 { bottom: 4px; left: 0; }
+.lay .ui-strip-screen { font-size: 22px; color: var(--ui-knob-off); }
+
+.lay-tip { display: flex; justify-content: center; gap: 28px; font-size: 18px; color: var(--ui-muted); }
+
+/* ---------------------------------------------------------------- LEDs per side */
+
+.lay .lay-counts { gap: 8px; }
+.lay-counts .ui-card-head { margin-bottom: 8px; }
+
+.lay-row {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 18px;
+  height: 76px;
+  padding: 0 18px;
+  border-radius: 14px;
+}
+.lay-row.focused { background: #10151d; outline: 4px solid var(--ui-focus-color); }
+.lay-chip { width: 20px; height: 20px; border-radius: 5px; background: var(--ui-side-top); }
+.lay-chip.right { background: var(--ui-side-right); }
+.lay-chip.bottom { background: var(--ui-side-bottom); }
+.lay-chip.left { background: var(--ui-side-left); }
+.lay-name { font-size: 23px; font-weight: 500; }
+.lay-row.focused .lay-name { font-weight: 600; }
+
+.lay-stepper { display: flex; align-items: center; gap: 14px; }
+.lay-step {
+  width: 52px;
+  height: 52px;
+  border-radius: 12px;
+  border: 1px solid var(--ui-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 26px;
+  color: var(--ui-text-2);
+}
+.lay-row.focused .lay-step { background: #1a2230; color: var(--ui-text); }
+.lay-step.dim { opacity: 0.35; }
+.lay-value {
+  width: 72px;
+  text-align: center;
+  font-size: 30px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  border-bottom: 3px solid transparent;
+}
+.lay-row.typing .lay-value { color: var(--ui-accent); border-bottom-color: var(--ui-accent); }
+
+.lay-total {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-top: 4px;
+  padding: 16px 18px 0;
+  border-top: 1px solid var(--ui-line);
+}
+.lay-total-label { font-size: 21px; color: var(--ui-muted); }
+.lay-total-value { font-size: 30px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.lay-unit { font-size: 19px; font-weight: 400; color: var(--ui-muted); }
+.lay-small { padding: 0 18px; font-size: 18px; color: var(--ui-muted); }
+.lay-warn { padding: 0 18px; font-size: 18px; color: var(--ui-warn-text); }
+
+/* ---------------------------------------------------------------- check, save */
+
+.lay .lay-check { flex: 1; gap: 16px; }
+.lay-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-top: auto; }
+.lay .lay-actions .ui-btn { min-height: 64px; padding: 0 16px; border-radius: 14px; font-size: 21px; }
+
+/* ---------------------------------------------------------------- no controller */
+
+.lay-empty { margin-top: 36px; align-items: flex-start; }
+.lay-empty .lay-text { max-width: 1100px; font-size: 21px; }
+.lay .lay-empty-btn { padding: 0 36px; }
