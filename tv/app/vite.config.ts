@@ -28,6 +28,9 @@ function tizenWidget(): Plugin {
 export default defineConfig({
   base: './',
   plugins: [tizenWidget()],
+  // @ambilight/ui is linked source: its imports of preact must use this app's single copy.
+  resolve: { dedupe: ['preact'] },
+  server: { fs: { allow: ['.', '../../packages/protocol', '../../packages/ui'] } },
   oxc: {
     jsx: { runtime: 'automatic', importSource: 'preact' },
   },
