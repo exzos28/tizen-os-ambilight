@@ -18,17 +18,18 @@ Please include:
 
 ### Checking your TV
 
-Install the TV apps and open *Ambilight*: the status panel says whether screen capture works
-on this TV (✓ / ✗ with the reason) and whether frames go out to the ESP32 or HyperHDR. With
-*Debug* on, the *Captured colors* preview should follow the color wheel. Put what the panel
-shows (verdict, *Screen capture* row and the grey detail line) in your report.
+Install the TV apps and open *Ambilight*: Home says whether screen capture works on this TV
+(a problem banner with the reason if it doesn't) and whether the colors reach the LED
+controllers or HyperHDR. *Test pattern* fills the screen with a rotating color wheel: the strip
+should follow it, and the *Live preview* on Home shows the colors the TV captured. Put what Home
+shows (the banner text and the *Screen capture* line) in your report.
 
 ### Getting the service log
 
 For more detail — or if the launcher shows nothing useful:
 
 1. Run [`tools/server.py`](../tools/README.md) on a PC in the same network.
-2. Press *Start* in the Ambilight launcher on the TV (or wait up to 30 s): discovery picks up `server.py` and the event log starts flowing.
+2. Wait up to 30 s (or press *Search now* in the Ambilight launcher while it shows no controller): discovery picks up `server.py` and the event log starts flowing.
 3. Copy the `HwCondition`, `CaptureReady` and any `CaptureError` lines from the server window.
 
 `HwCondition` shows what the hardware reports (`ret=0 blocks=2 blockSize=16x16 full=3840x2160 delay=20ms` on working TVs). A non-zero `ret` or `blocks=0` means the measurement block is not available on that processor.

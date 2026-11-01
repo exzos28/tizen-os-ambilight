@@ -3,11 +3,18 @@
 | Path | What |
 |------|------|
 | `service/` | .NET Tizen service that captures screen edge colors and streams them to ESP32 controllers (UDP) and, optionally, a HyperHDR server (TCP) |
-| `ui/` | Launcher web app with *Start* / *Stop* / *Debug* buttons and a status panel that shows whether the TV supports capture and where the colors go |
+| `app/` | Source of the launcher (Preact + TypeScript + Vite): lighting on/off, brightness, mode, live preview, whether the TV supports capture and where the colors go |
+| `ui/` | The launcher as packaged: `config.xml`, `icon.png`, `tizen_web_project.yaml`, plus `index.html` and `assets/` built by `app/` (not in git) |
 
-Both apps ship as one hybrid package — building `ui/` also builds `service/`. Build, signing and installation: [docs/INSTALL.md § TV apps](../docs/INSTALL.md#4-tv-apps).
+Both apps ship as one hybrid package — building `ui/` also builds `service/`. Build the launcher first, then build `ui/` in VS Code as before:
 
-Releases attach the package as `ambilight-tv-vX.Y.Z.wgt`, built in CI by `scripts/make_package.sh` (`.github/workflows/tv-package.yml`): the service from `service/Service.csproj` with the Tizen .NET workload (as in VS Code), the hybrid `.wgt` with the Tizen-Core CLI (`tz pack`, as the VS Code extension), signed with the Tizen SDK's default certificate for Apps2Samsung to re-sign.
+```sh
+cd tv/app && npm ci && npm run build   # writes ui/index.html and ui/assets/
+```
+
+`npm run dev` in `app/` runs the launcher in a desktop browser against a built-in mock (`?state=ok|lost|none|off|unsupported`). Build, signing and installation: [docs/INSTALL.md § TV apps](../docs/INSTALL.md#4-tv-apps); the launcher's design: [docs/ARCHITECTURE.md § TV launcher](../docs/ARCHITECTURE.md#2-tv-launcher-tvui).
+
+Releases attach the package as `ambilight-tv-vX.Y.Z.wgt`, built in CI by `scripts/make_package.sh` (`.github/workflows/tv-package.yml`): the launcher with `npm ci && npm run build` in `app/`, the service from `service/Service.csproj` with the Tizen .NET workload (as in VS Code), the hybrid `.wgt` with the Tizen-Core CLI (`tz pack`, as the VS Code extension), signed with the Tizen SDK's default certificate for Apps2Samsung to re-sign.
 
 ## How it works
 
@@ -71,7 +78,7 @@ service/
   Service_App.cs      App lifecycle, outputs, capture retries, HTTP event log
   Capture.cs          HW PPI capture loop via libvideoenhance.so → EdgeFrame
   Discovery.cs        Background UDP discovery of ESP32s / tools/server.py
-  ServiceStatus.cs    Capture state + JSON for the launcher's status panel
+  ServiceStatus.cs    Capture state + JSON for the launcher's status
   StatusPort.cs       Local message port the launcher polls for status
   Esp32Output.cs      UDP frames to discovered ESP32s
   HyperHdrOutput.cs   HyperHDR FlatBuffers client (untested on a TV, see docs/HYPERHDR.md)
@@ -83,9 +90,15 @@ service/
   res/ambilight.json  Output settings — edit before building
   tizen-manifest.xml  Manifest: on-boot service, contentanalysis privilege
 
+app/
+  src/App.tsx         Shell: section rail, the one mounted screen, remote keys, status poll
+  src/screens/        Home (controls, preview, status, problem banner), Test pattern, placeholders
+  src/data/           Service message port, ESP32 HTTP API, desktop mock, wire types
+  vite.config.ts      Builds into ../ui for Chromium M94 (Tizen 7.0)
+
 ui/
-  index.html, main.js Launcher: Start / Stop the service, status panel, Debug color wheel
-  config.xml          Web app manifest (application.launch privilege)
+  index.html, assets/ Built by app/ (gitignored)
+  config.xml          Web app manifest (application.launch, internet; network access to the controllers)
   tizen_web_project.yaml  Declares ../service as a dependency → hybrid package
 ```
 

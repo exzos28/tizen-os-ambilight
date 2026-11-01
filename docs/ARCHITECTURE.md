@@ -20,7 +20,7 @@ wiring in [HARDWARE.md](HARDWARE.md).
 │  Service_App.cs — lifecycle, outputs, event log                    │
 │  Discovery.cs — finds ESP32s in the background                     │
 │  StatusPort.cs — answers the launcher's status requests            │
-│  tv/ui — launcher web app (Start / Stop, status panel)             │
+│  tv/ui — launcher web app (built from tv/app: controls, status)    │
 └──────────────────┬───────────────────────────────────┬─────────────┘
                    │ UDP 9001 (same LAN)               │ TCP 19400 (optional)
                    ▼                                   ▼
@@ -58,13 +58,13 @@ wiring in [HARDWARE.md](HARDWARE.md).
    does **not** wait for discovery — frames go to whichever outputs have somewhere to send.
 4. If capture fails (library or symbols missing, invalid HW condition), retries after
    5 s, 10 s, then every 30 s.
-5. AppControl `command=start` (the launcher's *Start*) probes for hosts, reconnects
+5. AppControl `command=start` (the launcher's *Start*, shown while the service is not running) probes for hosts, reconnects
    HyperHDR and re-initialises capture (re-reading the hardware condition) immediately;
    `command=stop` exits the service.
 6. Events logged before any log host is known (config, capture init) are queued — up to
    100 — and sent once discovery finds one.
 7. Opens the local message port `ambilight.status` (`StatusPort.cs`) for the launcher's
-   status panel — see [TV launcher](#2-tv-launcher-tvui).
+   status and commands — see [TV launcher](#2-tv-launcher-tvui).
 
 ### Outputs
 
@@ -136,19 +136,69 @@ failures are ignored.
 
 ## 2. TV launcher (`tv/ui/`)
 
-Plain JavaScript Tizen web app. *Start* / *Stop* send an AppControl with
-`command=start|stop` to `fCAYP0k0uD.Service`; *Debug* shows an animated color wheel
-for testing the strip response. Navigation: ◀ ▶ and OK on the remote; Back exits.
+Preact + TypeScript web app. The source is `tv/app/`; Vite (`npm run build` there) builds it into `tv/ui`, next to
+the tracked `config.xml`: one classic deferred script and one stylesheet (`assets/app.js`,
+`assets/app.css`) for Chromium M94, the web engine of Tizen 7.0 (2023 TVs), the oldest
+supported. `preact` is the only runtime dependency.
 
-### Status panel
+The TV is short on memory, so the app stays small: only the current screen is mounted, system
+fonts only, no blur, shadows or transitions; the only animation is the *Test pattern*. The
+widget is not preloaded (no `prelaunch.support`), and Back on Home exits it.
 
-Tells the user whether their TV is supported without a PC on the network. Every 500 ms the
-launcher sends `{request: "status"}` to the service's local message port `ambilight.status`
-(Tizen MessagePort — IPC between the two apps on the TV, not a network connection), with its
-own port `ambilight.ui` as the reply port. The service answers `{status: "<JSON>"}`:
+| Path | What |
+|---|---|
+| `src/App.tsx` | Shell: section rail + the one mounted screen, remote keys, status poll |
+| `src/focus.ts` | Focus manager: focusable elements as rows with column positions, explicit neighbours where needed |
+| `src/screens/Home.tsx` | Lighting on/off, brightness, mode + static colors, live preview, status, problem banner |
+| `src/screens/TestPattern.tsx` | Full-screen rotating color wheel (96×54 canvas, scaled) to check the strip follows the picture |
+| `src/screens/Placeholder.tsx` | *Picture*, *Strip layout*, *Controllers*, *Diagnostics*: not built yet |
+| `src/status.ts` | Status lines, problems (most important first) and the header pill from the service status |
+| `src/controllers.ts` | The discovered controllers over HTTP: `/status` + `/config` once, `/metrics` every second while Home is shown; writes |
+| `src/data/` | Adapters: `service.ts` (message port), `esp32.ts` (HTTP), `mock.ts` (desktop browser, `?state=ok\|lost\|none\|off\|unsupported`), `types.ts` (wire formats) |
+
+Remote: ◀ ▶ ▲ ▼ move, OK activates, Back exits on Home (closes the test pattern, returns
+to Home from other sections). ◀ from the leftmost element moves to the rail.
+
+### Controls
+
+Settings live on the controllers: the launcher talks to every ESP32 the service discovered
+(`status.esp32.hosts`) over its HTTP API ([NETWORKING.md](NETWORKING.md#esp32-http-api)),
+form-urlencoded with a 3 s timeout. A change goes to every controller that answers.
+
+| Control | Request |
+|---|---|
+| Lighting off / on | `POST /save/power power=0\|1` to every controller + service command `pause` / `resume` |
+| Brightness (◀ ▶ in 5% steps, after OK) | `POST /save/leds brightness=0..255`, sent 300 ms after the last key |
+| Follow the picture / Static color | `POST /save/mode led_mode=1\|0` |
+| Static color swatch | `POST /save/leds color=#rrggbb` (+ `led_mode=0`) |
+
+### Status
+
+Once per second while the page is visible (`visibilitychange` pauses it) the launcher sends
+`{request: "status"}` to the service's local message port `ambilight.status` (Tizen
+MessagePort — IPC between the two apps on the TV, not a network connection), with its own
+port `ambilight.ui` as the reply port. The service answers `{status: "<JSON>"}`. Commands go
+the same way: `{request: "command", command: "pause" | "resume" | "rediscover"}` → `{result:
+"{ok, error}"}`.
 
 | Section | Fields | Shown as |
 |---|---|---|
+| `capture` | `state` (`waiting` / `starting` / `running` / `paused` / `failed`), `failure` (`library` / `symbols` / `hardware`), `error`, `retryInMs`, `hw` (HwCondition), `frameMs`, `lastFrameAgoMs`, `reads`, `badReads`, `lastBadRet`, `h`, `v`, `rgb` (hex, `EdgeFrame` order) | *Screen capture* line, problem banner, live preview |
+| `esp32` | `enabled`, `hosts` (discovered; also `tools/server.py`), `framesSent`, `sendErrors`, `lastError` | One line per controller. *Streaming* when its `/metrics` `last_frame_ms` < 2 s; without it, *Sending* when `framesSent` grows (handed to the network, not confirmed) |
+| `hyperhdr` | `enabled`, `endpoint`, `connected`, `replies`, `lastError` | *HyperHDR* line |
+| `configWarnings` | `ambilight.json` problems | Problem banner |
+
+`library` / `symbols` failures mean the TV doesn't expose the capture API; `hardware`
+means `get_rgb_measure_condition` reported an unusable state (retried). A `running` capture
+whose reads all fail, or with no frame for 2 s, is shown as not working. No message port
+means the service isn't running (*Start* launches it with AppControl `command=start`); no
+reply for 3 s means it doesn't respond. No controller in `hosts`, or one that stops answering
+HTTP, shows *Search now* (`rediscover`).
+
+The test pattern's hint stays in the middle of the screen, away from the edges where the
+service samples.
+
+---|---|---|
 | `capture` | `state` (`waiting` / `starting` / `running` / `failed`), `failure` (`library` / `symbols` / `hardware`), `error`, `retryInMs`, `hw` (HwCondition), `frameMs`, `lastFrameAgoMs`, `reads`, `badReads`, `lastBadRet`, `h`, `v`, `rgb` (hex, `EdgeFrame` order) | Verdict, *Screen capture* row, preview of the captured colors |
 | `esp32` | `enabled`, `hosts` (discovered; also `tools/server.py`), `framesSent`, `sendErrors`, `lastError` | *ESP32* row. UDP has no replies, so *Sending* means handed to the network, not received |
 | `hyperhdr` | `enabled`, `endpoint`, `connected`, `replies`, `lastError` | *HyperHDR* row |
