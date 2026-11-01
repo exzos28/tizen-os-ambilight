@@ -205,6 +205,14 @@ driven in `loop()`.
 | Plain | 0 | All LEDs show `colorR/G/B`; UDP frames are ignored |
 | Dynamic | 1 | UDP frames drive the strip; fades to black 5 s after the last frame |
 
+**Power gating**: with the `power` setting off the strip is dark in both modes and UDP
+frames are ignored; brightness, color and mode are kept and come back when it is turned
+on. What owns the strip is decided in `LightOutput.h` (host-tested), highest priority
+first: identify blink → calibration preview → dark (power off) → plain / dynamic. Every
+change of power or mode, and the end of a preview or identify, goes through `repaint()`,
+which draws the current owner: the static color in plain mode, black otherwise (dynamic
+frames then blend back in).
+
 Frame processing (`applyAmbilight()`):
 
 1. **Interpolate** each side's samples to the configured LED count for that side
@@ -216,9 +224,17 @@ Frame processing (`applyAmbilight()`):
 
 `showCalibrationPreview()` lights the sides red / green / yellow / blue
 (top / right / bottom / left) and the first LED white for 10 s. When it expires,
-`update()` clears it and, in plain mode, restores the static color.
+`update()` clears it and `repaint()`s the current output.
+
+**Identify** (`POST /identify`, `startIdentify()`): blinks the whole strip white 3 times
+(333 ms on, 333 ms off, ≈ 2 s; timeline in `LightOutput::Identify`), driven from
+`update()` without blocking, at the configured brightness and power limit. It works with
+the lighting off, and a preview requested meanwhile is drawn when it ends. Frames keep
+updating the dynamic target during the blink. Not saved.
 
 `UDPReceiver` drains all queued datagrams each loop and applies only the newest frame.
+It counts every valid datagram (`frames_rx`, `last_frame_ms` in `GET /metrics`), applied
+or not.
 
 Limits: `MAX_LEDS = 1500`, up to 255 LEDs per side, data on GPIO 23, color order BRG
 (see [HARDWARE.md](HARDWARE.md#led-color-order)).
@@ -231,7 +247,9 @@ and served from flash with `Content-Encoding: gzip` — no SPIFFS/LittleFS. Thre
 Status, WiFi, LEDs. The LEDs tab has a Dynamic / Plain switch: Dynamic shows brightness,
 color correction and the strip layout editor; Plain shows LED count, brightness and the
 static color. Settings are saved to NVS on change; `Config::sanitize()` clamps them to
-valid ranges on every load and save. Only network changes restart the device.
+valid ranges on every load and save. Only network changes and `POST /restart` restart
+the device. Every response carries `Access-Control-Allow-Origin: *` and `OPTIONS` on any
+path answers the CORS preflight (see [NETWORKING.md](NETWORKING.md#esp32-http-api)).
 
 The firmware uses the `min_spiffs.csv` partition table: two 1.875 MB OTA app slots.
 
@@ -285,6 +303,7 @@ Stored in the `ambilight` NVS namespace, editable in the web UI (`esp32/src/Conf
 | `startCorner` | `start_corner` | 0 | 0 = top-left, 1 = top-right, 2 = bottom-right, 3 = bottom-left |
 | `clockwise` | `clockwise` | true | Strip direction from the start corner |
 | `ledMode` | `led_mode` | 1 | 0 = plain, 1 = dynamic |
+| `power` | `power` | true | Lighting on/off (`POST /save/power`, `0`/`1`). Off: dark in both modes, UDP frames ignored; other settings kept |
 | `gamma` | `gamma` | 2.2 | Gamma correction (UI range 0.5–3.0) |
 | `saturation` | `saturation` | 1.0 | Saturation multiplier (UI range 0–2) |
 | `whiteBalanceR/G/B` | `wb_r` / `wb_g` / `wb_b` | 255 | Per-channel scale |

@@ -75,7 +75,8 @@ With the current TV settings (`hCount = 4`, `vCount = 3`) a frame is `2 + 14 × 
 ESP32 acceptance rules (`esp32/src/UDPReceiver.cpp`):
 - `hCount` and `vCount` must be ≤ 32, and the datagram must be at least `2 + (hCount + vCount) × 6` bytes and at most 512 bytes.
 - If several frames are queued, only the newest one is applied.
-- Frames are applied only in *Dynamic* mode (`led_mode = 1`) and not during a calibration preview.
+- Frames are applied only with the lighting on (`power = true`), in *Dynamic* mode (`led_mode = 1`) and not during a calibration preview. An identify blink does not block them: the strip blends back to the latest frame when it ends.
+- `frames_rx` in [`GET /metrics`](#esp32-http-api) counts every datagram that passes the checks above, including frames superseded by a newer queued one and frames ignored because of the power flag, the mode or a preview. Malformed datagrams and datagrams the network stack dropped before the socket are not counted. `last_frame_ms` is the time since the last such frame.
 - The ESP32 interpolates each edge to the LED count configured for that side, so `hCount`/`vCount` do not need to match the strip.
 
 ## HyperHDR (TCP 19400)
@@ -100,27 +101,34 @@ The service sends events to every discovered host. Only `tools/server.py` listen
 
 ## ESP32 HTTP API
 
-All `POST` endpoints take `application/x-www-form-urlencoded` bodies and return `{"message": "..."}`. Omitted or non-numeric fields keep their current value; out-of-range values are clamped. Changes persist in NVS.
+All `POST` endpoints take `application/x-www-form-urlencoded` bodies and return `{"message": "..."}`. Omitted or non-numeric fields keep their current value; out-of-range values are clamped. Changes persist in NVS unless noted otherwise.
 
 | Method | Path | Fields | Effect |
 |--------|------|--------|--------|
 | GET | `/` | — | Web UI (single HTML file, served gzipped from flash) |
 | GET | `/status` | — | `version` (firmware), `ip`, `mode` (`STA`/`AP`), `ssid`, `rssi`, `connected`, `gateway` |
-| GET | `/config` | — | Every setting from the table in [ARCHITECTURE.md](ARCHITECTURE.md#esp32-settings-nvs) (passwords excluded) plus `max_leds` |
-| GET | `/metrics` | — | `heap_free`, `heap_total`, `heap_min`, `uptime_s`, `cpu_mhz`, `power_w` (estimated LED power of the last frame), `power_limited` |
+| GET | `/config` | — | Every setting from the table in [ARCHITECTURE.md](ARCHITECTURE.md#esp32-settings-nvs) (passwords excluded) plus `max_leds`. Includes `power` (`true`/`false`) |
+| GET | `/metrics` | — | `heap_free`, `heap_total`, `heap_min`, `uptime_s`, `cpu_mhz`, `power_w` (estimated LED power of the last frame), `power_limited`, `frames_rx` (valid UDP frames received since boot, see [Color frame](#color-frame-udp-9001)), `last_frame_ms` (ms since the last valid frame, `-1` if none yet) |
 | POST | `/save/leds` | `num_leds` (1–1500), `brightness` (0–255), `color` (`#rrggbb`), `gamma` (0.5–3), `saturation` (0–2), `wb_r`, `wb_g`, `wb_b` (0–255), `power_limit_w` (0–2000, 0 = off), `pixel_watts` (0.05–5) | Saved. `brightness`, `power_limit_w` and `pixel_watts` apply immediately (the strip is redrawn in both modes); `num_leds` and `color` are shown right away only in plain mode; gamma, saturation and white balance apply to the next TV frame |
 | POST | `/save/calibration` | `led_top`, `led_right`, `led_bottom`, `led_left` (0–255), `start_corner` (0–3), `clockwise` (0/1) | Saves the layout, sets `num_leds` to the sum of the sides, shows the 10 s preview (then the strip returns to the current mode) |
 | POST | `/preview/calibration` | Same as above | Shows the preview without saving |
 | POST | `/save/mode` | `led_mode` (0 = plain, 1 = dynamic) | Switches mode |
+| POST | `/save/power` | `power` (0 = off, 1 = on; anything else keeps the current value) | Lighting on/off. Off: the strip is dark in both modes and UDP frames are ignored; brightness, color and mode are kept. The calibration preview and `/identify` still light the strip, then it returns to dark |
+| POST | `/identify` | — | Blinks the whole strip white 3 times over about 2 s, then restores the previous output. Not saved |
+| POST | `/restart` | — | Replies, then restarts the ESP32 about 0.5 s later |
 | POST | `/save/network` | `wifi_ssid`, `wifi_pass`, `ota_host`, `ota_pass` (empty passwords keep the current ones), `ip_octet` (0 = DHCP, 1–254; anything else → HTTP 400 and nothing is saved) | Saves and **restarts** the ESP32 |
 
 The API has no authentication — anyone on the LAN can change settings, including Wi-Fi credentials.
 
-Captive-portal probe URLs (`/generate_204`, `/hotspot-detect.html`, `/connecttest.txt`, …) and any unknown path redirect to `/`.
+**CORS:** every response (including errors, redirects and the web UI) carries `Access-Control-Allow-Origin: *`, and an `OPTIONS` request on any path returns `204` with `Access-Control-Allow-Methods: GET, POST, OPTIONS` and `Access-Control-Allow-Headers: Content-Type`. This lets other web apps (e.g. the TV launcher) call the API — and it also means any web page open in a browser on the LAN can read and change the settings.
+
+Captive-portal probe URLs (`/generate_204`, `/hotspot-detect.html`, `/connecttest.txt`, …) and any unknown path redirect to `/` (except `OPTIONS` requests, which get the `204` above).
 
 Example:
 
 ```sh
 curl -X POST http://192.168.1.245/save/mode -d led_mode=0                    # plain mode
 curl -X POST http://192.168.1.245/save/leds -d brightness=128 -d color=%23ff8800
+curl -X POST http://192.168.1.245/save/power -d power=0                     # lighting off
+curl -X POST http://192.168.1.245/identify                                  # which strip is this?
 ```
