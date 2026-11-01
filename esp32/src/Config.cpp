@@ -1,4 +1,5 @@
 #include "Config.h"
+#include <esp_system.h>   // esp_random()
 #include "generated/ProtocolLimits.h"   // defaults and ranges, generated from protocol/
 
 using namespace protocol;
@@ -9,6 +10,8 @@ Config& Config::instance() {
 }
 
 void Config::begin() {
+    // Random start, so a value a client cached before a reboot can't match by accident.
+    _revision = esp_random();
     _prefs.begin("ambilight", false);
     wifiSSID     = _prefs.getString("wifi_ssid",  WIFI_SSID_DEFAULT);
     wifiPassword = _prefs.getString("wifi_pass",  WIFI_PASS_DEFAULT);
@@ -87,4 +90,5 @@ void Config::save() {
     _prefs.putUChar ("wb_b",        whiteBalanceB);
     _prefs.putUShort("pwr_limit",   powerLimitW);
     _prefs.putFloat ("px_watts",    pixelWatts);
+    _revision++;
 }

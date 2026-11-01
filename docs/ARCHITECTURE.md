@@ -347,8 +347,12 @@ of the last frame), and *Blink to identify* (`POST /identify`) and *Restart*
 (`POST /restart`, after a confirmation) buttons. The LEDs tab has a Dynamic / Plain
 switch: Dynamic shows brightness, color correction and the strip layout editor; Plain
 shows LED count, brightness and the static color. Settings are saved to NVS on change; `Config::sanitize()` clamps them to
-valid ranges on every load and save. Only network changes and `POST /restart` restart
-the device. Every response carries `Access-Control-Allow-Origin: *` and `OPTIONS` on any
+valid ranges on every load and save. Every `Config::save()` (one per successful save
+request; rejected requests return before it) bumps the settings revision, `config_rev` in
+`GET /metrics`, which starts at a random value at boot, so clients polling the metrics
+notice changes made by another client (see
+[NETWORKING.md](NETWORKING.md#esp32-http-api)). Only network changes and `POST /restart`
+restart the device. Every response carries `Access-Control-Allow-Origin: *` and `OPTIONS` on any
 path answers the CORS preflight (see [NETWORKING.md](NETWORKING.md#esp32-http-api)).
 
 The firmware uses the `min_spiffs.csv` partition table: two 1.875 MB OTA app slots.

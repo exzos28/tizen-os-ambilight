@@ -7,8 +7,14 @@ public:
     static Config& instance();
 
     void begin();
+    // Persists every setting and bumps revision(). Call only for a successful change
+    // request: a rejected one returns before saving.
     void save();
     void reset();   // wipes all NVS keys (factory reset)
+
+    // Settings revision (GET /metrics config_rev): random at boot, +1 on every save().
+    // Clients compare it for equality only, to notice changes made by another client.
+    uint32_t revision() const { return _revision; }
 
     // Clamps settings to their valid ranges. Runs on load and on save, so values
     // saved by older firmware or sent by a malformed request can't break output.
@@ -61,4 +67,5 @@ public:
 private:
     Config() = default;
     Preferences _prefs;
+    uint32_t    _revision = 0;
 };

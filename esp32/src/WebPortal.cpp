@@ -230,6 +230,7 @@ void WebPortal::handleMetrics() {
     doc["power_limited"] = LEDController::instance().powerLimited();
     doc["frames_rx"]     = UDPReceiver::instance().framesReceived();
     doc["last_frame_ms"] = UDPReceiver::instance().lastFrameAgeMs();
+    doc["config_rev"]    = Config::instance().revision();
     sendJson(_server, doc);
 }
 

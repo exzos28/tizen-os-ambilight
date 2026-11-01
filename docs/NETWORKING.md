@@ -114,7 +114,7 @@ Schemas: [`protocol/schemas/esp32/`](../protocol/schemas/esp32/). All `POST` end
 | GET | `/` | — | Web UI (single HTML file, served gzipped from flash) |
 | GET | `/status` | — | `version` (firmware), `ip`, `mode` (`STA`/`AP`), `ssid`, `rssi`, `connected`, `gateway` |
 | GET | `/config` | — | Every setting from the table in [ARCHITECTURE.md](ARCHITECTURE.md#esp32-settings-nvs) (passwords excluded) plus `max_leds`. Includes `power` (`true`/`false`) |
-| GET | `/metrics` | — | `heap_free`, `heap_total`, `heap_min`, `uptime_s`, `cpu_mhz`, `power_w` (estimated LED power of the last frame), `power_limited`, `frames_rx` (valid UDP frames received since boot, see [Color frame](#color-frame-udp-9001)), `last_frame_ms` (ms since the last valid frame, `-1` if none yet) |
+| GET | `/metrics` | — | `heap_free`, `heap_total`, `heap_min`, `uptime_s`, `cpu_mhz`, `power_w` (estimated LED power of the last frame), `power_limited`, `frames_rx` (valid UDP frames received since boot, see [Color frame](#color-frame-udp-9001)), `last_frame_ms` (ms since the last valid frame, `-1` if none yet), `config_rev` (settings revision, see below) |
 | POST | `/save/leds` | `num_leds` (1–1500), `brightness` (0–255), `color` (`#rrggbb`), `gamma` (0.5–3), `saturation` (0–2), `wb_r`, `wb_g`, `wb_b` (0–255), `power_limit_w` (0–2000, 0 = off), `pixel_watts` (0.05–5) | Saved. `brightness`, `power_limit_w` and `pixel_watts` apply immediately (the strip is redrawn in both modes); `num_leds` and `color` are shown right away only in plain mode; gamma, saturation and white balance apply to the next TV frame |
 | POST | `/save/calibration` | `led_top`, `led_right`, `led_bottom`, `led_left` (0–255), `start_corner` (0–3), `clockwise` (0/1) | Saves the layout, sets `num_leds` to the sum of the sides, shows the 10 s preview (then the strip returns to the current mode) |
 | POST | `/preview/calibration` | Same as above | Shows the preview without saving |
@@ -123,6 +123,8 @@ Schemas: [`protocol/schemas/esp32/`](../protocol/schemas/esp32/). All `POST` end
 | POST | `/identify` | — | Blinks the whole strip white 3 times over 2 s (including LEDs a longer calibration preview left lit), then restores the previous output. Settings changed meanwhile are applied but shown only when the blink ends. Not saved |
 | POST | `/restart` | — | Replies, then restarts the ESP32 about 0.5 s later |
 | POST | `/save/network` | `wifi_ssid`, `wifi_pass`, `ota_host`, `ota_pass` (empty passwords keep the current ones), `ip_octet` (0 = DHCP, 1–254; anything else → HTTP 400 and nothing is saved) | Saves and **restarts** the ESP32 |
+
+**Settings revision:** `config_rev` in `GET /metrics` (uint32) lets clients notice changes made by another client (e.g. the TV launcher and the web UI on a phone) from the metrics they already poll. It starts at a random value at boot and goes up by one after every successful `POST /save/leds`, `/save/mode`, `/save/power`, `/save/calibration` and `/save/network` (just before the restart), even if the values didn't change. `/preview/calibration`, `/identify`, `/restart` and rejected requests (HTTP 400) don't change it. Compare it for equality only: when it differs from the value seen last, re-read `GET /config`. The random start means a value cached before a reboot almost never matches by accident.
 
 The API has no authentication — anyone on the LAN can change settings, including Wi-Fi credentials.
 
