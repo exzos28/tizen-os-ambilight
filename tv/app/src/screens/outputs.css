@@ -1,0 +1,211 @@
+/* Outputs (and the HyperHDR fields / status row the setup wizard shares). 1920×1080 canvas,
+   kit tokens of the TV density; no shadows or blur — the focus ring is an outline. */
+
+.outputs button,
+.outputs input,
+.setup button,
+.setup input { font-family: inherit; }
+
+.out-header-aside { display: flex; align-items: center; gap: 16px; }
+.out-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  height: 48px;
+  padding: 0 20px;
+  border-radius: 24px;
+  background: var(--ui-panel);
+  border: 1px solid var(--ui-panel-line);
+  color: var(--ui-text-2);
+  font-size: 20px;
+  white-space: nowrap;
+}
+.out-chip-check { display: inline-flex; color: var(--ui-ok); }
+
+.out-cards {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 28px;
+  margin-top: 36px;
+}
+
+.out-card {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  min-width: 0;
+  min-height: 0;
+  padding: 32px 36px;
+  background: var(--ui-panel);
+  border: 1px solid var(--ui-panel-line);
+  border-radius: 22px;
+  overflow: hidden;
+}
+
+.out-card-head { display: flex; align-items: center; gap: 20px; }
+.out-icon {
+  width: 64px;
+  height: 64px;
+  flex-shrink: 0;
+  border-radius: 16px;
+  background: var(--ui-ok-soft);
+  color: var(--ui-ok);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.out-card-titles { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 0; }
+.out-card-titles h2 { font-size: 30px; font-weight: 700; }
+.out-card-sub {
+  font-size: 19px;
+  color: var(--ui-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The design's 92×50 switch, in the accent color when on. */
+.out-switch { flex-shrink: 0; display: inline-flex; border-radius: 30px; }
+.out-switch .ui-switch { --ui-switch-w: 92px; --ui-switch-h: 50px; --ui-switch-inset: 5px; }
+.out-switch.focused { outline: var(--ui-focus-width) solid var(--ui-focus-color); outline-offset: 4px; }
+
+/* ---- controllers */
+.out-controllers { display: flex; flex-direction: column; gap: 14px; margin: 0; padding: 0; list-style: none; }
+.out-controller {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 22px 24px;
+  border-radius: 16px;
+  background: #10151d;
+}
+.out-controller.compact { padding: 16px 24px; }
+.out-controller-head { display: flex; align-items: center; gap: 16px; }
+.out-controller-name { font-size: 26px; font-weight: 700; }
+.out-empty { gap: 6px; }
+.out-empty-title { font-size: 24px; font-weight: 700; }
+
+.out-facts {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 0.8fr);
+  gap: 14px;
+  margin: 0;
+}
+.out-facts > div { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.out-facts dt { font-size: 16px; color: var(--ui-muted); }
+.out-facts dd {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 22px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.out-bars { display: inline-flex; align-items: flex-end; gap: 3px; height: 18px; }
+.out-bars span { width: 5px; border-radius: 1px; background: #3a4555; }
+.out-bars span.on { background: var(--ui-ok); }
+
+.out-buttons { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.out-buttons .ui-btn,
+.out-conn .ui-btn,
+.out-header-aside .ui-btn {
+  min-height: 0;
+  height: 64px;
+  border-color: var(--ui-border);
+  background: #1a2230;
+  font-size: 21px;
+  white-space: nowrap;
+}
+.out-conn .ui-btn,
+.out-header-aside .ui-btn { height: 60px; padding: 0 24px; }
+.out-buttons .ui-btn.focused,
+.out-conn .ui-btn.focused,
+.out-header-aside .ui-btn.focused { background: var(--ui-panel-focus); border-color: transparent; }
+
+.out-off {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 22px 24px;
+  border-radius: 16px;
+  background: #10151d;
+}
+.out-off .out-card-sub { white-space: normal; }
+
+.out-help {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: auto;
+  padding: 22px 24px;
+  border: 1px dashed var(--ui-border);
+  border-radius: 16px;
+}
+.out-help h3 { margin: 0; font-size: 21px; font-weight: 600; }
+.out-help p,
+.out-note { font-size: 18px; line-height: 1.5; color: var(--ui-muted); }
+.out-note.bottom { margin-top: auto; }
+
+.out-error {
+  padding: 14px 20px;
+  border-radius: 12px;
+  background: var(--ui-bad-bg);
+  border: 1px solid var(--ui-bad-line);
+  color: var(--ui-bad-text);
+  font-size: 19px;
+  line-height: 1.4;
+}
+
+/* ---- HyperHDR fields (shared with the setup wizard) */
+.out-fields { display: flex; flex-direction: column; gap: 6px; }
+.out-field {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  align-items: center;
+  column-gap: 24px;
+  min-height: 92px;
+  padding: 0 20px;
+  border-radius: 14px;
+}
+.out-field.focused { background: #10151d; outline: 4px solid var(--ui-focus-color); outline-offset: 0; }
+.out-field.editing { outline-color: #fff; }
+.out-field-text { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.out-field-label { font-size: 23px; font-weight: 600; }
+.out-pending { font-size: 17px; font-weight: 600; color: var(--ui-warn-text); }
+.out-field-hint { font-size: 17px; color: var(--ui-muted); }
+.out-input {
+  width: 300px;
+  height: 60px;
+  padding: 0 18px;
+  border-radius: 12px;
+  border: 1px solid var(--ui-border);
+  background: var(--ui-bg);
+  color: #fff;
+  font-size: 24px;
+  font-weight: 600;
+  text-align: right;
+  outline: none;
+}
+.out-field.focused .out-input { border-color: var(--ui-focus-color); }
+.out-field.editing .out-input { border-color: #fff; text-align: left; }
+
+/* ---- connection status row */
+.out-conn {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 20px 24px;
+  border-radius: 16px;
+  background: #10151d;
+}
+.out-conn-text { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.out-conn-title { font-size: 22px; font-weight: 600; }
+.out-conn-title.tone-ok { color: var(--ui-ok-text); }
+.out-conn-title.tone-warn { color: var(--ui-warn-text); }
+.out-conn-title.tone-bad { color: var(--ui-bad-text); }
+.out-conn-title.tone-off { color: var(--ui-muted); }
+.out-conn .out-card-sub { font-size: 17px; }
