@@ -180,6 +180,16 @@ export interface Esp32Config {
    */
   saturation: number
   /**
+   * Time constant of the temporal smoothing of TV frames for small changes. A large change (a
+   * scene cut, a sudden dark or bright area) always follows within about 40 ms. 0 = no smoothing.
+   *
+   * @minimum 0
+   * @maximum 1000
+   * @default 200
+   * @unit ms
+   */
+  smoothing_ms: number
+  /**
    * White balance, red channel scale (255 = unchanged).
    *
    * @minimum 0
@@ -321,8 +331,8 @@ export interface Esp32Metrics {
  * POST /save/leds body (application/x-www-form-urlencoded; shown here as the values before
  * encoding). Omitted fields keep their value, out-of-range values are clamped. Saved;
  * `brightness`, `power_limit_w` and `pixel_watts` apply immediately (the strip is redrawn in both
- * modes), `num_leds` and `color` show right away only in plain mode, color correction applies to
- * the next TV frame. Replies with Esp32Message.
+ * modes), `num_leds` and `color` show right away only in plain mode, color correction and
+ * `smoothing_ms` apply to the TV picture from then on. Replies with Esp32Message.
  */
 export interface SaveLedsRequest {
   /**
@@ -364,6 +374,16 @@ export interface SaveLedsRequest {
    * @default 1
    */
   saturation?: number
+  /**
+   * Time constant of the temporal smoothing of TV frames for small changes. A large change (a
+   * scene cut, a sudden dark or bright area) always follows within about 40 ms. 0 = no smoothing.
+   *
+   * @minimum 0
+   * @maximum 1000
+   * @default 200
+   * @unit ms
+   */
+  smoothing_ms?: number
   /**
    * White balance, red channel scale (255 = unchanged).
    *

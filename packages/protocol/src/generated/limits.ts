@@ -43,6 +43,11 @@ export const limits = {
   gamma: { min: 0.5, max: 3, default: 2.2 },
   /** Saturation multiplier applied to TV frames (1 = unchanged). */
   saturation: { min: 0, max: 2, default: 1 },
+  /**
+   * Time constant of the temporal smoothing of TV frames for small changes. A large change (a
+   * scene cut, a sudden dark or bright area) always follows within about 40 ms. 0 = no smoothing.
+   */
+  smoothing_ms: { min: 0, max: 1000, default: 200, unit: 'ms' },
   /** White balance, red channel scale (255 = unchanged). */
   wb_r: { min: 0, max: 255, default: 255 },
   /** White balance, green channel scale (255 = unchanged). */
