@@ -1,13 +1,15 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Text;
 using System.Text.Json;
 using static System.FormattableString;
 
 namespace Service
 {
     // Where the settings in effect came from: res/ambilight.json in the package, or the file
-    // the launcher's set-outputs command saved in the app's data directory.
+    // the launcher's set-outputs command saved in the app's data directory (merged over
+    // res/ambilight.json, see LoadEffective).
     enum OutputSource { Package, Saved }
 
     // Output settings (ESP32 on/off, HyperHDR target).
@@ -20,7 +22,11 @@ namespace Service
     //     bad saved file is ignored in favour of res/ambilight.json, with a warning.
     //
     // Same keys, ranges and defaults in both. The strict form takes no unknown keys and needs
-    // every section and key except hyperhdr.priority (and, in the saved file, the image size).
+    // every section and key except hyperhdr.priority. It holds only what set-outputs sets
+    // (esp32.enabled, hyperhdr.enabled / host / port / priority); everything else, like the
+    // HyperHDR image size, always comes from res/ambilight.json, so a newer package's values
+    // apply even after set-outputs. Saved files from older versions also carry
+    // hyperhdr.imageWidth / imageHeight: those keys are accepted and ignored.
     // Tizen-independent, so it is unit-tested in CI.
     sealed class OutputConfig
     {
@@ -29,38 +35,51 @@ namespace Service
         public List<string> Warnings { get; } = new List<string>();
         public OutputSource Source { get; private set; } = OutputSource.Package;
 
+        // The problems of res/ambilight.json that affect the HyperHDR image size, worded for
+        // LoadEffective's merged result: the image size is taken from the package even when
+        // everything else comes from the saved file.
+        private readonly List<string> _imageSizeWarnings = new List<string>();
+
         public static OutputConfig Load(string path)
         {
             if (!File.Exists(path))
             {
                 var defaults = new OutputConfig();
                 defaults.Warnings.Add($"{path} not found — using defaults (ESP32 only)");
+                defaults._imageSizeWarnings.Add($"{path} not found — using the default HyperHDR image size");
                 return defaults;
             }
             return Parse(File.ReadAllText(path));
         }
 
-        // The settings to start with: the saved ones (savedPath, written by Save) if that file
-        // exists and is valid, otherwise res/ambilight.json (packagePath). A saved file that
-        // can't be read or is invalid is reported as the first warning.
+        // The settings to start with: res/ambilight.json (packagePath) with the saved ones
+        // (savedPath, written by Save) over it if that file exists and is valid. The saved file
+        // sets esp32.enabled and the HyperHDR target (Source = Saved); the image size always
+        // comes from the package, and the package's problems with it are the warnings. A
+        // saved file that can't be read or is invalid is ignored and reported as the first
+        // warning; the result is then res/ambilight.json alone, with its warnings.
         public static OutputConfig LoadEffective(string packagePath, string savedPath)
         {
-            if (!File.Exists(savedPath)) return Load(packagePath);
+            var package = Load(packagePath);
+            if (!File.Exists(savedPath)) return package;
 
             string problem;
             try
             {
-                string error = ParseStrict(File.ReadAllText(savedPath), true, null, out var saved);
-                if (error == null) return saved;
+                string error = ParseStrict(File.ReadAllText(savedPath), true, package.HyperHdr, out var saved);
+                if (error == null)
+                {
+                    saved.Warnings.AddRange(package._imageSizeWarnings);
+                    return saved;
+                }
                 problem = $"saved outputs {savedPath} are invalid ({error})";
             }
             catch (Exception ex)
             {
                 problem = $"saved outputs {savedPath} could not be read ({ex.Message})";
             }
-            var fallback = Load(packagePath);
-            fallback.Warnings.Insert(0, $"{problem} — using {Path.GetFileName(packagePath)} from the package");
-            return fallback;
+            package.Warnings.Insert(0, $"{problem} — using {Path.GetFileName(packagePath)} from the package");
+            return package;
         }
 
         public static OutputConfig Parse(string json)
@@ -74,6 +93,7 @@ namespace Service
             catch (JsonException ex)
             {
                 cfg.Warnings.Add($"config is not valid JSON ({ex.Message}) — using defaults (ESP32 only)");
+                cfg._imageSizeWarnings.Add($"config is not valid JSON ({ex.Message}) — using the default HyperHDR image size");
                 return cfg;
             }
 
@@ -83,6 +103,7 @@ namespace Service
                 if (root.ValueKind != JsonValueKind.Object)
                 {
                     cfg.Warnings.Add("config root must be an object — using defaults (ESP32 only)");
+                    cfg._imageSizeWarnings.Add("config root must be an object — using the default HyperHDR image size");
                     return cfg;
                 }
 
@@ -95,7 +116,7 @@ namespace Service
                 }
 
                 if (root.TryGetProperty("hyperhdr", out var hyper))
-                    cfg.HyperHdr = HyperHdrSettings.Parse(hyper, cfg.Warnings);
+                    cfg.HyperHdr = HyperHdrSettings.Parse(hyper, cfg.Warnings, cfg._imageSizeWarnings);
             }
             return cfg;
         }
@@ -108,7 +129,9 @@ namespace Service
         public static string ParseCommand(string json, HyperHdrSettings imageSizeOf, out OutputConfig cfg) =>
             ParseStrict(json, false, imageSizeOf, out cfg);
 
-        // Strict parse (see the class comment). savedFile also accepts the image size keys.
+        // Strict parse (see the class comment); the image size is taken from imageSizeOf, or the
+        // default without one. savedFile also accepts, and ignores, the image size keys that
+        // older versions saved.
         private static string ParseStrict(string json, bool savedFile, HyperHdrSettings imageSizeOf, out OutputConfig cfg)
         {
             cfg = null;
@@ -143,12 +166,7 @@ namespace Service
                     else { s.Host = host.GetString().Trim(); hostOk = true; }
                     s.Port = StrictInt(hyper, "port", null, 1, 65535, errors);
                     s.Priority = StrictInt(hyper, "priority", s.Priority, HyperHdrProtocol.MinPriority, HyperHdrProtocol.MaxPriority, errors);
-                    if (savedFile)
-                    {
-                        s.ImageWidth = StrictInt(hyper, "imageWidth", s.ImageWidth, EdgeImage.MinSize, EdgeImage.MaxSize, errors);
-                        s.ImageHeight = StrictInt(hyper, "imageHeight", s.ImageHeight, EdgeImage.MinSize, EdgeImage.MaxSize, errors);
-                    }
-                    else if (imageSizeOf != null)
+                    if (imageSizeOf != null)
                     {
                         s.ImageWidth = imageSizeOf.ImageWidth;
                         s.ImageHeight = imageSizeOf.ImageHeight;
@@ -164,18 +182,27 @@ namespace Service
             return null;
         }
 
-        // Writes the settings for LoadEffective: atomically (a temp file, then a rename), so a
-        // power cut can't leave half a file.
+        // Writes the settings for LoadEffective through a temp file: its data is flushed to the
+        // disk (fsync) before it is renamed over path, and on Linux the rename replaces path
+        // atomically. So after a power cut path holds either the previous settings or the new
+        // ones, never half a file (if the rename itself didn't reach the disk, the previous
+        // settings come back at the next start).
         public void Save(string path)
         {
             string dir = Path.GetDirectoryName(path);
             if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
             string tmp = path + ".tmp";
-            File.WriteAllText(tmp, StatusJson.Build(WriteSaved));
+            byte[] bytes = Encoding.UTF8.GetBytes(StatusJson.Build(WriteSaved));
+            using (var file = new FileStream(tmp, FileMode.Create, FileAccess.Write, FileShare.None))
+            {
+                file.Write(bytes, 0, bytes.Length);
+                file.Flush(flushToDisk: true);
+            }
             File.Move(tmp, path, true);
         }
 
-        // The saved file: the set-outputs keys plus the HyperHDR image size.
+        // The saved file: only the set-outputs keys. The rest (the HyperHDR image size) is read
+        // from res/ambilight.json at every start.
         private void WriteSaved(Utf8JsonWriter w)
         {
             w.WriteStartObject();
@@ -187,8 +214,6 @@ namespace Service
             w.WriteString("host", HyperHdr.Host);
             w.WriteNumber("port", HyperHdr.Port);
             w.WriteNumber("priority", HyperHdr.Priority);
-            w.WriteNumber("imageWidth", HyperHdr.ImageWidth);
-            w.WriteNumber("imageHeight", HyperHdr.ImageHeight);
             w.WriteEndObject();
             w.WriteEndObject();
         }
@@ -281,12 +306,15 @@ namespace Service
             other != null && Enabled == other.Enabled && Host == other.Host && Port == other.Port
             && Priority == other.Priority && ImageWidth == other.ImageWidth && ImageHeight == other.ImageHeight;
 
-        internal static HyperHdrSettings Parse(JsonElement obj, List<string> warnings)
+        // Lenient parse of res/ambilight.json's hyperhdr section. The problems that affect the
+        // image size also go to imageSizeWarnings (see OutputConfig.LoadEffective).
+        internal static HyperHdrSettings Parse(JsonElement obj, List<string> warnings, List<string> imageSizeWarnings)
         {
             var s = new HyperHdrSettings();
             if (obj.ValueKind != JsonValueKind.Object)
             {
                 warnings.Add("hyperhdr must be an object — HyperHDR output disabled");
+                imageSizeWarnings.Add("hyperhdr must be an object — using the default HyperHDR image size");
                 return s;
             }
 
@@ -300,8 +328,11 @@ namespace Service
             }
             s.Port        = OutputConfig.GetInt(obj, "port",        s.Port,        1, 65535, "hyperhdr", warnings, ref valid);
             s.Priority    = OutputConfig.GetInt(obj, "priority",    s.Priority,    HyperHdrProtocol.MinPriority, HyperHdrProtocol.MaxPriority, "hyperhdr", warnings, ref valid);
-            s.ImageWidth  = OutputConfig.GetInt(obj, "imageWidth",  s.ImageWidth,  EdgeImage.MinSize, EdgeImage.MaxSize, "hyperhdr", warnings, ref valid);
-            s.ImageHeight = OutputConfig.GetInt(obj, "imageHeight", s.ImageHeight, EdgeImage.MinSize, EdgeImage.MaxSize, "hyperhdr", warnings, ref valid);
+            var sizeWarnings = new List<string>();
+            s.ImageWidth  = OutputConfig.GetInt(obj, "imageWidth",  s.ImageWidth,  EdgeImage.MinSize, EdgeImage.MaxSize, "hyperhdr", sizeWarnings, ref valid);
+            s.ImageHeight = OutputConfig.GetInt(obj, "imageHeight", s.ImageHeight, EdgeImage.MinSize, EdgeImage.MaxSize, "hyperhdr", sizeWarnings, ref valid);
+            warnings.AddRange(sizeWarnings);
+            foreach (var w in sizeWarnings) imageSizeWarnings.Add($"{w} — using the default");
 
             if (enabled && string.IsNullOrEmpty(s.Host))
             {

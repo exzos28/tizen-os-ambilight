@@ -17,7 +17,8 @@ namespace Service
 
         // Output settings (ESP32 on/off, HyperHDR target) — see OutputConfig.cs.
         // Bundled into the package from tv/service/res/: the settings until the launcher
-        // saves its own with the set-outputs command (SavedOutputsFile, which then wins).
+        // saves its own with the set-outputs command (SavedOutputsFile, merged over this file:
+        // it wins for the keys set-outputs sets; the rest, like the image size, stays from here).
         public const string OutputConfigFile = "ambilight.json";
         // Written by set-outputs into the app's data directory (DirectoryInfo.Data).
         public const string SavedOutputsFile = "outputs.json";

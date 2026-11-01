@@ -1,7 +1,6 @@
-/* Strip layout screen. Kit tokens (--ui-*) at TV density; .main, .header, .footer come from the
-   app shell. Focus rings are outlines (no shadows on the TV). */
+/* Strip layout screen. Kit tokens (--ui-*); .main, .header, .footer come from the app shell.
+   Focus rings are outlines (no shadows on the TV). */
 
-.lay button { font-family: inherit; }
 .lay-body, .lay-steps { line-height: 1.25; }
 
 /* ---------------------------------------------------------------- steps */

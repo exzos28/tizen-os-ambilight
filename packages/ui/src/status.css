@@ -67,7 +67,10 @@
   background: var(--ui-panel);
   border: 1px solid var(--ui-panel-line);
 }
-[data-density='tv'] .ui-line.card { padding: 24px 28px; border-radius: 20px; }
+[data-density='tv'] .ui-line-text { gap: 4px; }
+[data-density='tv'] .ui-line.card { column-gap: 16px; padding: 24px 28px; border-radius: 20px; }
+[data-density='tv'] .ui-line.card .ui-line-text { gap: 2px; }
+[data-density='tv'] .ui-line.card .ui-line-title { font-size: 21px; }
 .ui-line.card.ui-tone-warn { background: var(--ui-warn-bg); border-color: var(--ui-warn-line); }
 .ui-line.card.ui-tone-warn .ui-line-detail { color: var(--ui-warn-body); }
 .ui-line.card.ui-tone-bad { background: var(--ui-bad-bg); border-color: var(--ui-bad-line); }

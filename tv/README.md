@@ -3,7 +3,7 @@
 | Path | What |
 |------|------|
 | `service/` | .NET Tizen service that captures screen edge colors and streams them to ESP32 controllers (UDP) and, optionally, a HyperHDR server (TCP) |
-| `app/` | Source of the launcher (Preact + TypeScript + Vite): lighting on/off, brightness, mode, live preview, whether the TV supports capture and where the colors go |
+| `app/` | Source of the launcher (Preact + TypeScript + Vite, drawn with the UI kit [`@ambilight/ui`](../packages/ui/README.md) like the controller's web app): lighting on/off, brightness, mode, live preview, whether the TV supports capture and where the colors go |
 | `ui/` | The launcher as packaged: `config.xml`, `icon.png`, `tizen_web_project.yaml`, plus `index.html` and `assets/` built by `app/` (not in git) |
 
 Both apps ship as one hybrid package — building `ui/` also builds `service/`. Build the launcher first, then build `ui/` in VS Code as before:
@@ -96,6 +96,7 @@ app/
   src/App.tsx         Shell: section rail, the one mounted screen, remote keys, status poll
   src/screens/        Home (controls, preview, status, problem banner), Test pattern, placeholders
   src/data/           Service message port, ESP32 HTTP API, desktop mock (wire types and clients: @ambilight/protocol)
+  src/style.css       Rail, header, footer, screen grids; cards, controls and status come from @ambilight/ui (TV density)
   vite.config.ts      Builds into ../ui for Chromium M94 (Tizen 7.0)
 
 ui/

@@ -6,9 +6,10 @@
 
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { type CalibrationRequest, type Esp32Config, constants, limits } from '@ambilight/protocol';
-import '@ambilight/ui/tokens.css';
-import { Button, CORNER_NAMES, Card, CheckIcon, type Corner, SIDES, type Side, StatusPill, StripLayoutDiagram } from '@ambilight/ui';
-import { Footer, Hint } from '../components/Keys';
+import {
+  Button, CORNER_NAMES, Card, CheckIcon, type Corner, KeyHint, SIDES, type Side, StatusPill, StripLayoutDiagram,
+} from '@ambilight/ui';
+import { Footer } from '../components/Footer';
 import { type Controller, unreachable } from '../controllers';
 import { EDGE_LEFT, type FocusGrid, step } from '../focus';
 import { controllerTitle } from '../status';
@@ -76,16 +77,16 @@ function Empty(p: ScreenProps) {
   });
 
   return (
-    <main class="main lay" data-density="tv">
+    <main class="main lay">
       <Header subtitle="LEDs per side, the corner the strip starts at and its direction" step={null} />
       <Card class="lay-empty" title={title}>
         <p class="lay-text">{text}</p>
         <Button variant="primary" class="lay-empty-btn" focused={p.active}>Open Outputs</Button>
       </Card>
       <Footer>
-        <Hint k="OK">Open Outputs</Hint>
-        <Hint k="◀">Menu</Hint>
-        <Hint k="↩">Home</Hint>
+        <KeyHint k="OK">Open Outputs</KeyHint>
+        <KeyHint k="◀">Menu</KeyHint>
+        <KeyHint k="↩">Home</KeyHint>
       </Footer>
     </main>
   );
@@ -293,7 +294,7 @@ function Editor({ p, c, list, onPick }: EditorProps) {
   const where = list.length > 1 ? `${controllerTitle(index, list.length)} · ${c.host}` : c.host;
 
   return (
-    <main class="main lay" data-density="tv">
+    <main class="main lay">
       <Header subtitle={`Tell the controller where its LEDs are · ${where}`} step={area} />
 
       <div class="lay-body">
@@ -376,23 +377,23 @@ function Editor({ p, c, list, onPick }: EditorProps) {
       <Footer>
         {confirm ? (
           <>
-            <Hint k="◀▶">Choose</Hint>
-            <Hint k="OK">Confirm</Hint>
-            <Hint k="↩">Keep editing</Hint>
+            <KeyHint k="◀▶">Choose</KeyHint>
+            <KeyHint k="OK">Confirm</KeyHint>
+            <KeyHint k="↩">Keep editing</KeyHint>
           </>
         ) : area === 2 ? (
           <>
-            <Hint k="▲▼">Side</Hint>
-            <Hint k="◀▶">Fewer / more LEDs</Hint>
-            {digits && <Hint k="0–9">Type a number</Hint>}
-            <Hint k="↩">Back</Hint>
+            <KeyHint k="▲▼">Side</KeyHint>
+            <KeyHint k="◀▶">Fewer / more LEDs</KeyHint>
+            {digits && <KeyHint k="0–9">Type a number</KeyHint>}
+            <KeyHint k="↩">Back</KeyHint>
             <span class="footer-note">Up to {limits.led_top.max} LEDs per side</span>
           </>
         ) : (
           <>
-            <Hint k="OK">{area === 0 ? 'Start the strip here' : area === 1 ? 'Reverse the direction' : current === 'save' ? 'Save layout' : current === 'preview' ? 'Light up the strip' : 'Edit this controller'}</Hint>
-            <Hint k="◀▶▲▼">Move</Hint>
-            <Hint k="↩">Back</Hint>
+            <KeyHint k="OK">{area === 0 ? 'Start the strip here' : area === 1 ? 'Reverse the direction' : current === 'save' ? 'Save layout' : current === 'preview' ? 'Light up the strip' : 'Edit this controller'}</KeyHint>
+            <KeyHint k="◀▶▲▼">Move</KeyHint>
+            <KeyHint k="↩">Back</KeyHint>
             {dirty && <span class="footer-note">Changes are not saved until Save layout</span>}
           </>
         )}

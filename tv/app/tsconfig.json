@@ -14,14 +14,14 @@
     "verbatimModuleSyntax": true,
     "skipLibCheck": true,
     "noEmit": true,
-    // @ambilight/protocol is TypeScript source that imports with .ts extensions.
+    // @ambilight/protocol and @ambilight/ui are TypeScript source that imports with .ts extensions.
     "allowImportingTsExtensions": true,
-    "types": ["vite/client", "node"],
-    // @ambilight/ui is TypeScript source too: its files resolve preact to this app's copy.
+    // The kit's files resolve preact to this app's copy (it may have its own for its type-check).
     "paths": {
       "preact": ["./node_modules/preact/src/index.d.ts"],
       "preact/*": ["./node_modules/preact/*/src/index.d.ts"]
-    }
+    },
+    "types": ["vite/client", "node"]
   },
   "include": ["src", "vite.config.ts"]
 }
