@@ -18,7 +18,8 @@ protocol/
 ├── fixtures/                 realistic example(s) of every message, mirroring schemas/
 └── scripts/
     ├── gen.mjs               generator
-    └── check.mjs             CI check
+    ├── check.mjs             CI check
+    └── validate.mjs          validates JSON files against a schema (also used by check.mjs)
 ```
 
 The binary UDP color frame and the discovery strings are not JSON; their layout is in
@@ -45,6 +46,25 @@ npm run protocol:check    # what CI runs: generated files up to date, constants.
 Commit the schema change, its fixture(s) and the regenerated files together. `protocol:gen`
 takes an optional output directory (`node protocol/scripts/gen.mjs /tmp/out`).
 
+## Validating JSON from other code
+
+```sh
+node protocol/scripts/validate.mjs service/status out/*.json    # schema: service/status,
+                                                                 # a schema file path or its $id
+```
+
+Validates each file like `protocol:check` validates the fixtures (ajv, strict, JSON carried in
+strings included — through `oneOf` branches too) and exits 1 if one doesn't match. CI uses it
+for the **TV service contract check**: `.github/tv-service-check/Tests` builds the service's
+real status, command result and command reply JSON with the service's own C# code (several
+capture states, `version` null, outputs from the package / saved / after a bad saved file,
+command successes and errors, with and without a request id) into `Tests/out/contract/`, and
+the `tv-service` job validates `status.*.json` against `service/status`,
+`command-result.*.json` against `service/command-result` and `command-reply.*.json` against
+`service/command-reply`. The C# tests also feed the `outputs` fixtures to the service's
+`set-outputs` parser, so both directions are covered. A service change that breaks the
+contract fails CI; so does a schema change the service doesn't follow.
+
 ## Writing schemas
 
 `gen.mjs` understands a deliberately small subset of JSON Schema and stops on anything else
@@ -66,9 +86,12 @@ takes an optional output directory (`node protocol/scripts/gen.mjs /tmp/out`).
 - **POST bodies** are form-urlencoded on the wire; their schemas describe the values before
   encoding. Booleans in forms are `0` / `1` (`common.schema.json#/$defs/flag`), while GET /config
   returns real booleans.
-- **MessagePort messages** are bundles of string key/values. Replies that carry JSON in a string
-  say so with `contentMediaType: application/json` and `contentSchema`; `check.mjs` validates the
-  decoded value too.
+- **MessagePort messages** are bundles of string key/values. Values that carry JSON in a string
+  (the `status` / `result` replies, the `outputs` of `set-outputs`) say so with
+  `contentMediaType: application/json` and `contentSchema`; `check.mjs` validates the decoded
+  value too. Requests that differ by command are a root `oneOf` of titled `$defs`
+  (`ServiceCommandRequest` = `ServiceSimpleCommandRequest | ServiceSetOutputsRequest`).
+- **Strings** may set `maxLength` (generated as `@maxLength`), e.g. the optional command `id`.
 - **Fixtures**: `fixtures/<dir>/<name>.json` for `schemas/<dir>/<name>.schema.json`, more examples
   as `<name>.<variant>.json`. Every message schema needs at least one.
 
@@ -91,10 +114,20 @@ await esp.saveMode({ led_mode: LedMode.dynamic })
   bodies are sent form-urlencoded (`undefined` fields are left out, so the device keeps them).
   Non-2xx replies, timeouts, network errors and unexpected bodies throw `Esp32Error`
   (`reason`, `status`, `path`; `message` is the firmware's own message when it sent one).
-- `buildStatusRequest()` / `buildCommandRequest(command)` build the `[{key, value}]` array for
-  `tizen.messageport`; `parseServiceReply(data)` reads a `status` or `result` reply with a light
-  runtime check and throws `ServiceReplyError` on a malformed one; its `reply` says which kind
-  (`status` / `result`) was malformed, so a bad `result` can still fail the pending command.
+- `configChanged(readAt, metrics)` — whether GET /config should be read again: `metrics.config_rev`
+  differs from the revision the config in hand was read at (`null`: none known → true).
+  Revisions are compared for equality only. Firmware without `config_rev` → false.
+- `buildStatusRequest()` / `buildCommandRequest(command, { id? })` /
+  `buildSetOutputsRequest(outputs, { id? })` build the `[{key, value}]` array for
+  `tizen.messageport`. `id` (up to `MAX_COMMAND_ID_LENGTH` = 64 characters) is echoed by the
+  service in the reply, so a late reply can be matched to its request instead of being taken
+  for the answer to the next one; without it the reply has none (older UIs and services).
+  `buildSetOutputsRequest` sends only the `ServiceOutputs` keys; the service validates the
+  values and answers `ok: false` with the reason if one is invalid.
+- `parseServiceReply(data)` reads a `status` or `result` reply with a light runtime check —
+  `{kind: 'result', id, result}` with `id` null when the reply has none — and throws
+  `ServiceReplyError` on a malformed one; its `reply` says which kind (`status` / `result`) was
+  malformed, so a bad `result` can still fail the pending command.
 
 Hooking it into an app (the root has no npm workspaces — see below):
 

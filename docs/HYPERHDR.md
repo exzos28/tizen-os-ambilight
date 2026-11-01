@@ -44,7 +44,10 @@ Edit `tv/service/res/ambilight.json` **before building** the TV package (it is b
 }
 ```
 
-Then build and install as described in [INSTALL.md § TV apps](INSTALL.md#4-tv-apps). Changing the settings later means editing the file, rebuilding and reinstalling.
+Then build and install as described in [INSTALL.md § TV apps](INSTALL.md#4-tv-apps).
+
+> [!NOTE]
+> **No rebuild needed once the launcher exposes it.** The TV service can already switch its outputs at run time: the launcher's `set-outputs` command turns the ESP32 and HyperHDR outputs on or off and sets the HyperHDR host, port and priority live, and the service saves them on the TV, where they replace `res/ambilight.json` from then on ([ARCHITECTURE.md § Commands](ARCHITECTURE.md#commands)). The launcher screen for it is coming; until then, the file above is the way to configure HyperHDR, and changing it means rebuilding and reinstalling.
 
 | Key | Default | Notes |
 |-----|---------|-------|
@@ -55,7 +58,7 @@ Then build and install as described in [INSTALL.md § TV apps](INSTALL.md#4-tv-a
 | `hyperhdr.priority` | `150` | HyperHDR shows the source with the **lowest** number. Its own USB/system grabbers use 240/245, so 150 overrides them while the TV is streaming |
 | `hyperhdr.imageWidth` / `imageHeight` | `64` / `36` | 8–256. Larger doesn't add detail (there are only 14 samples), only makes each LED area smoother |
 
-An invalid section is disabled and reported as a `ConfigWarning` event in the service log (see [tools/server.py](../tools/README.md)).
+An invalid section is disabled and reported as a `ConfigWarning` event in the service log (see [tools/server.py](../tools/README.md)). Settings sent with `set-outputs` use the same keys, ranges and defaults (without the image size, which stays as it was), but an invalid value there rejects the whole change instead.
 
 ## Behaviour
 
@@ -71,7 +74,7 @@ An invalid section is disabled and reported as a `ConfigWarning` event in the se
 - **Untested on a TV** — see the warning above.
 - **TV standby**: what capture returns while the TV is in standby has not been measured. If the service keeps sending black frames, the TV source keeps its priority in HyperHDR until the service stops.
 - **Same samples for every output**: the number of sample points is shared by all outputs; raising it for HyperHDR also lowers the ESP32 frame rate.
-- **No on-TV settings screen**: configuration is a file in the package.
+- **No on-TV settings screen yet**: the service supports changing the outputs at run time (`set-outputs`), but the launcher has no screen for it yet, so for now configuration is a file in the package.
 
 ## Third-party code
 
