@@ -1,5 +1,6 @@
 using System;
 using System.Net.Sockets;
+using System.Text.Json;
 using System.Threading;
 
 namespace Service
@@ -40,6 +41,7 @@ namespace Service
         private volatile string _dropReason;  // set by the reader thread
         private long _replyErrors;
         private int _consecutiveFailures;     // reset by the first reply of a connection
+        private volatile string _lastError;   // why the last connection failed or dropped
 
         // Guards the per-connection state (_generation, counters, _dropReason) so a reader
         // of an old connection can't update it after the sender has moved to a new one.
@@ -56,6 +58,18 @@ namespace Service
         // Number of replies received so far (for tests and diagnostics).
         public long RepliesReceived { get { lock (_stateLock) return _replied; } }
         public bool IsConnected => Volatile.Read(ref _socket) != null;
+
+        // Status panel section. "connected" with replies > 0 means HyperHDR is answering.
+        public void WriteStatus(Utf8JsonWriter w)
+        {
+            w.WriteStartObject();
+            w.WriteBoolean("enabled", true);
+            w.WriteString("endpoint", Endpoint);
+            w.WriteBoolean("connected", IsConnected);
+            w.WriteNumber("replies", RepliesReceived);
+            w.WriteString("lastError", _lastError);
+            w.WriteEndObject();
+        }
 
         public void Start()
         {
@@ -241,6 +255,7 @@ namespace Service
 
         private void ScheduleReconnect(string reason)
         {
+            _lastError = reason;
             int backoff = Volatile.Read(ref _backoffMs);
             Interlocked.Exchange(ref _nextConnectTicks, Environment.TickCount64 + backoff);
             Interlocked.Exchange(ref _backoffMs, Math.Min(backoff * 2, MaxBackoffMs));

@@ -123,7 +123,7 @@ The TV side is one **hybrid package** (package ID `fCAYP0k0uD`) with two apps:
 
 | App | Path | Type | Purpose |
 |-----|------|------|---------|
-| Ambilight | `tv/ui/` | Web app | Launcher with *Start* / *Stop* buttons |
+| Ambilight | `tv/ui/` | Web app | Launcher with *Start* / *Stop* buttons and a status panel (is this TV supported?) |
 | Service | `tv/service/` | .NET service | Captures edge colors and streams them to the ESP32. Declared with `on-boot="true"` |
 
 `tv/ui/tizen_web_project.yaml` lists `../service` as a dependency, so building the launcher also builds the service and packs both into one package.

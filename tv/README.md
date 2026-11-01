@@ -3,7 +3,7 @@
 | Path | What |
 |------|------|
 | `service/` | .NET Tizen service that captures screen edge colors and streams them to ESP32 controllers (UDP) and, optionally, a HyperHDR server (TCP) |
-| `ui/` | Launcher web app with *Start* / *Stop* / *Debug* buttons |
+| `ui/` | Launcher web app with *Start* / *Stop* / *Debug* buttons and a status panel that shows whether the TV supports capture and where the colors go |
 
 Both apps ship as one hybrid package — building `ui/` also builds `service/`. Build, signing and installation: [docs/INSTALL.md § TV apps](../docs/INSTALL.md#4-tv-apps).
 
@@ -69,6 +69,8 @@ service/
   Service_App.cs      App lifecycle, outputs, capture retries, HTTP event log
   Capture.cs          HW PPI capture loop via libvideoenhance.so → EdgeFrame
   Discovery.cs        Background UDP discovery of ESP32s / tools/server.py
+  ServiceStatus.cs    Capture state + JSON for the launcher's status panel
+  StatusPort.cs       Local message port the launcher polls for status
   Esp32Output.cs      UDP frames to discovered ESP32s
   HyperHdrOutput.cs   HyperHDR FlatBuffers client (untested on a TV, see docs/HYPERHDR.md)
   HyperHdrProtocol.cs FlatBuffers messages, written by hand against HyperHDR's schema
@@ -80,7 +82,7 @@ service/
   tizen-manifest.xml  Manifest: on-boot service, contentanalysis privilege
 
 ui/
-  index.html, main.js Launcher: Start / Stop the service, Debug color wheel
+  index.html, main.js Launcher: Start / Stop the service, status panel, Debug color wheel
   config.xml          Web app manifest (application.launch privilege)
   tizen_web_project.yaml  Declares ../service as a dependency → hybrid package
 ```

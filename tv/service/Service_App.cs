@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Net.Http;
 using System.Text;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Tizen.Applications;
@@ -18,6 +19,9 @@ namespace Service
         private Esp32Output _esp32;
         private HyperHdrOutput _hyperHdr;
         private volatile bool _restartCapture;
+        private OutputConfig _config;
+        private readonly CaptureStatus _captureStatus = new CaptureStatus();
+        private StatusPort _statusPort;
 
         // Events logged before any log host is known (startup: config, capture init) are
         // kept here and sent once discovery finds one, instead of being dropped.
@@ -91,7 +95,7 @@ namespace Service
             _cts = new CancellationTokenSource();
             var token = _cts.Token;
 
-            var config = OutputConfig.Load(Path.Combine(DirectoryInfo.Resource, Config.OutputConfigFile));
+            var config = _config = OutputConfig.Load(Path.Combine(DirectoryInfo.Resource, Config.OutputConfigFile));
 
             // Discovery always runs: it finds ESP32s to stream to and tools/server.py
             // instances to send the event log to. It never blocks capture.
@@ -110,6 +114,9 @@ namespace Service
                 _hyperHdr.Start();
             }
 
+            // The launcher's status panel asks here whether capture and the outputs work.
+            _statusPort = StatusPort.TryStart(BuildStatusJson, (e, d) => SendLog(e, d));
+
             Task.Run(async () =>
             {
                 try { await Task.Delay(2000, token); } catch (OperationCanceledException) { return; }
@@ -122,7 +129,7 @@ namespace Service
                 int attempt = 0;
                 while (!token.IsCancellationRequested && !_stopping)
                 {
-                    bool cleanStop = Capture.Run(OnFrame, (evt, data) => SendLog(evt, data), token);
+                    bool cleanStop = Capture.Run(OnFrame, (evt, data) => SendLog(evt, data), _captureStatus, token);
                     if (token.IsCancellationRequested || _stopping) break;
                     if (cleanStop)
                     {
@@ -134,11 +141,33 @@ namespace Service
 
                     int delay = backoffMs[Math.Min(attempt, backoffMs.Length - 1)];
                     attempt++;
+                    _captureStatus.RetryIn(delay);
                     SendLog("CaptureRetry", $"attempt={attempt} retryIn={delay}ms");
                     try { await Task.Delay(delay, token); } catch (OperationCanceledException) { break; }
                 }
             });
         }
+
+        // Reply for the launcher's status panel (StatusPort). Runs on the main thread.
+        private string BuildStatusJson() => StatusJson.Build(w =>
+        {
+            w.WriteStartObject();
+            w.WritePropertyName("capture");
+            _captureStatus.WriteJson(w);
+
+            w.WritePropertyName("esp32");
+            if (_esp32 != null) _esp32.WriteStatus(w);
+            else { w.WriteStartObject(); w.WriteBoolean("enabled", false); w.WriteEndObject(); }
+
+            w.WritePropertyName("hyperhdr");
+            if (_hyperHdr != null) _hyperHdr.WriteStatus(w);
+            else { w.WriteStartObject(); w.WriteBoolean("enabled", false); w.WriteEndObject(); }
+
+            w.WriteStartArray("configWarnings");
+            foreach (var warning in _config.Warnings) w.WriteStringValue(warning);
+            w.WriteEndArray();
+            w.WriteEndObject();
+        });
 
         // Called on the capture thread for every frame; must not block.
         private void OnFrame(EdgeFrame frame)
@@ -172,6 +201,7 @@ namespace Service
             _stopping = true;
             _cts?.Cancel();
             Capture.Stop();
+            _statusPort?.Dispose();
             _hyperHdr?.Dispose();
             _esp32?.Dispose();
             _discovery?.Dispose();
