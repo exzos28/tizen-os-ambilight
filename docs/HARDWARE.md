@@ -76,11 +76,11 @@ WS2811 strips from different vendors wire the R, G and B channels in different o
 FastLED.addLeds<WS2811, LED_PIN, BRG>(_leds, _numLeds);
 ```
 
-If colors come out wrong, set the strip to solid red (web UI *Plain* mode, or `tools/led_tester.py --mode solid --color 255 0 0`), try `RGB`, `GRB`, `BRG`, etc. until it shows red, and reflash.
+If colors come out wrong, set the strip to solid red (a *Static color* in the web app, or `tools/led_tester.py --mode solid --color 255 0 0`), try `RGB`, `GRB`, `BRG`, etc. until it shows red, and reflash.
 
 ## Power
 
-- **Size the PSU from your strip's datasheet**: watts per meter × length, plus ~20 % headroom. Without a power limit, full white at brightness 255 draws the maximum. The web UI has an optional **power limit** (LEDs tab) that lowers the brightness when the estimated power would exceed it — see [INSTALL.md § Calibrate](INSTALL.md#3-calibrate-the-strip). It is an estimate from the pixel colors, not a measurement.
+- **Size the PSU from your strip's datasheet**: watts per meter × length, plus ~20 % headroom. Without a power limit, full white at brightness 255 draws the maximum. The web app has an optional **power limit** (*Picture* tab) that lowers the brightness when the estimated power would exceed it — see [INSTALL.md § Calibrate](INSTALL.md#3-calibrate-the-strip). It is an estimate from the pixel colors, not a measurement.
 - **Fuse**: an inline fuse on the 12 V output, rated slightly above the strip's maximum current, protects the wiring if something shorts behind the TV.
 - **Long strips**: if the far end looks dimmer or yellowish at full white, feed +12 V / GND to both ends of the strip.
 - **Data level**: the ESP32 outputs 3.3 V logic. It usually works with a short data wire; if the first LEDs flicker or show random colors, shorten the wire or add a 3.3 → 5 V level shifter (e.g. 74AHCT125).

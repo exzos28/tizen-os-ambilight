@@ -31,7 +31,7 @@ wiring in [HARDWARE.md](HARDWARE.md).
 │  UDPReceiver  ──►  LEDController  ──►  WS2811 LED strip     │
 │                                                             │
 │  DiscoveryResponder  (answers TV broadcast on UDP 9003)     │
-│  WebPortal  ──►  React UI (served from flash)               │
+│  WebPortal  ──►  Preact app (served from flash)             │
 │  NetworkManager  (STA / AP captive-portal fallback)         │
 │  OTAManager  (Arduino OTA)                                  │
 │  RemoteLogger  (Telnet, port 2323)                          │
@@ -182,6 +182,11 @@ widget is not preloaded (no `prelaunch.support`), and Back on Home exits it.
 | `src/controllers.ts` | The discovered controllers over HTTP: `/status` + `/config` once, `/metrics` every second while Home is shown; writes |
 | `src/data/` | Adapters: `service.ts` (message port), `esp32.ts` (HTTP), `mock.ts` (desktop browser, `?state=ok\|lost\|none\|off\|unsupported`), `types.ts` (wire formats) |
 
+Its look (tokens, icons, cards, switch, status pill and lines, problem banner, swatches, live
+preview) is shared with the controller's web app through the UI kit `@ambilight/ui`
+([`packages/ui`](../packages/ui/README.md)); the launcher still has its own copy in
+`src/style.css` and moves to the kit's TV density later.
+
 Remote: ◀ ▶ ▲ ▼ move, OK activates, Back exits on Home (closes the test pattern, returns
 to Home from other sections). ◀ from the leftmost element moves to the rail.
 
@@ -321,17 +326,34 @@ Limits: `MAX_LEDS = 1500`, up to 255 LEDs per side, data on GPIO 23, color order
 
 ### Web portal (`WebPortal`)
 
-The React app in `esp32/web/` is built by `scripts/embed_web.py` (a PlatformIO pre-build
-step running `npm run build`) into a single HTML file, gzipped, embedded as `src/web_ui.h`
-and served from flash with `Content-Encoding: gzip` — no SPIFFS/LittleFS. It talks to the
-API through `@ambilight/protocol` (`createEsp32Client`, generated types, slider ranges and
-defaults from `limits`; see [protocol/README.md](../protocol/README.md#using-ambilightprotocol)).
-Three tabs: Status, WiFi, LEDs. The Status tab has the lighting on/off switch
-(`POST /save/power`), network and system metrics (including frames received and the age
-of the last frame), and *Blink to identify* (`POST /identify`) and *Restart*
-(`POST /restart`, after a confirmation) buttons. The LEDs tab has a Dynamic / Plain
-switch: Dynamic shows brightness, color correction and the strip layout editor; Plain
-shows LED count, brightness and the static color. Settings are saved to NVS on change; `Config::sanitize()` clamps them to
+The phone web app in `esp32/web/` (Preact + TypeScript; `preact`, `@ambilight/protocol` and
+`@ambilight/ui` are its only runtime dependencies) is built by `scripts/embed_web.py` (a
+PlatformIO pre-build step running `npm run build`) into a single HTML file, gzipped (≈ 23 KB),
+embedded as `src/web_ui.h` and served from flash with `Content-Encoding: gzip` — no
+SPIFFS/LittleFS, no webfonts or external requests (the captive portal is offline). It talks
+to the API through `@ambilight/protocol` (`createEsp32Client`, generated types, slider ranges
+and defaults from `limits`; see [protocol/README.md](../protocol/README.md#using-ambilightprotocol))
+and looks like the TV launcher: the same tokens and components from the UI kit
+[`packages/ui`](../packages/ui/README.md), at phone density.
+
+**First-time setup comes first:** while `GET /status` reports `mode: "AP"` (captive portal
+on `ambilight-setup`) the app opens a Wi-Fi setup screen instead of the tabs: network name
+and password → `POST /save/network` (an empty `wifi_ssid` / `ota_host` is never sent), then
+what happens next: the controller restarts and joins the network, it is found at
+`http://<ota_host>.local` or `<subnet>.<ip_octet>`, and the TV finds it by itself. *Skip*
+opens the tabs anyway.
+
+Otherwise a bottom tab bar with four tabs (the URL hash keeps the tab: `#home`, `#picture`,
+`#layout`, `#device`):
+
+| Tab | What | Requests |
+|---|---|---|
+| Home | Problem banner (no frames for 30 s while following the picture, power limit dimming, controller not answering); *Lighting* switch; *Brightness*; *Mode*: Follow the picture / Static color with the TV's six swatches and a custom color; live status: receiving from the TV (`last_frame_ms` < 2 s) with frames and age, estimated strip power, Wi-Fi signal | `POST /save/power`, `/save/leds` (brightness, color; 300 ms after the last change), `/save/mode`; `GET /metrics` every 2 s while the page is visible, `GET /status` every 10 s |
+| Picture | Gamma, saturation, white balance R/G/B, *Reset color to defaults*; power limit and one LED's power, power used now | `POST /save/leds` |
+| Layout | Strip diagram (corners: start, sides: direction, colored as the preview lights them), LEDs per side, *Light up the strip*, *Save layout* | `POST /preview/calibration` 400 ms after each change, `POST /save/calibration` on save |
+| Device | Firmware, uptime, memory, Wi-Fi; *Blink to identify*; *Restart* (after a confirmation); Wi-Fi, fixed address, OTA name and password | `POST /identify`, `/restart`, `/save/network` |
+
+Settings are saved to NVS on change; `Config::sanitize()` clamps them to
 valid ranges on every load and save. Only network changes and `POST /restart` restart
 the device. Every response carries `Access-Control-Allow-Origin: *` and `OPTIONS` on any
 path answers the CORS preflight (see [NETWORKING.md](NETWORKING.md#esp32-http-api)).

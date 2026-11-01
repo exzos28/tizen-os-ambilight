@@ -1,6 +1,6 @@
 # ESP32 firmware
 
-PlatformIO / Arduino firmware that receives color frames from the TV and drives a WS2811 strip. Includes a React web UI for configuration, embedded into the firmware binary.
+PlatformIO / Arduino firmware that receives color frames from the TV and drives a WS2811 strip. Includes the phone web app for setup and control (Preact, on the shared UI kit `packages/ui`), embedded into the firmware binary.
 
 Setup and flashing: [docs/INSTALL.md § ESP32](../docs/INSTALL.md#1-esp32-firmware). Internals: [docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md#3-esp32-firmware-esp32src).
 
@@ -23,16 +23,17 @@ src/
   WebPortal.*             HTTP server: web UI and JSON API
   OTAManager.*            Arduino OTA
   RemoteLogger.*          Log to Serial + Telnet (port 2323)
-web/                      React + Vite web UI (built into a single HTML file): Status (lighting
-                          on/off, metrics, identify, restart), WiFi, LEDs; API client, types
-                          and limits from packages/protocol (@ambilight/protocol)
+web/                      Preact + Vite phone web app (built into one HTML file, ~23 KB gzipped):
+                          Wi-Fi setup first in AP mode, then Home (lighting, brightness, mode,
+                          live status), Picture, Layout, Device; API client, types and limits
+                          from packages/protocol, look from packages/ui (@ambilight/ui)
 test/                     Host unit tests (pio test -e native)
 ```
 
 ## Commands
 
 ```sh
-pio run                   # build (also builds the web UI; needs npm install in web/ once)
+pio run                   # build (also builds the web app; needs npm install in web/ once)
 pio test -e native        # host unit tests (StripLayout.h, PowerLimit.h, StaticIp.h, LightOutput.h)
 pio run -t upload         # flash over USB
 pio run -e ota -t upload  # flash over Wi-Fi (ambilight.local, see [env:ota] in platformio.ini)
@@ -42,6 +43,8 @@ nc <esp32-ip> 2323        # remote log over Telnet
 ```
 
 `src/web_ui.h` is generated on every build and is not committed.
+
+**Web app without a controller:** `npm run dev` in `web/` and open it with `?mock=ok|ap|noframes|limited|offline` (see [CONTRIBUTING.md](../docs/CONTRIBUTING.md#developing-the-web-ui)); `npm run build:mock` writes the same page with the mock to `web/dist-mock/`. The firmware build never contains the mock.
 
 **Releases** are driven by [changesets](../.changeset/README.md): merging the *chore: release* PR tags `vX.Y.Z`, creates the GitHub release from `CHANGELOG.md` and runs `.github/workflows/release.yml`, which builds the images with `scripts/make_release.sh` and attaches them. Pushing a `v*` tag by hand also works. Every CI run uploads the images as the `esp32-firmware` artifact.
 
