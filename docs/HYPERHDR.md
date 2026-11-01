@@ -26,9 +26,22 @@ The TV measures 14 points along the screen edges (~7 updates/s). For HyperHDR th
 - *Smoothing*: consider raising the time from the default to ~250 ms. Frames arrive every ~140 ms, so a longer smoothing window hides the steps.
 - If the TV is in a different subnet than HyperHDR, allow its address in HyperHDR's network settings — otherwise HyperHDR closes the connection right after it opens (the service log then says so).
 
-**2. TV service configuration**
+**2. On the TV: the launcher's Outputs screen**
 
-Edit `tv/service/res/ambilight.json` **before building** the TV package (it is bundled into the package):
+Open the Ambilight app on the TV, then *Outputs* in the menu (on the first start the setup
+wizard asks *What lights do you have?*: pick *HyperHDR server* or *Both*). In the *HyperHDR*
+card enter the host (OK opens the TV keyboard), the port (`19400`) and, if needed, the
+priority, then *Apply and test*: the card shows *Connected · answering* once HyperHDR replies,
+or the connection error. The switch turns the output on and off; the ESP32 card has its own
+switch, so both can run at once. Changes apply at once — no rebuild or reinstall — and are
+saved on the TV, where they take precedence over those keys of `res/ambilight.json` (the
+image size still comes from the file) ([ARCHITECTURE.md § Outputs](ARCHITECTURE.md#outputs-1)).
+
+**Or: the package defaults**
+
+`tv/service/res/ambilight.json` holds the outputs a fresh install starts with (bundled into
+the package, so changing it means rebuilding and reinstalling — see
+[INSTALL.md § TV apps](INSTALL.md#4-tv-apps)):
 
 ```jsonc
 {
@@ -43,11 +56,6 @@ Edit `tv/service/res/ambilight.json` **before building** the TV package (it is b
   }
 }
 ```
-
-Then build and install as described in [INSTALL.md § TV apps](INSTALL.md#4-tv-apps).
-
-> [!NOTE]
-> **No rebuild needed once the launcher exposes it.** The TV service can already switch its outputs at run time: the launcher's `set-outputs` command turns the ESP32 and HyperHDR outputs on or off and sets the HyperHDR host, port and priority live, and the service saves them on the TV, where they take precedence over those keys of `res/ambilight.json` from then on (the image size still comes from the file) ([ARCHITECTURE.md § Commands](ARCHITECTURE.md#commands)). The launcher screen for it is coming; until then, the file above is the way to configure HyperHDR, and changing it means rebuilding and reinstalling.
 
 | Key | Default | Notes |
 |-----|---------|-------|
