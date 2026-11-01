@@ -1,13 +1,13 @@
 import type { JSX } from 'preact';
 import { ChipIcon, HomeIcon, LayoutIcon, Logo, PictureIcon, PulseIcon } from './icons';
 
-export type ScreenId = 'home' | 'picture' | 'layout' | 'controllers' | 'diagnostics';
+export type ScreenId = 'home' | 'picture' | 'layout' | 'outputs' | 'diagnostics';
 
 export const RAIL: { id: ScreenId; label: string; icon: () => JSX.Element }[] = [
   { id: 'home', label: 'Home', icon: HomeIcon },
   { id: 'picture', label: 'Picture', icon: PictureIcon },
   { id: 'layout', label: 'Strip layout', icon: LayoutIcon },
-  { id: 'controllers', label: 'Controllers', icon: ChipIcon },
+  { id: 'outputs', label: 'Outputs', icon: ChipIcon },
   { id: 'diagnostics', label: 'Diagnostics', icon: PulseIcon },
 ];
 

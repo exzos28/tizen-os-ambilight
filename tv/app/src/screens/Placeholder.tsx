@@ -1,13 +1,16 @@
 import { Footer, Hint } from '../components/Keys';
+import type { KeyHandler } from './Home';
 
 const ABOUT: Record<string, string> = {
   picture: 'Gamma, saturation, white balance and the power limit of the strip.',
   layout: 'LEDs per side, the corner the strip starts at and its direction.',
-  controllers: 'Every LED controller on the network: address, firmware, Wi-Fi and power.',
+  outputs: 'Where the colors go: the LED controllers on the network and a HyperHDR server.',
   diagnostics: 'Capture timing, failed reads, frames sent and the controller metrics.',
 };
 
-export function Placeholder({ title, id }: { title: string; id: string }) {
+export function Placeholder({ title, id, bindKeys }: { title: string; id: string; bindKeys: (h: KeyHandler) => void }) {
+  // Nothing to focus here: every key but Back goes back to the rail.
+  bindKeys((key) => (key === 'back' ? false : 'rail'));
   return (
     <main class="main">
       <header class="header">

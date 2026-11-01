@@ -8,13 +8,17 @@ import type { ServiceStatus } from '@ambilight/protocol';
 import type { Backend, ServiceLink } from './data';
 import { keyOf } from './focus';
 import { Home, type KeyHandler } from './screens/Home';
-import { Placeholder } from './screens/Placeholder';
+import { Diagnostics } from './screens/Diagnostics';
+import { Layout } from './screens/Layout';
+import { Outputs } from './screens/Outputs';
+import { Picture } from './screens/Picture';
 import { TestPattern } from './screens/TestPattern';
+import type { ScreenProps } from './screens/types';
 import { problems as findProblems } from './status';
 
 const POLL_MS = 1000;
 
-/** Desktop preview only (no window.tizen): ?screen=picture|layout|controllers|diagnostics|test opens that screen. */
+/** Desktop preview only (no window.tizen): ?screen=picture|layout|outputs|diagnostics|test opens that screen. */
 const devScreen = window.tizen ? null : new URLSearchParams(location.search).get('screen');
 
 export function App({ backend }: { backend: Backend }) {
@@ -26,7 +30,7 @@ export function App({ backend }: { backend: Backend }) {
   const initial = RAIL.find((r) => r.id === devScreen)?.id ?? 'home';
   const [screen, setScreen] = useState<ScreenId>(initial);
   const [testPattern, setTestPattern] = useState(devScreen === 'test');
-  const [zone, setZone] = useState<'rail' | 'content'>(initial === 'home' ? 'content' : 'rail');
+  const [zone, setZone] = useState<'rail' | 'content'>('content');
   const [railIndex, setRailIndex] = useState(RAIL.findIndex((r) => r.id === initial));
   const keys = useRef<KeyHandler | null>(null);
   /** Where the focus goes when Home mounts again (after the test pattern). */
@@ -58,7 +62,7 @@ export function App({ backend }: { backend: Backend }) {
   }, [visible, testPattern, backend]);
 
   const hosts = link.kind === 'up' && link.status.esp32.enabled ? link.status.esp32.hosts : link.kind === 'up' ? [] : null;
-  const { controllers, actions } = useControllers(backend, hosts, visible && screen === 'home' && !testPattern, tick);
+  const { controllers, actions } = useControllers(backend, hosts, visible && !testPattern, tick);
   const problems = useMemo(() => findProblems(link, controllers), [link, controllers]);
 
   // ---------------------------------------------------------------- remote
@@ -67,8 +71,8 @@ export function App({ backend }: { backend: Backend }) {
     setHomeFocus(null);
     setScreen(id);
     setRailIndex(RAIL.findIndex((r) => r.id === id));
-    // Only Home has focusable content for now; on the other screens the focus stays on the rail.
-    setZone(id === 'home' ? 'content' : 'rail');
+    keys.current = null; // the new screen registers its own handler when it renders
+    setZone('content');
   };
 
   // The listener is registered once and calls the handler of the latest render, so the
@@ -95,7 +99,7 @@ export function App({ backend }: { backend: Backend }) {
         if (key === 'up') setRailIndex((i) => Math.max(0, i - 1));
         else if (key === 'down') setRailIndex((i) => Math.min(RAIL.length - 1, i + 1));
         else if (key === 'ok') open(RAIL[railIndex].id);
-        else if (key === 'right' && screen === 'home') setZone('content');
+        else if (key === 'right') setZone('content');
         else if (key === 'back') { if (screen === 'home') exit(); else open('home'); }
         return;
       }
@@ -114,7 +118,9 @@ export function App({ backend }: { backend: Backend }) {
   if (testPattern) return <TestPattern />;
 
   const bindKeys = (h: KeyHandler) => { keys.current = h; };
-  if (screen !== 'home') keys.current = null;
+  const screenProps: ScreenProps = {
+    backend, link, controllers, actions, problems, active: zone === 'content', bindKeys, open,
+  };
 
   return (
     <div class="shell">
@@ -132,10 +138,16 @@ export function App({ backend }: { backend: Backend }) {
           active={zone === 'content'}
           bindKeys={bindKeys}
           onTestPattern={() => setTestPattern(true)}
-          onControllers={() => open('controllers')}
+          onControllers={() => open('outputs')}
         />
+      ) : screen === 'picture' ? (
+        <Picture {...screenProps} />
+      ) : screen === 'layout' ? (
+        <Layout {...screenProps} />
+      ) : screen === 'outputs' ? (
+        <Outputs {...screenProps} />
       ) : (
-        <Placeholder id={screen} title={RAIL.find((r) => r.id === screen)!.label} />
+        <Diagnostics {...screenProps} />
       )}
     </div>
   );
