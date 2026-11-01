@@ -9,7 +9,7 @@
    <tizen:privilege name="http://tizen.org/privilege/application.launch"></tizen:privilege>
    <tizen:privilege name="http://developer.samsung.com/privilege/contentanalysis"></tizen:privilege>
    <tizen:privilege name="http://tizen.org/privilege/internet"></tizen:privilege>
-   <tizen:metadata key="http://samsung.com/tv/metadata/prelaunch.support" value="true"></tizen:metadata>
+   <access origin="*" subdomains="true"></access>
    <tizen:metadata key="http://tizen.org/metadata/app_ui_type/base_screen_resolution" value="extensive"></tizen:metadata>
    <tizen:profile name="tv-samsung"></tizen:profile>
 </widget>
