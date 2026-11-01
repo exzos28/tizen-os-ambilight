@@ -46,10 +46,10 @@ wiring in [HARDWARE.md](HARDWARE.md).
 
 ### Lifecycle
 
-1. Loads the output settings: the ones the launcher saved with
-   [`set-outputs`](#commands) if there are valid ones, otherwise `res/ambilight.json`
-   (bundled at build time; see [Configuration](#4-configuration-reference)). A missing or
-   invalid `res/ambilight.json` falls back to ESP32 only.
+1. Loads the output settings: `res/ambilight.json` (bundled at build time; see
+   [Configuration](#4-configuration-reference)), with the ones the launcher saved with
+   [`set-outputs`](#commands) over it if there are valid ones. A missing or invalid
+   `res/ambilight.json` falls back to ESP32 only.
 2. Starts discovery (`Discovery.cs`) in the background: broadcasts `AMBILIGHT_DISCOVER` on
    UDP 9003 and collects **all** replies for 2 s. While nobody is known it retries — 30
    quick attempts, then every 10 s; once hosts are known it re-probes every 30 s, so new
@@ -271,10 +271,16 @@ the next command; with ids the launcher can tell. A request without `id` (older 
 gets a reply without one. A longer id is not run and answered `ok: false` without an `id`.
 
 **Saved outputs.** `set-outputs` writes `outputs.json` to the app's data directory (Tizen
-`DirectoryInfo.Data`; atomically, through a temp file) before applying it, so `ok: true` means
-applied *and* kept. From the next start on it replaces `res/ambilight.json` entirely (with the
-HyperHDR image size in effect when it was saved); the status says `outputs.source: "saved"`.
-A saved file that can't be read or isn't valid is ignored: the service falls back to
+`DirectoryInfo.Data`) before applying it, so `ok: true` means applied *and* kept. The file is
+written to a temp file, flushed to the disk and renamed over the old one, so a power cut
+leaves either the old or the new settings, never half a file. It holds only what
+`set-outputs` sets — `esp32.enabled` and `hyperhdr.enabled` / `host` / `port` / `priority`.
+From the next start on it is merged over `res/ambilight.json`: those keys come from the
+saved file, everything else (the HyperHDR image size) from the package, so a newer package's
+values apply even after `set-outputs`; the status says `outputs.source: "saved"`. Problems
+of `res/ambilight.json` with the image size are still reported in `configWarnings`. Saved
+files from older versions also carry `hyperhdr.imageWidth` / `imageHeight`; those keys are
+ignored. A saved file that can't be read or isn't valid is ignored: the service falls back to
 `res/ambilight.json` and reports it as the first `configWarnings` entry / `ConfigWarning`
 event. The file goes away with the app's data (reinstalling after an uninstall, or clearing
 the app's data).
@@ -430,7 +436,7 @@ The firmware uses the `min_spiffs.csv` partition table: two 1.875 MB OTA app slo
 | `DiscoveryRetryDelayMs` | 10000 | Interval between attempts after that (discovery never gives up) |
 | `DiscoveryRefreshMs` | 30000 | Re-probe interval once hosts are known |
 | `OutputConfigFile` | `ambilight.json` | Output settings file in the package's `res/` folder |
-| `SavedOutputsFile` | `outputs.json` | Output settings saved by `set-outputs`, in the app's data directory; wins over `OutputConfigFile` |
+| `SavedOutputsFile` | `outputs.json` | Output settings saved by `set-outputs`, in the app's data directory; merged over `OutputConfigFile` (wins for the keys `set-outputs` sets) |
 | `TargetCaptureW` | 4 | Sample points per horizontal edge |
 | `TargetCaptureH` | 3 | Sample points per vertical edge |
 | `EdgeInsetPx` | 250 | Distance of sample points from the screen edge, in HW pixels (3840 × 2160 on 4K) |

@@ -316,9 +316,45 @@ namespace Service
             OutputConfig.ParseCommand(OutputsBoth, custom, out var set);
             set.Save(saved);   // creates the data directory
             Check(!File.Exists(saved + ".tmp"), "saving leaves no temp file behind");
+            var savedKeys = new List<string>();
+            foreach (var p in JsonDocument.Parse(File.ReadAllText(saved)).RootElement.GetProperty("hyperhdr").EnumerateObject()) savedKeys.Add(p.Name);
+            Check(string.Join(",", savedKeys) == "enabled,host,port,priority", "the saved file holds only the set-outputs keys (no image size)");
             cfg = OutputConfig.LoadEffective(package, saved);
-            Check(cfg.Source == OutputSource.Saved && cfg.HyperHdr.SameAs(set.HyperHdr) && cfg.Esp32Enabled && cfg.Warnings.Count == 0,
-                "saved outputs win over res/ambilight.json at the next start, image size included");
+            Check(cfg.Source == OutputSource.Saved && cfg.Esp32Enabled && cfg.HyperHdr.Enabled && cfg.HyperHdr.Host == "192.168.1.50"
+                  && cfg.HyperHdr.Port == 19400 && cfg.HyperHdr.Priority == 100 && cfg.Warnings.Count == 0,
+                "saved outputs win over res/ambilight.json at the next start");
+            Check(cfg.HyperHdr.ImageWidth == 64 && cfg.HyperHdr.ImageHeight == 36,
+                "the image size comes from res/ambilight.json, not the size in effect when it was saved");
+
+            // A newer package with another image size: picked up even with saved outputs.
+            string newer = Path.Combine(dir, "ambilight.newer.json");
+            File.WriteAllText(newer, @"{ ""hyperhdr"": { ""enabled"": false, ""imageWidth"": 48, ""imageHeight"": 27 } }");
+            cfg = OutputConfig.LoadEffective(newer, saved);
+            Check(cfg.Source == OutputSource.Saved && cfg.HyperHdr.Enabled && cfg.HyperHdr.Host == "192.168.1.50"
+                  && cfg.HyperHdr.ImageWidth == 48 && cfg.HyperHdr.ImageHeight == 27 && cfg.Warnings.Count == 0,
+                "a newer package's image size applies over saved outputs; the saved target is kept");
+
+            // A saved file from an older version, with the image size in it: loads, the size ignored.
+            string old = Path.Combine(dir, "outputs.old.json");
+            File.WriteAllText(old, @"{ ""esp32"": { ""enabled"": false }, ""hyperhdr"": { ""enabled"": true, ""host"": ""10.0.0.7"", ""port"": 19401, ""priority"": 120, ""imageWidth"": 32, ""imageHeight"": 18 } }");
+            cfg = OutputConfig.LoadEffective(newer, old);
+            Check(cfg.Source == OutputSource.Saved && !cfg.Esp32Enabled && cfg.HyperHdr.Enabled && cfg.HyperHdr.Host == "10.0.0.7"
+                  && cfg.HyperHdr.Port == 19401 && cfg.HyperHdr.Priority == 120
+                  && cfg.HyperHdr.ImageWidth == 48 && cfg.HyperHdr.ImageHeight == 27 && cfg.Warnings.Count == 0,
+                "an older saved file with imageWidth / imageHeight loads; those keys are ignored");
+
+            // The package's problems with the image size are still reported over saved outputs,
+            // but not its other problems (the saved file replaces those keys).
+            string badSize = Path.Combine(dir, "ambilight.bad-size.json");
+            File.WriteAllText(badSize, @"{ ""hyperhdr"": { ""enabled"": true, ""imageWidth"": 4 } }");
+            cfg = OutputConfig.LoadEffective(badSize, saved);
+            Check(cfg.Source == OutputSource.Saved && cfg.HyperHdr.Enabled && cfg.HyperHdr.ImageWidth == 64 && cfg.HyperHdr.ImageHeight == 36
+                  && cfg.Warnings.Count == 1 && cfg.Warnings[0].Contains("hyperhdr.imageWidth") && cfg.Warnings[0].Contains("default"),
+                "an invalid image size in the package → the default size and one warning, saved outputs kept");
+            cfg = OutputConfig.LoadEffective("/nonexistent/ambilight.json", saved);
+            Check(cfg.Source == OutputSource.Saved && cfg.HyperHdr.Enabled && cfg.HyperHdr.ImageWidth == 64
+                  && cfg.Warnings.Count == 1 && cfg.Warnings[0].Contains("not found") && cfg.Warnings[0].Contains("image size"),
+                "no package file → saved outputs with the default image size, reported");
 
             OutputConfig.ParseCommand(@"{ ""esp32"": { ""enabled"": false }, ""hyperhdr"": { ""enabled"": false, ""host"": ""10.0.0.9"", ""port"": 19444 } }", null, out set);
             set.Save(saved);
