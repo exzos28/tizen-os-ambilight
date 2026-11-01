@@ -8,6 +8,7 @@
 #include "WebPortal.h"
 #include "UDPReceiver.h"
 #include "DiscoveryResponder.h"
+#include "generated/ProtocolLimits.h"
 
 // GPIO 0 — BOOT button (active LOW, internal pull-up).
 // Hold for FACTORY_RESET_HOLD_MS at any time to wipe all saved config.
@@ -51,9 +52,9 @@ void setup() {
     if (net.connectSTA(cfg.wifiSSID, cfg.wifiPassword, cfg.preferredLastOctet)) {
         Log.printf("[WiFi] Connected — IP: %s\n", net.ipAddress().c_str());
     } else {
-        Log.println("[WiFi] Could not connect — starting AP 'ambilight-setup'");
-        Log.println("[WiFi] Open http://192.168.4.1 to configure WiFi.");
-        net.startAP("ambilight-setup", cfg.wifiSSID, cfg.wifiPassword);
+        Log.printf("[WiFi] Could not connect — starting AP '%s'\n", protocol::ESP32_AP_SSID);
+        Log.printf("[WiFi] Open http://%s to configure WiFi.\n", protocol::ESP32_AP_IP);
+        net.startAP(protocol::ESP32_AP_SSID, cfg.wifiSSID, cfg.wifiPassword);
     }
 
     // 3. OTA updates (only meaningful in STA mode).
@@ -62,10 +63,11 @@ void setup() {
     // 4. Telnet remote log.
     RemoteLogger::instance().begin();
 
-    // 5. LED strip.
+    // 5. LED strip. repaint() applies the power/mode rules: the static color in plain mode,
+    // dark with the lighting off and in dynamic mode until the first frame arrives.
     auto& leds = LEDController::instance();
     leds.begin(cfg.numLeds, cfg.brightness);
-    if (cfg.power) leds.setColor(cfg.colorR, cfg.colorG, cfg.colorB);   // off: stays dark
+    leds.repaint();
 
     // 6. Web configuration portal.
     WebPortal::instance().begin();

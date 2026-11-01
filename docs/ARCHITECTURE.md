@@ -260,7 +260,8 @@ driven in `loop()`.
 2. NetworkManager               connect STA (12 s timeout); fall back to AP "ambilight-setup"
 3. OTAManager::begin()          Arduino OTA
 4. RemoteLogger::begin()        Telnet log server on port 2323
-5. LEDController::begin()       FastLED init, static color
+5. LEDController::begin()       FastLED init, then repaint(): static color in plain mode,
+                                dark in dynamic mode (until frames arrive) or with the lighting off
 6. WebPortal::begin()           HTTP config UI on port 80
 7. UDPReceiver::begin()         listen on UDP 9001 for frames
 8. DiscoveryResponder::begin()  answer discovery probes on UDP 9003
@@ -292,10 +293,13 @@ driven in `loop()`.
 **Power gating**: with the `power` setting off the strip is dark in both modes and UDP
 frames are ignored; brightness, color and mode are kept and come back when it is turned
 on. What owns the strip is decided in `LightOutput.h` (host-tested), highest priority
-first: identify blink → calibration preview → dark (power off) → plain / dynamic. Every
-change of power or mode, and the end of a preview or identify, goes through `repaint()`,
-which draws the current owner: the static color in plain mode, black otherwise (dynamic
-frames then blend back in).
+first: identify blink → calibration preview → dark (power off) → plain / dynamic. Boot,
+every change of power or mode, and the end of a preview or identify go through
+`repaint()`, which draws the current owner: the static color in plain mode, black
+otherwise (dynamic frames then blend back in). While frames aren't applied (power off,
+plain mode, preview) `repaint()` also drops the last decoded frame, so turning the lighting
+or dynamic mode back on stays dark until a fresh frame arrives instead of fading in an old
+one.
 
 Frame processing (`applyAmbilight()`):
 
@@ -310,11 +314,18 @@ Frame processing (`applyAmbilight()`):
 (top / right / bottom / left) and the first LED white for 10 s. When it expires,
 `update()` clears it and `repaint()`s the current output.
 
-**Identify** (`POST /identify`, `startIdentify()`): blinks the whole strip white 3 times
-(333 ms on, 333 ms off, ≈ 2 s; timeline in `LightOutput::Identify`), driven from
-`update()` without blocking, at the configured brightness and power limit. It works with
-the lighting off, and a preview requested meanwhile is drawn when it ends. Frames keep
-updating the dynamic target during the blink. Not saved.
+**Identify** (`POST /identify`, `startIdentify()`): blinks white
+`ESP32_IDENTIFY_BLINKS` (3) times over exactly `ESP32_IDENTIFY_DURATION_MS` (2 s), split
+into equal on / off slots of ≈ 333 ms and ending on an off slot (timeline in
+`LightOutput::Identify`), driven from `update()` without blocking, at the configured
+brightness and power limit. It covers every LED that may be lit — the driven count, LEDs
+a longer calibration preview left lit and the calibrated layout (`Identify::coverage()`)
+— and clears them all when it ends, before `repaint()`. It works with the lighting off.
+While it runs, other redraws (`setNumLeds()`, `repaint()` after a mode, power or color
+change, brightness and power-limit updates, a new preview) only update state
+(`LightOutput::redrawsNow()`): the blink re-applies its current phase on the next update,
+and the end of the blink shows the new state. Frames keep updating the dynamic target
+during the blink. Not saved.
 
 `UDPReceiver` drains all queued datagrams each loop and applies only the newest frame.
 It counts every valid datagram (`frames_rx`, `last_frame_ms` in `GET /metrics`), applied
