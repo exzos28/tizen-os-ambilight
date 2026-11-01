@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Text;
 using System.Text.Json;
 using static System.FormattableString;
 
@@ -164,14 +165,22 @@ namespace Service
             return null;
         }
 
-        // Writes the settings for LoadEffective: atomically (a temp file, then a rename), so a
-        // power cut can't leave half a file.
+        // Writes the settings for LoadEffective through a temp file: its data is flushed to the
+        // disk (fsync) before it is renamed over path, and on Linux the rename replaces path
+        // atomically. So after a power cut path holds either the previous settings or the new
+        // ones, never half a file (if the rename itself didn't reach the disk, the previous
+        // settings come back at the next start).
         public void Save(string path)
         {
             string dir = Path.GetDirectoryName(path);
             if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
             string tmp = path + ".tmp";
-            File.WriteAllText(tmp, StatusJson.Build(WriteSaved));
+            byte[] bytes = Encoding.UTF8.GetBytes(StatusJson.Build(WriteSaved));
+            using (var file = new FileStream(tmp, FileMode.Create, FileAccess.Write, FileShare.None))
+            {
+                file.Write(bytes, 0, bytes.Length);
+                file.Flush(flushToDisk: true);
+            }
             File.Move(tmp, path, true);
         }
 
