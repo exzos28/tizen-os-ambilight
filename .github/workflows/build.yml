@@ -85,9 +85,28 @@ jobs:
       - name: Compile against Tizen 9 reference assemblies
         run: dotnet build .github/tv-service-check/ServiceCheck.csproj -warnaserror:CS0168,CS0219,CS0162
 
-      - name: Unit tests (edge image, HyperHDR protocol, config, status, commands, capture loop)
+      - name: Unit tests (edge image, HyperHDR protocol, config, saved outputs, status, commands, capture loop)
         working-directory: .github/tv-service-check/Tests
         run: dotnet run
+
+      # The tests above wrote the service's real status / command JSON to out/contract; it
+      # must match the protocol schemas the launcher is built against.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - run: npm ci
+
+      - name: Contract check (service JSON against protocol/schemas)
+        run: |
+          dir=.github/tv-service-check/Tests/out/contract
+          status=0
+          node protocol/scripts/validate.mjs service/status "$dir"/status.*.json || status=1
+          node protocol/scripts/validate.mjs service/command-result "$dir"/command-result.*.json || status=1
+          node protocol/scripts/validate.mjs service/command-reply "$dir"/command-reply.*.json || status=1
+          exit $status
 
       - name: Decode our HyperHDR messages with flatc against HyperHDR's schema
         working-directory: .github/tv-service-check/Tests
