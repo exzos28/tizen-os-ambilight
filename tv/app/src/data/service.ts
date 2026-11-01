@@ -6,8 +6,8 @@
 // Requests carry the launcher's own port (constants.messagePort.uiPort) as the reply port.
 
 import {
-  type ServiceCommand, type ServiceCommandResult, type ServiceReply,
-  buildCommandRequest, buildStatusRequest, constants, parseServiceReply,
+  type MessagePortDataItem, type ServiceCommandResult, type ServiceReply,
+  buildCommandRequest, buildSetOutputsRequest, buildStatusRequest, constants, parseServiceReply,
 } from '@ambilight/protocol';
 import type { ServiceApi, ServiceLink } from './api';
 
@@ -69,6 +69,35 @@ export function createServiceClient(tz: TizenApi.Tizen): ServiceApi {
   // Throws NotFoundError while the service (or its port) is not up.
   const remote = () => tz.messageport.requestRemoteMessagePort(serviceAppId, servicePort);
 
+  // One command request with a fresh id; resolves with the reply that carries that id.
+  const send = (build: (id: string) => MessagePortDataItem[]) =>
+    new Promise<ServiceCommandResult>((resolve) => {
+      if (!localPort) return resolve({ ok: false, error: 'Message ports are unavailable' });
+      let port: TizenApi.RemoteMessagePort;
+      try {
+        port = remote();
+      } catch {
+        return resolve({ ok: false, error: 'The service is not running' });
+      }
+      const entry: PendingCommand = {
+        id: String(nextId++),
+        resolve,
+        timer: window.setTimeout(() => {
+          const i = pending.indexOf(entry);
+          if (i >= 0) pending.splice(i, 1);
+          resolve({ ok: false, error: 'The service did not answer' });
+        }, COMMAND_TIMEOUT_MS),
+      };
+      pending.push(entry);
+      try {
+        port.sendMessage(build(entry.id), localPort);
+      } catch (e) {
+        clearTimeout(entry.timer);
+        pending.splice(pending.indexOf(entry), 1);
+        resolve({ ok: false, error: e instanceof Error ? e.message : String(e) });
+      }
+    });
+
   return {
     subscribe(cb) {
       listeners.add(cb);
@@ -99,34 +128,8 @@ export function createServiceClient(tz: TizenApi.Tizen): ServiceApi {
       else if (now - waitingSince > NO_REPLY_MS) emit({ kind: 'down', reason: 'not-responding' });
     },
 
-    command(command: ServiceCommand) {
-      return new Promise<ServiceCommandResult>((resolve) => {
-        if (!localPort) return resolve({ ok: false, error: 'Message ports are unavailable' });
-        let port: TizenApi.RemoteMessagePort;
-        try {
-          port = remote();
-        } catch {
-          return resolve({ ok: false, error: 'The service is not running' });
-        }
-        const entry: PendingCommand = {
-          id: String(nextId++),
-          resolve,
-          timer: window.setTimeout(() => {
-            const i = pending.indexOf(entry);
-            if (i >= 0) pending.splice(i, 1);
-            resolve({ ok: false, error: 'The service did not answer' });
-          }, COMMAND_TIMEOUT_MS),
-        };
-        pending.push(entry);
-        try {
-          port.sendMessage(buildCommandRequest(command, { id: entry.id }), localPort);
-        } catch (e) {
-          clearTimeout(entry.timer);
-          pending.splice(pending.indexOf(entry), 1);
-          resolve({ ok: false, error: e instanceof Error ? e.message : String(e) });
-        }
-      });
-    },
+    command: (command) => send((id) => buildCommandRequest(command, { id })),
+    setOutputs: (outputs) => send((id) => buildSetOutputsRequest(outputs, { id })),
 
     start() {
       return new Promise<void>((resolve, reject) => {

@@ -2,7 +2,7 @@
 // @ambilight/protocol ESP32 client, see index.ts) and an in-memory mock for a desktop browser
 // (mock.ts). Wire types come from @ambilight/protocol.
 
-import type { Esp32Client, ServiceCommand, ServiceCommandResult, ServiceStatus } from '@ambilight/protocol';
+import type { Esp32Client, ServiceCommand, ServiceCommandResult, ServiceOutputs, ServiceStatus } from '@ambilight/protocol';
 
 /** Whether the launcher can reach the service, and its last status. */
 export type ServiceLink =
@@ -19,12 +19,17 @@ export interface ServiceApi {
   /** Sends one status request; the answer arrives through subscribe(). */
   requestStatus(): void;
   command(command: ServiceCommand): Promise<ServiceCommandResult>;
+  /**
+   * `set-outputs`: turns the ESP32 / HyperHDR outputs on or off and sets the HyperHDR target,
+   * live; the service saves it on the TV. ok: false with the service's reason if it is invalid.
+   */
+  setOutputs(outputs: ServiceOutputs): Promise<ServiceCommandResult>;
   /** Launches the service (AppControl command=start), the old launcher's *Start*. */
   start(): Promise<void>;
 }
 
 /** The ESP32 HTTP API endpoints the launcher uses. */
-export type Esp32Controller = Pick<Esp32Client, 'getStatus' | 'getConfig' | 'getMetrics' | 'savePower' | 'saveLeds' | 'saveMode'>;
+export type Esp32Controller = Pick<Esp32Client, 'getStatus' | 'getConfig' | 'getMetrics' | 'savePower' | 'saveLeds' | 'saveMode' | 'identify'>;
 
 /** The controller at `host` (an IPv4 address from status.esp32.hosts). */
 export type Esp32Api = (host: string) => Esp32Controller;

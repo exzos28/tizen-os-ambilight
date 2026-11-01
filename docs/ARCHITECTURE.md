@@ -190,7 +190,10 @@ widget is not preloaded (no `prelaunch.support`), and Back on Home exits it.
 | `src/focus.ts` | Focus manager: focusable elements as rows with column positions, explicit neighbours where needed |
 | `src/screens/Home.tsx` | Lighting on/off, brightness, mode + static colors, live preview, status, problem banner |
 | `src/screens/TestPattern.tsx` | Full-screen rotating color wheel (96×54 canvas, scaled) to check the strip follows the picture |
-| `src/screens/Placeholder.tsx` | *Picture*, *Strip layout*, *Controllers*, *Diagnostics*: not built yet |
+| `src/screens/Outputs.tsx` | The two outputs, each with its own switch: ESP32 controllers (list, *Blink to identify*, *Search again*) and HyperHDR (host, port, priority, connection); sends `set-outputs` |
+| `src/screens/Setup.tsx` | First-run wizard *What lights do you have?*; `shouldShowSetup(status)` |
+| `src/screens/hyperhdr.tsx` | The HyperHDR fields and connection line Outputs and the wizard share |
+| `src/screens/Placeholder.tsx` | Sections not built yet |
 | `src/status.ts` | Status lines, problems (most important first) and the header pill from the service status |
 | `src/controllers.ts` | The discovered controllers over HTTP: `/status` + `/config` once, `/metrics` every second while Home is shown; writes |
 | `src/data/` | Adapters: `service.ts` (Tizen message port and AppControl glue around the `@ambilight/protocol` message helpers), `index.ts` (picks the backend; one `createEsp32Client` per controller, 3 s timeout), `mock.ts` (desktop browser, `?state=ok\|lost\|none\|off\|unsupported`), `api.ts` (what the screens use) |
@@ -240,6 +243,36 @@ differ; a change then sets all of them.
 No answering controller: an empty state with *Open Outputs*; ◀ there moves to the rail. On the
 value rows ◀ ▶ adjust, so the rail is reached with Back (Home) or from there.
 
+### Outputs
+
+`src/screens/Outputs.tsx`: where the colors go. Two cards side by side, each with its own
+switch, both can be on at once. Every change is one `set-outputs` with both outputs
+([Commands](#commands)): the settings in effect from `status.outputs` with the one change; the
+service applies it live and saves it. On `ok: false` the card shows the service's `error` text
+and nothing changed.
+
+| Card | What |
+|---|---|
+| LED controllers (ESP32) | The switch sets `esp32.enabled`. The controllers in `status.esp32.hosts` with their state (as on Home), address, Wi-Fi signal (`/status` `rssi`) and firmware version; *Blink to identify* sends `POST /identify` to every answering controller, *Search again* the `rediscover` command. Off: the TV sends them nothing and Home reports no missing controller |
+| HyperHDR | Host, port, priority as text inputs: OK focuses the real `<input>`, so the TV opens its on-screen keyboard; OK / Done keeps the value, Back / Cancel restores it, ▲ ▼ keep it and move on. Typed values are a draft (*not applied*) until *Apply and test* (or *Turn on and test* while off), which sends them with `enabled: true` and watches `status.hyperhdr` for 8 s: *Connected · answering* once replies arrive, otherwise the connection error. The switch turns it on with the fields as shown, or off keeping the address. Port and priority must be digits; ranges and the required host are checked by the service |
+
+◀ ▶ move between the cards, ◀ from the ESP32 card goes to the rail. *Run setup again* opens the
+[setup wizard](#setup-wizard) over the screen; Back closes it.
+
+### Setup wizard
+
+`src/screens/Setup.tsx`, full screen without the rail. Step 1, *What lights do you have?*:
+*LED strip with an ESP32* (with the number of controllers found), *HyperHDR server* or *Both*;
+◀ ▶ choose, OK continues, ▼ *Skip for now*. The strip alone sends `set-outputs` at once
+(ESP32 on, HyperHDR off with its address kept) and closes. HyperHDR or Both go to step 2, host
+and port: *Connect* sends `set-outputs` (HyperHDR on, ESP32 on only for Both), then shows the
+connection like Outputs does and turns into *Done*. Back returns to step 1.
+
+`shouldShowSetup(status)` is true while `status.outputs.source` is `package` (the outputs were
+never set on this TV) and the wizard was not finished or skipped here (`localStorage`
+`ambilight.setupDone`; without storage it shows again until the outputs are saved). In the
+desktop preview `?screen=outputs&setup=1` opens it; the mock takes `?outputs=package|both|hyperhdr`.
+
 ### Status
 
 Once per second while the page is visible (`visibilitychange` pauses it) the launcher sends
@@ -255,7 +288,7 @@ id?}` → `{result: "{ok, error}", id?}` ([Commands](#commands)).
 | `capture` | `state` (`waiting` / `starting` / `running` / `paused` / `failed`), `failure` (`library` / `symbols` / `hardware`; `null` with `failed` = unexpected exception), `error`, `failedAttempts`, `retryInMs`, `hw` (HwCondition), `frames`, `frameMs`, `lastFrameAgoMs`, `reads`, `badReads`, `lastBadRet`, `h`, `v`, `rgb` (hex, `EdgeFrame` order) | *Screen capture* line, problem banner, live preview |
 | `esp32` | `enabled`, `hosts` (discovered; also `tools/server.py`), `framesSent`, `sendErrors`, `lastError` | One line per controller. *Streaming* when its `/metrics` `last_frame_ms` < 2 s; without it, *Sending* when `framesSent` grows (handed to the network, not confirmed) |
 | `hyperhdr` | `enabled`, `endpoint`, `connected`, `replies`, `lastError` | *HyperHDR* line |
-| `outputs` | The output settings in effect, as `set-outputs` takes them: `esp32.enabled`, `hyperhdr.enabled` / `host` / `port` / `priority`, and `source` (`package` = `res/ambilight.json`, `saved` = set with `set-outputs`). An invalid HyperHDR section of `res/ambilight.json` shows as `enabled: false` | Not shown yet (settings screen to come) |
+| `outputs` | The output settings in effect, as `set-outputs` takes them: `esp32.enabled`, `hyperhdr.enabled` / `host` / `port` / `priority`, and `source` (`package` = `res/ambilight.json`, `saved` = set with `set-outputs`). An invalid HyperHDR section of `res/ambilight.json` shows as `enabled: false` | [Outputs](#outputs-1) switches and fields; `source: "package"` shows the [setup wizard](#setup-wizard) |
 | `configWarnings` | Problems in `res/ambilight.json`, or saved outputs that couldn't be used; empty after a successful `set-outputs` | Problem banner |
 
 `library` / `symbols` failures mean the TV doesn't expose the capture API; `hardware`
