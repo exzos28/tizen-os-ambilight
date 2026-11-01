@@ -18,7 +18,8 @@ import { problems as findProblems } from './status';
 
 const POLL_MS = 1000;
 
-/** Desktop preview only (no window.tizen): ?screen=picture|layout|outputs|diagnostics|test opens that screen. */
+/** Desktop preview only (no window.tizen): ?screen=picture|layout|outputs|diagnostics|test opens that screen
+ *  (with test, &pattern=<id> picks the pattern: see PATTERNS in TestPattern.tsx). */
 const devScreen = window.tizen ? null : new URLSearchParams(location.search).get('screen');
 
 export function App({ backend }: { backend: Backend }) {
@@ -92,7 +93,7 @@ export function App({ backend }: { backend: Backend }) {
         if (key === 'back' || key === 'ok') {
           setHomeFocus('test-pattern');
           setTestPattern(false);
-        }
+        } else keys.current?.(key);
         return;
       }
       if (zone === 'rail') {
@@ -115,9 +116,9 @@ export function App({ backend }: { backend: Backend }) {
   }
 
   // ---------------------------------------------------------------- view
-  if (testPattern) return <TestPattern />;
-
   const bindKeys = (h: KeyHandler) => { keys.current = h; };
+  if (testPattern) return <TestPattern bindKeys={bindKeys} />;
+
   const screenProps: ScreenProps = {
     backend, link, controllers, actions, problems, active: zone === 'content', bindKeys, open,
   };
