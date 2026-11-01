@@ -146,21 +146,3 @@ html, body { width: 100%; height: 100%; overflow: hidden; }
 .main > .placeholder { margin-top: 36px; padding: 48px 56px; gap: 14px; border-radius: 22px; }
 .placeholder h2 { font-size: 34px; font-weight: 700; }
 .placeholder .ui-muted { font-size: 21px; }
-
-.test-pattern { position: relative; width: 1920px; height: 1080px; background: #000; }
-.test-pattern canvas { width: 1920px; height: 1080px; image-rendering: pixelated; display: block; }
-/* Centered, far from the edges the service samples. */
-.test-hint {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  padding: 16px 28px;
-  border-radius: 16px;
-  background: rgba(11, 14, 19, 0.85);
-  font-size: 22px;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  white-space: nowrap;
-}
