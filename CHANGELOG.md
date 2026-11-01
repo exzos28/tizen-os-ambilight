@@ -1,5 +1,12 @@
 # tizen-os-ambilight
 
+## 1.2.1
+
+### Patch Changes
+
+- [#11](https://github.com/exzos28/tizen-os-ambilight/pull/11) [`d64bb90`](https://github.com/exzos28/tizen-os-ambilight/commit/d64bb90a83d47798e96bc058419ef234a9a35535) Thanks [@exzos28](https://github.com/exzos28)! - TV app: Back in a section returns to the menu on the left instead of Home, and ▲ ▼ on the menu switch sections without pressing OK.
+  Picture: a slider changes only after OK; OK or Back again ends editing, so ◀ ▶ move between the controls.
+
 ## 1.2.0
 
 ### Minor Changes
