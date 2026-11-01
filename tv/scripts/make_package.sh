@@ -61,7 +61,6 @@ mkdir -p "$KEYS"
     -n "$PROFILE" -e ci@example.org -f "$PROFILE" -- "$KEYS"
 P12="$(find "$KEYS" -name "$PROFILE.p12" | head -n 1)"
 [ -n "$P12" ] || { echo "the Tizen CLI did not create $KEYS/$PROFILE.p12" >&2; exit 1; }
-"$TIZEN" cli-config "profiles.path=$WORK/profiles.xml"
 "$TIZEN" security-profiles add -n "$PROFILE" -a "$P12" -p "$CERT_PASSWORD"
 
 echo "== Hybrid package (.wgt with the service .tpk as reference)"
