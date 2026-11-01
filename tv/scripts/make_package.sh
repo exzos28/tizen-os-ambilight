@@ -25,7 +25,8 @@ OUT="${1:-$ROOT/tv/release}"
 mkdir -p "$OUT"
 OUT="$(cd "$OUT" && pwd)"
 
-TIZEN="${TIZEN_STUDIO:-$HOME/tizen-studio}/tools/ide/bin/tizen"
+STUDIO="${TIZEN_STUDIO:-$HOME/tizen-studio}"
+TIZEN="$STUDIO/tools/ide/bin/tizen"
 [ -x "$TIZEN" ] || { echo "Tizen CLI not found at $TIZEN (set TIZEN_STUDIO)" >&2; exit 1; }
 command -v expect >/dev/null || { echo "expect is required" >&2; exit 1; }
 
@@ -62,21 +63,35 @@ mkdir -p "$KEYS"
 P12="$(find "$KEYS" -name "$PROFILE.p12" | head -n 1)"
 [ -n "$P12" ] || { echo "the Tizen CLI did not create $KEYS/$PROFILE.p12" >&2; exit 1; }
 "$TIZEN" security-profiles add -n "$PROFILE" -a "$P12" -p "$CERT_PASSWORD"
+# security-profiles add writes the store next to the SDK; the CLI signs only from the
+# store set in its configuration.
+"$TIZEN" cli-config "profiles.path=$STUDIO/../tizen-studio-data/profile/profiles.xml"
 
-echo "== Hybrid package (.wgt with the service .tpk as reference)"
-# The CLI asks for the certificate passwords on a terminal even when they are stored.
-expect <<EOF
+# Runs `tizen package` with the given arguments. The CLI asks for the certificate passwords
+# on a terminal even when they are stored, hence expect.
+tizen_package() {
+    expect -f - "$TIZEN" package "$@" <<'EXP'
 set timeout 300
-spawn "$TIZEN" package -t wgt -s $PROFILE -r "$TPK" -- "$WORK/ui"
+spawn {*}$argv
 expect {
-    -re "(Author|Distributor\\\\d*) password:" { send "\$env(CERT_PASSWORD)\r"; exp_continue }
+    -re {(Author|Distributor\d*) password:} { send "$env(CERT_PASSWORD)\r"; exp_continue }
     eof
 }
 lassign [wait] pid spawnid os_error status
-exit \$status
-EOF
-WGT="$(find "$WORK/ui" -maxdepth 1 -name '*.wgt' | head -n 1)"
-[ -n "$WGT" ] || { echo "no .wgt produced" >&2; exit 1; }
+exit $status
+EXP
+}
+
+echo "== Hybrid package"
+"$TIZEN" package --help || true
+# 1) the launcher alone; 2) the service .tpk added to that .wgt as a reference (-r only takes
+# a .tpk when the target is a package file, not a project directory).
+tizen_package -t wgt -s "$PROFILE" -- "$WORK/ui"
+WEB="$(find "$WORK/ui" -maxdepth 1 -name '*.wgt' | head -n 1)"
+[ -n "$WEB" ] || { echo "no .wgt produced for the launcher" >&2; exit 1; }
+WGT="$WORK/hybrid.wgt"
+mv "$WEB" "$WGT"
+tizen_package -t wgt -s "$PROFILE" -r "$TPK" -- "$WGT"
 
 NAME="ambilight-tv-v$VERSION.wgt"
 cp "$WGT" "$OUT/$NAME"
