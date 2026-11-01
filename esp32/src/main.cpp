@@ -65,7 +65,7 @@ void setup() {
     // 5. LED strip.
     auto& leds = LEDController::instance();
     leds.begin(cfg.numLeds, cfg.brightness);
-    leds.setColor(cfg.colorR, cfg.colorG, cfg.colorB);
+    if (cfg.power) leds.setColor(cfg.colorR, cfg.colorG, cfg.colorB);   // off: stays dark
 
     // 6. Web configuration portal.
     WebPortal::instance().begin();

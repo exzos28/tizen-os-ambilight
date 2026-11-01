@@ -13,7 +13,15 @@ private:
     WebPortal() : _server(80) {}
 
     WebServer _server;
+    uint32_t  _restartRequestedMs = 0;
+    bool      _restartPending     = false;
 
+    // Registers a handler that first adds the CORS header (Access-Control-Allow-Origin: *).
+    void route(const char* uri, HTTPMethod method, void (WebPortal::*handler)());
+    void allowCors();
+
+    void handleNotFound();          // OPTIONS -> 204 (CORS preflight), anything else -> captive-portal redirect
+    void redirectToRoot();
     void handleRoot();
     void handleStatus();
     void handleConfig();
@@ -23,4 +31,7 @@ private:
     void handleSaveCalibration();   // LED counts per side + layout — saves and applies
     void handlePreviewCalibration();// Temporary LED preview (does not save)
     void handleSaveMode();          // Switch plain/dynamic mode
+    void handleSavePower();         // Lighting on/off
+    void handleIdentify();          // Blink the strip white (not saved)
+    void handleRestart();           // Reply, then restart
 };
