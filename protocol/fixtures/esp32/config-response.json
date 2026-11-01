@@ -15,6 +15,7 @@
   "clockwise": true,
   "gamma": 2.2,
   "saturation": 1,
+  "smoothing_ms": 200,
   "wb_r": 255,
   "wb_g": 255,
   "wb_b": 255,

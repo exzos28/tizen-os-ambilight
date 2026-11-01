@@ -135,6 +135,14 @@
       "default": 1,
       "description": "Saturation multiplier applied to TV frames (1 = unchanged)."
     },
+    "smoothing_ms": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 1000,
+      "default": 200,
+      "x-unit": "ms",
+      "description": "Time constant of the temporal smoothing of TV frames for small changes. A large change (a scene cut, a sudden dark or bright area) always follows within about 40 ms. 0 = no smoothing."
+    },
     "wb_r": {
       "$ref": "common.schema.json#/$defs/channel_scale",
       "default": 255,
