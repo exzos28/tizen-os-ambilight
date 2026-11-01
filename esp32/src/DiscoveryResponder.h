@@ -3,9 +3,9 @@
 #include <WiFiUdp.h>
 
 // Listens for UDP broadcast discovery probes from the TV service.
-// Protocol: TV broadcasts "AMBILIGHT_DISCOVER" on DISCOVERY_PORT.
-// We reply with "AMBILIGHT_DISCOVER:<our_ip>" so the TV sends
-// ambilight frames directly to this ESP32 on UDP_PORT.
+// Protocol: TV broadcasts protocol::DISCOVERY_MAGIC ("AMBILIGHT_DISCOVER") on
+// protocol::PORT_DISCOVERY. We reply with "AMBILIGHT_DISCOVER:<our_ip>" so the TV sends
+// ambilight frames directly to this ESP32 on protocol::PORT_FRAME.
 class DiscoveryResponder {
 public:
     static DiscoveryResponder& instance();
@@ -18,7 +18,4 @@ private:
 
     WiFiUDP  _udp;
     bool     _started = false;
-
-    static constexpr uint16_t DISCOVERY_PORT  = 9003;
-    static constexpr const char* MAGIC        = "AMBILIGHT_DISCOVER";
 };

@@ -2,12 +2,13 @@
 #include <Arduino.h>
 #include <WiFiServer.h>
 #include <WiFiClient.h>
+#include "generated/ProtocolLimits.h"
 
 class RemoteLogger : public Print {
 public:
     static RemoteLogger& instance();
 
-    void begin(uint16_t port = 2323);
+    void begin(uint16_t port = protocol::PORT_ESP32_TELNET);
     void handle();
 
     size_t write(uint8_t b)                        override;

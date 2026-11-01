@@ -1,6 +1,7 @@
 #include "NetworkManager.h"
 #include "RemoteLogger.h"
 #include "StaticIp.h"
+#include "generated/ProtocolLimits.h"
 
 NetworkManager& NetworkManager::instance() {
     static NetworkManager inst;
@@ -64,7 +65,7 @@ void NetworkManager::startAP(const String& ssid, const String& staSsid,
 
     // Redirect every DNS query to our IP — this triggers the captive portal
     // popup on Android, iOS, Windows, and macOS automatically.
-    _dns.start(53, "*", WiFi.softAPIP());
+    _dns.start(protocol::PORT_CAPTIVE_DNS, "*", WiFi.softAPIP());
 
     _apMode          = true;
     _staAttemptStart = 0;

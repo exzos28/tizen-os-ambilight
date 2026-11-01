@@ -11,9 +11,9 @@ UDPReceiver& UDPReceiver::instance() {
 }
 
 void UDPReceiver::begin() {
-    if (_udp.begin(UDP_PORT)) {
+    if (_udp.begin(protocol::PORT_FRAME)) {
         _started = true;
-        Log.printf("[UDP] Listening for ambilight frames on port %d\n", UDP_PORT);
+        Log.printf("[UDP] Listening for ambilight frames on port %u\n", (unsigned)protocol::PORT_FRAME);
     } else {
         Log.println("[UDP] Failed to bind UDP socket");
     }
@@ -33,14 +33,14 @@ void UDPReceiver::handle() {
         if (size <= 0) break;
         IPAddress from = _udp.remoteIP();
 
-        if (size < 2 || size > (int)BUF_SIZE) {
+        if (size < HEADER || size > (int)BUF_SIZE) {
             logThrottled("[UDP] Packet from %s bad size=%d\n", from.toString().c_str(), size);
             _udp.flush();
             continue;
         }
 
         int len = _udp.read(_scratch, BUF_SIZE);
-        if (len < 2) continue;
+        if (len < HEADER) continue;
 
         uint8_t hCount = _scratch[0];
         uint8_t vCount = _scratch[1];
@@ -49,7 +49,7 @@ void UDPReceiver::handle() {
                          from.toString().c_str(), hCount, vCount, MAX_SIDE_COUNT);
             continue;
         }
-        int expected = 2 + (hCount + vCount) * 2 * 3;
+        int expected = HEADER + (hCount + vCount) * 2 * protocol::FRAME_BYTES_PER_SAMPLE;
         if (len < expected) {
             logThrottled("[UDP] Packet from %s too short: got=%d expected=%d h=%d v=%d\n",
                          from.toString().c_str(), len, expected, hCount, vCount);
@@ -83,7 +83,7 @@ void UDPReceiver::handle() {
                    remote.toString().c_str(), _buf[0], _buf[1], n);
     }
 
-    LEDController::instance().applyAmbilight(_buf + 2, _buf[0], _buf[1]);
+    LEDController::instance().applyAmbilight(_buf + HEADER, _buf[0], _buf[1]);
 }
 
 void UDPReceiver::logThrottled(const char* fmt, ...) {
