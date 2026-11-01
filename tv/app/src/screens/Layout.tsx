@@ -291,7 +291,8 @@ function Editor({ p, c, list, onPick }: EditorProps) {
 
   // ---------------------------------------------------------------- view
   const dir = d.clockwise ? 'clockwise' : 'counter-clockwise';
-  const where = list.length > 1 ? `${controllerTitle(index, list.length)} · ${c.host}` : c.host;
+  // With several controllers the picker shows the addresses.
+  const where = list.length > 1 ? controllerTitle(index, list.length) : c.host;
 
   return (
     <main class="main lay">

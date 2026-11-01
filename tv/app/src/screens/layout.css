@@ -69,7 +69,7 @@
 
 /* Room above and below the strip for the LED 1 tag at the start corner. */
 .lay-diagram { position: relative; width: 740px; align-self: center; margin: auto 0; padding: 56px 0; }
-.lay-diagram.compact { width: 660px; padding: 50px 0; }
+.lay-diagram.compact { width: 640px; padding: 50px 0; }
 .lay-led1 {
   position: absolute;
   padding: 6px 14px;
