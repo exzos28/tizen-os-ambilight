@@ -37,5 +37,6 @@
 .ui-btn-secondary:not(:disabled):active,
 .ui-btn-danger:not(:disabled):active { background: var(--ui-raised); }
 
+[data-density='tv'] .ui-btn { line-height: normal; white-space: nowrap; }
 [data-density='tv'] .ui-btn-primary { min-height: 68px; font-size: 22px; }
 [data-density='tv'] .ui-btn-secondary { font-size: 20px; }

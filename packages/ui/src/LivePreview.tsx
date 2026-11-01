@@ -6,7 +6,11 @@ import { type Rgb, cssRgb, interpolate, parseEdgeColors } from './geometry.ts'
 import './live-preview.css'
 
 const W = 440, H = 248, OX = 40, OY = 36, B = 26, R = 16, DOT = 10
+/** Screen frame: the bands sit inside it, like content inside a CSS border of BW px. */
+const BW = 2, RX = 8
 const BOX_W = W + 2 * OX, BOX_H = H + 2 * OY
+/** Middle of the "No picture yet" line, from the top of the area inside the frame. */
+const EMPTY_Y = 119
 
 /** The controller settings the dots depend on; an Esp32Config fits. */
 export interface PreviewConfig {
@@ -68,14 +72,16 @@ export function LivePreview({ rgb, h = 0, v = 0, live, config, width, emptyText 
       width={width} height={width ? (width * BOX_H) / BOX_W : undefined} role="img"
       aria-label={samples ? 'Colors at the edges of the picture and on the LEDs' : emptyText}>
       {/* Same id in every instance on purpose: the definitions are identical. */}
-      <clipPath id="ui-preview-clip"><rect x="0" y="0" width={W} height={H} rx="8" /></clipPath>
+      <clipPath id="ui-preview-clip"><rect width={W - 2 * BW} height={H - 2 * BW} rx={RX - BW} /></clipPath>
       <g transform={`translate(${OX} ${OY})`}>
-        <g clip-path="url(#ui-preview-clip)">
-          <rect class="ui-preview-screen" width={W} height={H} />
-          {bands.map((b, i) => <rect key={i} class="ui-preview-band" x={b.x} y={b.y} width={b.w} height={b.h} style={`fill:${b.c}`} />)}
+        <rect class="ui-preview-screen" width={W} height={H} rx={RX} />
+        <rect class="ui-preview-frame" x={BW / 2} y={BW / 2} width={W - BW} height={H - BW} rx={RX - BW / 2} stroke-width={BW} />
+        <g transform={`translate(${BW} ${BW})`}>
+          <g clip-path="url(#ui-preview-clip)">
+            {bands.map((b, i) => <rect key={i} class="ui-preview-band" x={b.x} y={b.y} width={b.w} height={b.h} style={`fill:${b.c}`} />)}
+          </g>
+          {!samples && <text class="ui-preview-empty" x={W / 2 - BW} y={EMPTY_Y} text-anchor="middle" dominant-baseline="central">{emptyText}</text>}
         </g>
-        {!samples && <text class="ui-preview-empty" x={W / 2} y={H / 2} text-anchor="middle" dominant-baseline="middle">{emptyText}</text>}
-        <rect class="ui-preview-frame" x="1" y="1" width={W - 2} height={H - 2} rx="8" />
       </g>
       {dots.map((d, i) => <circle key={i} class="ui-preview-dot" cx={d.x} cy={d.y} r={DOT / 2} style={`fill:${d.c}`} />)}
     </svg>
