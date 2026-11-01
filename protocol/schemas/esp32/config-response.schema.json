@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/exzos28/tizen-os-ambilight/main/protocol/schemas/esp32/config-response.schema.json",
+  "title": "Esp32Config",
+  "description": "GET /config — every setting (passwords are never returned) plus `max_leds`.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "wifi_ssid", "ota_host", "ip_octet", "num_leds", "max_leds", "brightness", "color", "led_mode",
+    "led_top", "led_right", "led_bottom", "led_left", "start_corner", "clockwise",
+    "gamma", "saturation", "wb_r", "wb_g", "wb_b", "power_limit_w", "pixel_watts", "power"
+  ],
+  "properties": {
+    "wifi_ssid": { "$ref": "settings.schema.json#/$defs/wifi_ssid" },
+    "ota_host": { "$ref": "settings.schema.json#/$defs/ota_host" },
+    "ip_octet": { "$ref": "settings.schema.json#/$defs/ip_octet" },
+    "num_leds": { "$ref": "settings.schema.json#/$defs/num_leds" },
+    "max_leds": { "type": "integer", "minimum": 1, "description": "Largest `num_leds` this firmware supports." },
+    "brightness": { "$ref": "settings.schema.json#/$defs/brightness" },
+    "color": { "$ref": "settings.schema.json#/$defs/color" },
+    "led_mode": { "$ref": "settings.schema.json#/$defs/led_mode" },
+    "led_top": { "$ref": "settings.schema.json#/$defs/led_top" },
+    "led_right": { "$ref": "settings.schema.json#/$defs/led_right" },
+    "led_bottom": { "$ref": "settings.schema.json#/$defs/led_bottom" },
+    "led_left": { "$ref": "settings.schema.json#/$defs/led_left" },
+    "start_corner": { "$ref": "settings.schema.json#/$defs/start_corner" },
+    "clockwise": { "$ref": "settings.schema.json#/$defs/clockwise" },
+    "gamma": { "$ref": "settings.schema.json#/$defs/gamma" },
+    "saturation": { "$ref": "settings.schema.json#/$defs/saturation" },
+    "wb_r": { "$ref": "settings.schema.json#/$defs/wb_r" },
+    "wb_g": { "$ref": "settings.schema.json#/$defs/wb_g" },
+    "wb_b": { "$ref": "settings.schema.json#/$defs/wb_b" },
+    "power_limit_w": { "$ref": "settings.schema.json#/$defs/power_limit_w" },
+    "pixel_watts": { "$ref": "settings.schema.json#/$defs/pixel_watts" },
+    "power": { "$ref": "settings.schema.json#/$defs/power" }
+  }
+}

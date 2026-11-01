@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/exzos28/tizen-os-ambilight/main/protocol/schemas/service/command-reply.schema.json",
+  "title": "ServiceCommandReply",
+  "description": "The service's reply to ServiceCommandRequest, sent to the UI's reply port. A bundle of string key/values.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["result"],
+  "properties": {
+    "result": {
+      "type": "string",
+      "contentMediaType": "application/json",
+      "contentSchema": { "$ref": "command-result.schema.json" },
+      "description": "ServiceCommandResult as a JSON string."
+    }
+  }
+}

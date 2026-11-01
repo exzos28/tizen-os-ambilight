@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/exzos28/tizen-os-ambilight/main/protocol/schemas/service/status-request.schema.json",
+  "title": "ServiceStatusRequest",
+  "description": "Message the UI sends to the service's local message port `ambilight.status`, with its own port `ambilight.ui` as the reply port. A message is a bundle of string key/values (sent as [{key, value}] by tizen.messageport). The service replies with ServiceStatusReply.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["request"],
+  "properties": {
+    "request": { "const": "status" }
+  }
+}

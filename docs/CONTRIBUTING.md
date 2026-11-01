@@ -38,7 +38,7 @@ For more detail — or if the launcher shows nothing useful:
 - Keep changes focused; one feature or fix per PR.
 - Add a changeset if users will notice the change: `npm install` once at the repo root, then `npx changeset` (see [.changeset/README.md](../.changeset/README.md)). Docs- or CI-only changes don't need one.
 - Describe how you tested: TV model, strip type, what you observed.
-- If you change ports, packet formats or HTTP endpoints, update [NETWORKING.md](NETWORKING.md). If you change settings or defaults, update the tables in [ARCHITECTURE.md](ARCHITECTURE.md).
+- If you change ports, packet formats, HTTP endpoints, MessagePort messages, settings or defaults, change the protocol definition in [`protocol/`](../protocol/README.md) first (schemas, `constants.json`, a fixture per message), then run `npm run protocol:gen` and `npm run protocol:check` at the repo root and commit the regenerated files. Also update [NETWORKING.md](NETWORKING.md), and for settings or defaults the tables in [ARCHITECTURE.md](ARCHITECTURE.md).
 - Firmware: make sure `pio run` builds (it also builds the web UI) and `pio test -e native` passes. Logic without Arduino dependencies goes into headers like `src/StripLayout.h` so it can be tested on the host. Web UI: `npm run type-check` in `esp32/web`.
 
 ## Developing the web UI

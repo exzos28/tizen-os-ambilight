@@ -1,0 +1,175 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/exzos28/tizen-os-ambilight/main/protocol/schemas/esp32/settings.schema.json",
+  "description": "Every ESP32 setting, stored in the NVS namespace `ambilight`. Definitions only: GET /config and the POST /save/* bodies reference them. `default` is the value of a fresh (or factory-reset) device; `minimum`/`maximum` is the valid range — out-of-range values sent to the device are clamped, except `ip_octet`.",
+  "$defs": {
+    "wifi_ssid": {
+      "type": "string",
+      "default": "",
+      "description": "Wi-Fi network the device joins in station mode. Empty: no network, the device opens the setup access point."
+    },
+    "wifi_pass": {
+      "type": "string",
+      "default": "",
+      "writeOnly": true,
+      "description": "Wi-Fi password. Never returned by the device; an empty value in POST /save/network keeps the current one."
+    },
+    "ota_host": {
+      "type": "string",
+      "default": "ambilight",
+      "description": "Arduino OTA / mDNS hostname."
+    },
+    "ota_pass": {
+      "type": "string",
+      "default": "123456",
+      "writeOnly": true,
+      "description": "Arduino OTA password. Never returned by the device; an empty value in POST /save/network keeps the current one."
+    },
+    "ip_octet": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 254,
+      "default": 245,
+      "description": "Last octet of the static IP in the router's subnet, applied after connecting. 0 = keep the DHCP address. Whether it fits the network is checked at connect time."
+    },
+    "num_leds": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 1500,
+      "default": 300,
+      "description": "Number of LEDs driven. Saving the calibration sets it to the sum of the sides."
+    },
+    "brightness": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 255,
+      "default": 100,
+      "description": "Global strip brightness."
+    },
+    "color": {
+      "type": "string",
+      "pattern": "^#[0-9a-fA-F]{6}$",
+      "default": "#ffffff",
+      "description": "Static color shown in plain mode, `#rrggbb`. The device returns lowercase."
+    },
+    "led_mode": {
+      "title": "LedMode",
+      "description": "What drives the strip.",
+      "oneOf": [
+        {
+          "const": 0,
+          "title": "plain",
+          "description": "Static color; UDP frames are ignored."
+        },
+        {
+          "const": 1,
+          "title": "dynamic",
+          "description": "UDP frames from the TV drive the strip (follows the picture)."
+        }
+      ],
+      "default": 1
+    },
+    "led_top": {
+      "$ref": "common.schema.json#/$defs/led_count",
+      "default": 10,
+      "description": "LEDs along the top edge."
+    },
+    "led_right": {
+      "$ref": "common.schema.json#/$defs/led_count",
+      "default": 6,
+      "description": "LEDs along the right edge."
+    },
+    "led_bottom": {
+      "$ref": "common.schema.json#/$defs/led_count",
+      "default": 10,
+      "description": "LEDs along the bottom edge."
+    },
+    "led_left": {
+      "$ref": "common.schema.json#/$defs/led_count",
+      "default": 6,
+      "description": "LEDs along the left edge."
+    },
+    "start_corner": {
+      "title": "StartCorner",
+      "description": "Screen corner where the strip's first LED is (as seen from the front).",
+      "oneOf": [
+        {
+          "const": 0,
+          "title": "topLeft",
+          "description": "Top-left corner."
+        },
+        {
+          "const": 1,
+          "title": "topRight",
+          "description": "Top-right corner."
+        },
+        {
+          "const": 2,
+          "title": "bottomRight",
+          "description": "Bottom-right corner."
+        },
+        {
+          "const": 3,
+          "title": "bottomLeft",
+          "description": "Bottom-left corner."
+        }
+      ],
+      "default": 0
+    },
+    "clockwise": {
+      "type": "boolean",
+      "default": true,
+      "description": "Strip direction from the start corner, as seen from the front."
+    },
+    "gamma": {
+      "type": "number",
+      "minimum": 0.5,
+      "maximum": 3,
+      "default": 2.2,
+      "description": "Gamma correction applied to TV frames."
+    },
+    "saturation": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 2,
+      "default": 1,
+      "description": "Saturation multiplier applied to TV frames (1 = unchanged)."
+    },
+    "wb_r": {
+      "$ref": "common.schema.json#/$defs/channel_scale",
+      "default": 255,
+      "description": "White balance, red channel scale (255 = unchanged)."
+    },
+    "wb_g": {
+      "$ref": "common.schema.json#/$defs/channel_scale",
+      "default": 255,
+      "description": "White balance, green channel scale (255 = unchanged)."
+    },
+    "wb_b": {
+      "$ref": "common.schema.json#/$defs/channel_scale",
+      "default": 255,
+      "description": "White balance, blue channel scale (255 = unchanged)."
+    },
+    "power_limit_w": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 2000,
+      "default": 0,
+      "x-unit": "W",
+      "description": "Maximum estimated strip power; brightness is scaled down for frames above it. 0 = no limit."
+    },
+    "pixel_watts": {
+      "type": "number",
+      "minimum": 0.05,
+      "maximum": 5,
+      "default": 0.72,
+      "x-unit": "W",
+      "description": "Power of one LED pixel at full white and brightness 255 (12 V WS2811, 60 LEDs/m: 14.4 W/m / 20 pixels = 0.72)."
+    },
+    "power": {
+      "type": "boolean",
+      "default": true,
+      "description": "Lighting on. false: the strip stays dark and UDP frames are ignored, in both modes."
+    }
+  }
+}

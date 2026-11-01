@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/exzos28/tizen-os-ambilight/main/protocol/schemas/esp32/save-mode-request.schema.json",
+  "title": "SaveModeRequest",
+  "description": "POST /save/mode body (application/x-www-form-urlencoded). Saves and switches the mode. Replies with Esp32Message.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["led_mode"],
+  "properties": {
+    "led_mode": { "$ref": "settings.schema.json#/$defs/led_mode" }
+  }
+}

@@ -2,6 +2,12 @@
 
 Single reference for every port, packet format and endpoint used by the project.
 
+The machine-readable definition lives in [`protocol/`](../protocol/README.md): JSON Schemas for
+every HTTP body and MessagePort message (with ranges, defaults and units), `constants.json` for
+ports, discovery and frame layout, and example messages. TypeScript types and clients
+(`packages/protocol`) and the firmware's `esp32/src/generated/ProtocolLimits.h` are generated
+from it. The tables below are the human-readable summary; if they disagree, `protocol/` wins.
+
 ```mermaid
 sequenceDiagram
     participant UI as TV (UI)<br/>Tizen Web App
@@ -100,7 +106,7 @@ The service sends events to every discovered host. Only `tools/server.py` listen
 
 ## ESP32 HTTP API
 
-All `POST` endpoints take `application/x-www-form-urlencoded` bodies and return `{"message": "..."}`. Omitted or non-numeric fields keep their current value; out-of-range values are clamped. Changes persist in NVS.
+Schemas: [`protocol/schemas/esp32/`](../protocol/schemas/esp32/). All `POST` endpoints take `application/x-www-form-urlencoded` bodies and return `{"message": "..."}`. Omitted or non-numeric fields keep their current value; out-of-range values are clamped. Changes persist in NVS.
 
 | Method | Path | Fields | Effect |
 |--------|------|--------|--------|
