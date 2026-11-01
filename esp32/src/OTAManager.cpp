@@ -1,6 +1,7 @@
 #include "OTAManager.h"
 #include "RemoteLogger.h"
 #include <ArduinoOTA.h>
+#include "generated/ProtocolLimits.h"
 
 OTAManager& OTAManager::instance() {
     static OTAManager inst;
@@ -8,6 +9,7 @@ OTAManager& OTAManager::instance() {
 }
 
 void OTAManager::begin(const String& hostname, const String& password) {
+    ArduinoOTA.setPort(protocol::PORT_ESP32_OTA);   // the Arduino default, set explicitly
     ArduinoOTA.setHostname(hostname.c_str());
     ArduinoOTA.setPassword(password.c_str());
 
