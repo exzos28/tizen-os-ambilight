@@ -173,7 +173,7 @@ The projects use the VS Code Tizen extension format (`tizen_web_project.yaml`, `
 
 Don't install a launcher-only `.wgt` (e.g. built with `tizen build-web` + `tizen package -t wgt`): it has the same package ID, so it replaces the hybrid package and removes the service.
 
-If you change the package ID, update it in both manifests and `SERVICE_APP_ID` in `tv/app/src/data/service.ts`.
+If you change the package ID, update it in both manifests and in `tvApp` in `protocol/constants.json` (then `npm run protocol:gen` at the repo root), which the launcher reads.
 
 To work on the launcher without a TV, run `npm run dev` in `tv/app` and open the printed URL: outside the TV it runs against a built-in mock (`?state=ok|lost|none|off|unsupported`).
 

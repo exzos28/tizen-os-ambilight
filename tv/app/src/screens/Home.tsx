@@ -6,7 +6,8 @@ import { Preview } from '../components/Preview';
 import { Footer, Hint, Kbd } from '../components/Keys';
 import { CircleIcon, ErrorIcon, ScreenIcon, WarnIcon } from '../components/icons';
 import { type Controller, type ControllerActions, unreachable } from '../controllers';
-import type { Backend, Esp32Config, LedMode, ServiceLink, ServiceStatus } from '../data';
+import { type Esp32Config, LedMode, type ServiceStatus, limits } from '@ambilight/protocol';
+import type { Backend, ServiceLink } from '../data';
 import { EDGE_LEFT, type FocusGrid, type Key, step } from '../focus';
 import {
   type Problem, type Row, captureRow, controllerRow, controllerTitle, fps, hyperHdrRow, live, summary,
@@ -41,8 +42,9 @@ interface Props {
   onControllers: () => void;
 }
 
-const pctOf = (b: number) => Math.round((b * 100) / 255);
-const byteOf = (pct: number) => Math.round((pct * 255) / 100);
+const BRIGHTNESS_MAX = limits.brightness.max;
+const pctOf = (b: number) => Math.round((b * 100) / BRIGHTNESS_MAX);
+const byteOf = (pct: number) => Math.round((pct * BRIGHTNESS_MAX) / 100);
 
 export function Home(p: Props) {
   const { link, controllers, actions, problems } = p;
@@ -123,13 +125,13 @@ export function Home(p: Props) {
   const ok = (id: string) => {
     if (id === 'lighting') toggleLighting();
     else if (id === 'brightness') setAdjusting((a) => !a);
-    else if (id === 'mode') setMode(lead?.led_mode === 1 ? 0 : 1);
-    else if (id === 'mode-follow') setMode(1);
-    else if (id === 'mode-static') setMode(0);
+    else if (id === 'mode') setMode(lead?.led_mode === LedMode.dynamic ? LedMode.plain : LedMode.dynamic);
+    else if (id === 'mode-follow') setMode(LedMode.dynamic);
+    else if (id === 'mode-static') setMode(LedMode.plain);
     else if (id.startsWith('swatch-')) {
       if (!canControl) return;
       actions.setColor(SWATCHES[+id.slice(7)].c);
-      if (lead?.led_mode !== 0) setMode(0);
+      if (lead?.led_mode !== LedMode.plain) setMode(LedMode.plain);
     } else if (id === 'test-pattern') p.onTestPattern();
     else if (id === 'banner-primary') runBanner();
     else if (id === 'banner-secondary') p.onControllers();
@@ -170,9 +172,9 @@ export function Home(p: Props) {
   const lightingText = !cfgs.length ? 'No controller found'
     : !canControl ? 'Waiting for the strip'
       : !on ? 'The strip is dark'
-        : lead.led_mode === 0 ? 'Showing a static color'
+        : lead.led_mode === LedMode.plain ? 'Showing a static color'
           : capture && !capturing ? 'No picture to follow' : 'Following the picture';
-  const modeText = !lead ? '—' : mixed((c) => c.led_mode) ? 'Mixed' : lead.led_mode === 1 ? 'Follow the picture' : 'Static color';
+  const modeText = !lead ? '—' : mixed((c) => c.led_mode) ? 'Mixed' : lead.led_mode === LedMode.dynamic ? 'Follow the picture' : 'Static color';
 
   return (
     <main class="main">
@@ -240,8 +242,8 @@ export function Home(p: Props) {
           <div class="tile tile-big tile-mode">
             <span class="label">Mode</span>
             <div class="modes" role="radiogroup" aria-label="Lighting mode">
-              <div class={`mode${lead?.led_mode === 1 ? ' checked' : ''}${f('mode-follow')}`} role="radio" aria-checked={lead?.led_mode === 1}><ScreenIcon />Follow the picture</div>
-              <div class={`mode${lead?.led_mode === 0 ? ' checked' : ''}${f('mode-static')}`} role="radio" aria-checked={lead?.led_mode === 0}><CircleIcon />Static color</div>
+              <div class={`mode${lead?.led_mode === LedMode.dynamic ? ' checked' : ''}${f('mode-follow')}`} role="radio" aria-checked={lead?.led_mode === LedMode.dynamic}><ScreenIcon />Follow the picture</div>
+              <div class={`mode${lead?.led_mode === LedMode.plain ? ' checked' : ''}${f('mode-static')}`} role="radio" aria-checked={lead?.led_mode === LedMode.plain}><CircleIcon />Static color</div>
             </div>
             <Swatches lead={lead} f={f} />
           </div>
@@ -309,7 +311,7 @@ function Swatches({ lead, f, small }: { lead?: Esp32Config; f: (id: string) => s
     <div class={`swatches${small ? ' small' : ''}`} aria-label="Static colors">
       {SWATCHES.map((s, i) => (
         <div key={s.c} aria-label={s.name} style={`background:${s.c}`}
-          class={`swatch${lead?.led_mode === 0 && lead.color.toLowerCase() === s.c ? ' selected' : ''}${f(`swatch-${i}`)}`} />
+          class={`swatch${lead?.led_mode === LedMode.plain && lead.color.toLowerCase() === s.c ? ' selected' : ''}${f(`swatch-${i}`)}`} />
       ))}
     </div>
   );

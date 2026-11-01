@@ -21,9 +21,16 @@ export type ServiceReply =
 
 /** A reply that doesn't match protocol/schemas/service. */
 export class ServiceReplyError extends Error {
-  constructor(message: string) {
+  /**
+   * Which reply was malformed, a `status` or a `result` one (e.g. to fail the pending command
+   * on a bad `result`); null when that isn't known (a message with both keys).
+   */
+  readonly reply: ServiceReply['kind'] | null
+
+  constructor(message: string, reply: ServiceReply['kind'] | null = null) {
     super(message)
     this.name = 'ServiceReplyError'
+    this.reply = reply
   }
 }
 
@@ -53,15 +60,25 @@ export function parseServiceReply(data: readonly MessagePortDataItem[]): Service
   const status = data.find((item) => item.key === mp.statusKey)
   const result = data.find((item) => item.key === mp.resultKey)
   if (status && result) throw new ServiceReplyError(`Reply has both "${mp.statusKey}" and "${mp.resultKey}"`)
-  if (status) return { kind: 'status', status: parseServiceStatus(stringValue(status)) }
-  if (result) return { kind: 'result', result: parseCommandResult(stringValue(result)) }
+  if (status) return { kind: 'status', status: tagged('status', () => parseServiceStatus(stringValue(status))) }
+  if (result) return { kind: 'result', result: tagged('result', () => parseCommandResult(stringValue(result))) }
   return null
 }
 
 /** Parses and checks the ServiceStatus JSON (structure and enums, not every optional field). */
 export function parseServiceStatus(json: string): ServiceStatus {
-  const s = parseObject(json, 'status')
-  expect(typeof s.version === 'string', 'status.version')
+  return tagged('status', () => checkServiceStatus(parseObject(json, 'status')))
+}
+
+/** Parses and checks the ServiceCommandResult JSON. */
+export function parseCommandResult(json: string): ServiceCommandResult {
+  return tagged('result', () => checkCommandResult(parseObject(json, 'result')))
+}
+
+type Json = Record<string, unknown>
+
+function checkServiceStatus(s: Json): ServiceStatus {
+  expect(s.version === null || typeof s.version === 'string', 'status.version')
   expect(Array.isArray(s.configWarnings) && s.configWarnings.every((w) => typeof w === 'string'), 'status.configWarnings')
 
   const c = object(s.capture, 'status.capture')
@@ -87,15 +104,20 @@ export function parseServiceStatus(json: string): ServiceStatus {
   return s as unknown as ServiceStatus
 }
 
-/** Parses and checks the ServiceCommandResult JSON. */
-export function parseCommandResult(json: string): ServiceCommandResult {
-  const r = parseObject(json, 'result')
+function checkCommandResult(r: Json): ServiceCommandResult {
   expect(typeof r.ok === 'boolean', 'result.ok')
   expect(r.error === null || typeof r.error === 'string', 'result.error')
   return r as unknown as ServiceCommandResult
 }
 
-type Json = Record<string, unknown>
+/** Runs `read`, marking a ServiceReplyError it throws as one about a `reply` reply. */
+function tagged<T>(reply: ServiceReply['kind'], read: () => T): T {
+  try {
+    return read()
+  } catch (e) {
+    throw e instanceof ServiceReplyError && e.reply === null ? new ServiceReplyError(e.message, reply) : e
+  }
+}
 
 function stringValue(item: MessagePortDataItem): string {
   if (typeof item.value !== 'string') throw new ServiceReplyError(`"${item.key}" is not a string`)

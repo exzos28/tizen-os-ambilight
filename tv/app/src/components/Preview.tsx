@@ -2,7 +2,7 @@
 // right T→B, bottom R→L, left B→T), dots = the LEDs along each side, interpolated like the
 // controller does (linear RGB here, the firmware blends in HSV). Plain divs, no effects.
 
-import type { Esp32Config } from '../data';
+import { type Esp32Config, LedMode } from '@ambilight/protocol';
 
 const W = 440, H = 248, OX = 40, OY = 36, B = 26, R = 16, DOT = 10;
 const BOX_W = W + 2 * OX, BOX_H = H + 2 * OY;
@@ -59,7 +59,7 @@ export function Preview({ rgb, h = 0, v = 0, live, config }: Props) {
     const n = [config.led_top, config.led_right, config.led_bottom, config.led_left];
     const side = (s: number, from: number, len: number): string[] => {
       if (!config.power) return new Array<string>(n[s]).fill(DARK);
-      if (config.led_mode === 0) return new Array<string>(n[s]).fill(config.color);
+      if (config.led_mode === LedMode.plain) return new Array<string>(n[s]).fill(config.color);
       if (!valid) return new Array<string>(n[s]).fill(DARK);
       return interpolate(samples.slice(from, from + len), n[s]);
     };

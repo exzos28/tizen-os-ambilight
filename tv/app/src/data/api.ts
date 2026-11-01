@@ -1,10 +1,8 @@
-// What the screens talk to. Two implementations: the real one on the TV (service.ts +
-// esp32.ts + platform.ts) and an in-memory mock for a desktop browser (mock.ts).
+// What the screens talk to. Two implementations: the real one on the TV (service.ts and the
+// @ambilight/protocol ESP32 client, see index.ts) and an in-memory mock for a desktop browser
+// (mock.ts). Wire types come from @ambilight/protocol.
 
-import type {
-  CommandResult, Esp32Config, Esp32Message, Esp32Metrics, Esp32Status, LedMode,
-  SaveLedsForm, ServiceCommand, ServiceStatus,
-} from './types';
+import type { Esp32Client, ServiceCommand, ServiceCommandResult, ServiceStatus } from '@ambilight/protocol';
 
 /** Whether the launcher can reach the service, and its last status. */
 export type ServiceLink =
@@ -20,19 +18,16 @@ export interface ServiceApi {
   subscribe(cb: (link: ServiceLink) => void): () => void;
   /** Sends one status request; the answer arrives through subscribe(). */
   requestStatus(): void;
-  command(command: ServiceCommand): Promise<CommandResult>;
+  command(command: ServiceCommand): Promise<ServiceCommandResult>;
   /** Launches the service (AppControl command=start), the old launcher's *Start*. */
   start(): Promise<void>;
 }
 
-export interface Esp32Api {
-  getStatus(host: string): Promise<Esp32Status>;
-  getConfig(host: string): Promise<Esp32Config>;
-  getMetrics(host: string): Promise<Esp32Metrics>;
-  savePower(host: string, on: boolean): Promise<Esp32Message>;
-  saveLeds(host: string, form: SaveLedsForm): Promise<Esp32Message>;
-  saveMode(host: string, mode: LedMode): Promise<Esp32Message>;
-}
+/** The ESP32 HTTP API endpoints the launcher uses. */
+export type Esp32Controller = Pick<Esp32Client, 'getStatus' | 'getConfig' | 'getMetrics' | 'savePower' | 'saveLeds' | 'saveMode'>;
+
+/** The controller at `host` (an IPv4 address from status.esp32.hosts). */
+export type Esp32Api = (host: string) => Esp32Controller;
 
 export interface PlatformApi {
   /** The launcher's version from config.xml, null when unknown. */

@@ -2,7 +2,8 @@
 // problem banner and the header pill. Same verdicts as the old launcher's status panel.
 
 import { type Controller, unreachable } from './controllers';
-import type { CaptureStatus, Esp32Output, HyperHdrOutput, ServiceLink, ServiceStatus } from './data';
+import { type CaptureStatus, type Esp32OutputStatus, type HyperHdrOutputStatus, LedMode, type ServiceStatus } from '@ambilight/protocol';
+import type { ServiceLink } from './data';
 
 export type Tone = 'ok' | 'warn' | 'bad' | 'off';
 
@@ -95,7 +96,7 @@ export function controllerRow(c: Controller, title: string, status: ServiceStatu
   if (unreachable(c)) return { title, detail, value: 'Not answering', tone: 'warn' };
   if (!c.config) return { title, detail, value: 'Connecting', tone: 'off' };
   if (!c.config.power) return { title, detail, value: 'Off', tone: 'off' };
-  if (c.config.led_mode === 0) return { title, detail, value: 'Static color', tone: 'ok' };
+  if (c.config.led_mode === LedMode.plain) return { title, detail, value: 'Static color', tone: 'ok' };
 
   const capturing = status != null && live(status.capture);
   const m = c.metrics;
@@ -103,8 +104,8 @@ export function controllerRow(c: Controller, title: string, status: ServiceStatu
     if (m.last_frame_ms >= 0 && m.last_frame_ms < RECEIVING_MS) return { title, detail, value: 'Streaming', tone: 'ok' };
     return capturing ? { title, detail, value: 'No frames', tone: 'warn' } : { title, detail, value: 'Waiting', tone: 'off' };
   }
-  const e: Esp32Output | undefined = status?.esp32;
-  const p: Esp32Output | undefined = prev?.esp32;
+  const e: Esp32OutputStatus | undefined = status?.esp32;
+  const p: Esp32OutputStatus | undefined = prev?.esp32;
   if (e?.enabled) {
     const before = p?.enabled ? p : { framesSent: 0, sendErrors: 0 };
     if (e.sendErrors > before.sendErrors) return { title, detail: `Sending fails: ${e.lastError ?? ''}`, value: 'Failing', tone: 'bad' };
@@ -116,7 +117,7 @@ export function controllerRow(c: Controller, title: string, status: ServiceStatu
 export function hyperHdrRow(link: ServiceLink): Row {
   const title = 'HyperHDR';
   if (link.kind !== 'up') return { title, detail: '—', value: '—', tone: 'off' };
-  const h: HyperHdrOutput = link.status.hyperhdr;
+  const h: HyperHdrOutputStatus = link.status.hyperhdr;
   if (!h.enabled) return { title, detail: 'Not set up', value: 'Off', tone: 'off' };
   if (h.connected && h.replies > 0) return { title, detail: h.endpoint, value: 'Connected', tone: 'ok' };
   if (h.connected) return { title, detail: h.endpoint, value: 'Connecting', tone: 'warn' };

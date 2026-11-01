@@ -95,7 +95,7 @@ service/
 app/
   src/App.tsx         Shell: section rail, the one mounted screen, remote keys, status poll
   src/screens/        Home (controls, preview, status, problem banner), Test pattern, placeholders
-  src/data/           Service message port, ESP32 HTTP API, desktop mock, wire types
+  src/data/           Service message port, ESP32 HTTP API, desktop mock (wire types and clients: @ambilight/protocol)
   vite.config.ts      Builds into ../ui for Chromium M94 (Tizen 7.0)
 
 ui/

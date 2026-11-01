@@ -4,7 +4,8 @@
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { RAIL, Rail, type ScreenId } from './components/Rail';
 import { useControllers } from './controllers';
-import { type Backend, type ServiceLink, type ServiceStatus } from './data';
+import type { ServiceStatus } from '@ambilight/protocol';
+import type { Backend, ServiceLink } from './data';
 import { keyOf } from './focus';
 import { Home, type KeyHandler } from './screens/Home';
 import { Placeholder } from './screens/Placeholder';

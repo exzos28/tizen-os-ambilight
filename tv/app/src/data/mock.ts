@@ -7,8 +7,11 @@
 // ?state=off          the service is not running ("Start" starts it)
 // ?state=unsupported  the TV has no capture API (libvideoenhance.so missing)
 
+import {
+  type CaptureStatus, type Esp32Config, type Esp32Metrics, type Esp32Status, LedMode, type ServiceCommandResult,
+  type ServiceStatus, limits,
+} from '@ambilight/protocol';
 import type { Backend, ServiceLink } from './api';
-import type { CaptureStatus, CommandResult, Esp32Config, Esp32Metrics, Esp32Status, ServiceStatus } from './types';
 
 export type MockState = 'ok' | 'lost' | 'none' | 'off' | 'unsupported';
 
@@ -53,7 +56,7 @@ export function createMock(state: MockState): Backend {
 
   const config: Esp32Config = {
     wifi_ssid: 'Home', ota_host: 'ambilight', ip_octet: 245,
-    num_leds: 32, max_leds: 1500, brightness: 200, color: '#ffd9a8', led_mode: 1,
+    num_leds: 32, max_leds: limits.num_leds.max, brightness: 200, color: '#ffd9a8', led_mode: LedMode.dynamic,
     led_top: 10, led_right: 6, led_bottom: 10, led_left: 6, start_corner: 0, clockwise: true,
     gamma: 2.2, saturation: 1.2, wb_r: 255, wb_g: 240, wb_b: 220,
     power_limit_w: 0, pixel_watts: 0.3, power: true,
@@ -104,18 +107,18 @@ export function createMock(state: MockState): Backend {
     version: '1.2.0', ip: HOST, mode: 'STA', ssid: 'Home', rssi: -58, connected: true, gateway: '192.168.50.1',
   });
   const metrics = (): Esp32Metrics => {
-    const streaming = config.power && config.led_mode === 1 && captureRuns();
+    const streaming = config.power && config.led_mode === LedMode.dynamic && captureRuns();
     return {
       heap_free: 182000, heap_total: 320000, heap_min: 171000,
       uptime_s: Math.floor((Date.now() - t0) / 1000) + 86400, cpu_mhz: 240,
-      power_w: config.power ? Math.round(config.num_leds * config.pixel_watts * config.brightness / 255 * 10) / 10 : 0,
+      power_w: config.power ? Math.round(config.num_leds * config.pixel_watts * config.brightness / limits.brightness.max * 10) / 10 : 0,
       power_limited: false,
       frames_rx: Math.floor(framesSent / 7),
       last_frame_ms: streaming ? 40 : -1,
     };
   };
 
-  function command(name: string): Promise<CommandResult> {
+  function command(name: string): Promise<ServiceCommandResult> {
     if (!serviceUp) return delay({ ok: false, error: 'The service is not running' });
     if (name === 'pause') paused = true;
     else if (name === 'resume') paused = false;
@@ -146,14 +149,15 @@ export function createMock(state: MockState): Backend {
         return delay(undefined, 100);
       },
     },
-    esp32: {
+    // One controller: every host gets the same one.
+    esp32: () => ({
       getStatus: () => esp(espStatus),
       getConfig: () => esp(() => ({ ...config })),
       getMetrics: () => esp(metrics),
-      savePower: (_h, on) => esp(() => { config.power = on; return { message: 'saved' }; }),
-      saveLeds: (_h, form) => esp(() => { Object.assign(config, form); return { message: 'saved' }; }),
-      saveMode: (_h, mode) => esp(() => { config.led_mode = mode; return { message: 'saved' }; }),
-    },
+      savePower: ({ power }) => esp(() => { config.power = power === 1; return { message: 'saved' }; }),
+      saveLeds: (form) => esp(() => { Object.assign(config, form); return { message: 'saved' }; }),
+      saveMode: ({ led_mode }) => esp(() => { config.led_mode = led_mode; return { message: 'saved' }; }),
+    }),
     platform: {
       appVersion: () => '1.2.0',
       modelName: () => 'QE50QN92D',

@@ -165,7 +165,11 @@ avoids memory it doesn't need:
 Preact + TypeScript web app. The source is `tv/app/`; Vite (`npm run build` there) builds it into `tv/ui`, next to
 the tracked `config.xml`: one classic deferred script and one stylesheet (`assets/app.js`,
 `assets/app.css`) for Chromium M94, the web engine of Tizen 7.0 (2023 TVs), the oldest
-supported. `preact` is the only runtime dependency.
+supported. `preact` is the only runtime dependency besides
+[`@ambilight/protocol`](../protocol/README.md#using-ambilightprotocol) (`packages/protocol`,
+linked with `file:`, no dependencies of its own): the wire types, ESP32 setting limits,
+constants (port names, app IDs), the ESP32 HTTP client and the service message helpers, all
+generated from or written against `protocol/`.
 
 The TV is short on memory, so the app stays small: only the current screen is mounted, system
 fonts only, no blur, shadows or transitions; the only animation is the *Test pattern*. The
@@ -180,7 +184,7 @@ widget is not preloaded (no `prelaunch.support`), and Back on Home exits it.
 | `src/screens/Placeholder.tsx` | *Picture*, *Strip layout*, *Controllers*, *Diagnostics*: not built yet |
 | `src/status.ts` | Status lines, problems (most important first) and the header pill from the service status |
 | `src/controllers.ts` | The discovered controllers over HTTP: `/status` + `/config` once, `/metrics` every second while Home is shown; writes |
-| `src/data/` | Adapters: `service.ts` (message port), `esp32.ts` (HTTP), `mock.ts` (desktop browser, `?state=ok\|lost\|none\|off\|unsupported`), `types.ts` (wire formats) |
+| `src/data/` | Adapters: `service.ts` (Tizen message port and AppControl glue around the `@ambilight/protocol` message helpers), `index.ts` (picks the backend; one `createEsp32Client` per controller, 3 s timeout), `mock.ts` (desktop browser, `?state=ok\|lost\|none\|off\|unsupported`), `api.ts` (what the screens use) |
 
 Remote: ◀ ▶ ▲ ▼ move, OK activates, Back exits on Home (closes the test pattern, returns
 to Home from other sections). ◀ from the leftmost element moves to the rail.
