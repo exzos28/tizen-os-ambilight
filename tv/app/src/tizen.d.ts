@@ -1,10 +1,8 @@
 // The few Tizen Web APIs the launcher uses (window.tizen exists only on the TV).
 
 declare namespace TizenApi {
-  interface MessagePortDataItem {
-    key: string;
-    value: string | string[];
-  }
+  /** {key, value}: the messages @ambilight/protocol builds and reads. */
+  type MessagePortDataItem = import('@ambilight/protocol').MessagePortDataItem;
   interface RemoteMessagePort {
     sendMessage(data: MessagePortDataItem[], localPort?: LocalMessagePort): void;
   }

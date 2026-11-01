@@ -1,23 +1,24 @@
 // Client of the TV service's local message port (tv/service/StatusPort.cs): IPC between the
-// two apps of the package on the TV, nothing leaves the device.
+// two apps of the package on the TV, nothing leaves the device. The messages are built and
+// read by @ambilight/protocol (protocol/schemas/service); this file is the Tizen glue:
+// the ports, the reply timeouts and the AppControl launch.
 //
-//   status:  {request: "status"}                    → reply key "status" = JSON ServiceStatus
-//   command: {request: "command", command: <name>}  → reply key "result" = JSON CommandResult
-//
-// Requests carry the launcher's own port "ambilight.ui" as the reply port.
+// Requests carry the launcher's own port (constants.messagePort.uiPort) as the reply port.
 
+import {
+  type ServiceCommand, type ServiceCommandResult, type ServiceReply, ServiceReplyError,
+  buildCommandRequest, buildStatusRequest, constants, parseServiceReply,
+} from '@ambilight/protocol';
 import type { ServiceApi, ServiceLink } from './api';
-import type { CommandResult, ServiceCommand, ServiceStatus } from './types';
 
-export const SERVICE_APP_ID = 'fCAYP0k0uD.Service';
-const STATUS_PORT = 'ambilight.status';
-const UI_PORT = 'ambilight.ui';
+const { serviceAppId } = constants.tvApp;
+const { servicePort, uiPort } = constants.messagePort;
 /** The port is there but the service does not answer. */
 const NO_REPLY_MS = 3000;
 const COMMAND_TIMEOUT_MS = 3000;
 
 interface PendingCommand {
-  resolve: (r: CommandResult) => void;
+  resolve: (r: ServiceCommandResult) => void;
   timer: number;
 }
 
@@ -30,31 +31,30 @@ export function createServiceClient(tz: TizenApi.Tizen): ServiceApi {
 
   const emit = (link: ServiceLink) => listeners.forEach((cb) => cb(link));
 
+  // Replies come in request order; the port has no request ids.
+  const settle = (result: ServiceCommandResult) => {
+    const p = pending.shift();
+    if (!p) return;
+    clearTimeout(p.timer);
+    p.resolve(result);
+  };
+
   try {
-    localPort = tz.messageport.requestLocalMessagePort(UI_PORT);
+    localPort = tz.messageport.requestLocalMessagePort(uiPort);
     localPort.addMessagePortListener((data) => {
-      for (const item of data) {
-        if (item.key === 'status') {
-          let status: ServiceStatus;
-          try {
-            status = JSON.parse(String(item.value)) as ServiceStatus;
-          } catch (e) {
-            console.warn('Bad status reply', e);
-            continue;
-          }
-          waitingSince = 0;
-          emit({ kind: 'up', status });
-        } else if (item.key === 'result') {
-          // Replies come in request order; the port has no request ids.
-          const p = pending.shift();
-          if (!p) continue;
-          clearTimeout(p.timer);
-          try {
-            p.resolve(JSON.parse(String(item.value)) as CommandResult);
-          } catch {
-            p.resolve({ ok: false, error: 'Bad reply from the service' });
-          }
-        }
+      let reply: ServiceReply | null;
+      try {
+        reply = parseServiceReply(data);
+      } catch (e) {
+        console.warn('Bad reply from the service', e);
+        if (e instanceof ServiceReplyError && e.reply === 'result') settle({ ok: false, error: 'Bad reply from the service' });
+        return;
+      }
+      if (reply?.kind === 'status') {
+        waitingSince = 0;
+        emit({ kind: 'up', status: reply.status });
+      } else if (reply?.kind === 'result') {
+        settle(reply.result);
       }
     });
   } catch (e) {
@@ -62,7 +62,7 @@ export function createServiceClient(tz: TizenApi.Tizen): ServiceApi {
   }
 
   // Throws NotFoundError while the service (or its port) is not up.
-  const remote = () => tz.messageport.requestRemoteMessagePort(SERVICE_APP_ID, STATUS_PORT);
+  const remote = () => tz.messageport.requestRemoteMessagePort(serviceAppId, servicePort);
 
   return {
     subscribe(cb) {
@@ -84,7 +84,7 @@ export function createServiceClient(tz: TizenApi.Tizen): ServiceApi {
         return;
       }
       try {
-        port.sendMessage([{ key: 'request', value: 'status' }], localPort);
+        port.sendMessage(buildStatusRequest(), localPort);
       } catch (e) {
         emit({ kind: 'down', reason: 'not-responding', detail: e instanceof Error ? e.message : String(e) });
         return;
@@ -95,7 +95,7 @@ export function createServiceClient(tz: TizenApi.Tizen): ServiceApi {
     },
 
     command(command: ServiceCommand) {
-      return new Promise<CommandResult>((resolve) => {
+      return new Promise<ServiceCommandResult>((resolve) => {
         if (!localPort) return resolve({ ok: false, error: 'Message ports are unavailable' });
         let port: TizenApi.RemoteMessagePort;
         try {
@@ -113,10 +113,7 @@ export function createServiceClient(tz: TizenApi.Tizen): ServiceApi {
         };
         pending.push(entry);
         try {
-          port.sendMessage([
-            { key: 'request', value: 'command' },
-            { key: 'command', value: command },
-          ], localPort);
+          port.sendMessage(buildCommandRequest(command), localPort);
         } catch (e) {
           clearTimeout(entry.timer);
           pending.splice(pending.indexOf(entry), 1);
@@ -133,7 +130,7 @@ export function createServiceClient(tz: TizenApi.Tizen): ServiceApi {
             null, null, null,
             [new tz.ApplicationControlData('command', ['start'])],
           );
-          tz.application.launchAppControl(control, SERVICE_APP_ID, () => resolve(), (err) => reject(new Error(err.message)));
+          tz.application.launchAppControl(control, serviceAppId, () => resolve(), (err) => reject(new Error(err.message)));
         } catch (e) {
           reject(e instanceof Error ? e : new Error(String(e)));
         }

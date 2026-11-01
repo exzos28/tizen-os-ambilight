@@ -3,7 +3,8 @@
 // /metrics on every poll while Home is shown.
 
 import { useCallback, useEffect, useRef, useState } from 'preact/hooks';
-import type { Backend, Esp32Config, Esp32Metrics, Esp32Status, LedMode } from './data';
+import type { Esp32Config, Esp32Metrics, Esp32Status, LedMode } from '@ambilight/protocol';
+import type { Backend } from './data';
 
 export interface Controller {
   host: string;
@@ -76,10 +77,11 @@ export function useControllers(backend: Backend, hosts: string[] | null, active:
     inFlight.current.add(c.host);
     try {
       if (!c.config || !c.status) {
-        const [status, config] = await Promise.all([esp32.getStatus(c.host), esp32.getConfig(c.host)]);
+        const esp = esp32(c.host);
+        const [status, config] = await Promise.all([esp.getStatus(), esp.getConfig()]);
         ok(c.host, { status, config });
       } else {
-        ok(c.host, { metrics: await esp32.getMetrics(c.host) });
+        ok(c.host, { metrics: await esp32(c.host).getMetrics() });
       }
     } catch (e) {
       failed(c.host, e);
@@ -108,9 +110,9 @@ export function useControllers(backend: Backend, hosts: string[] | null, active:
   };
 
   const actions: ControllerActions = {
-    setPower: (on) => write(() => ({ power: on }), (h) => esp32.savePower(h, on)),
-    setMode: (mode) => write(() => ({ led_mode: mode }), (h) => esp32.saveMode(h, mode)),
-    setColor: (color) => write(() => ({ color }), (h) => esp32.saveLeds(h, { color })),
+    setPower: (on) => write(() => ({ power: on }), (h) => esp32(h).savePower({ power: on ? 1 : 0 })),
+    setMode: (mode) => write(() => ({ led_mode: mode }), (h) => esp32(h).saveMode({ led_mode: mode })),
+    setColor: (color) => write(() => ({ color }), (h) => esp32(h).saveLeds({ color })),
     setBrightness(value) {
       // Shown at once; sent once the remote stops repeating.
       for (const c of ref.current) {
@@ -118,7 +120,7 @@ export function useControllers(backend: Backend, hosts: string[] | null, active:
       }
       clearTimeout(brightnessTimer.current);
       brightnessTimer.current = window.setTimeout(() => {
-        write(() => ({ brightness: value }), (h) => esp32.saveLeds(h, { brightness: value }));
+        write(() => ({ brightness: value }), (h) => esp32(h).saveLeds({ brightness: value }));
       }, BRIGHTNESS_DEBOUNCE_MS);
     },
   };
