@@ -74,12 +74,21 @@ export function App({ backend }: { backend: Backend }) {
 
   // ---------------------------------------------------------------- remote
   const exit = () => backend.platform.exit();
-  const open = (id: ScreenId) => {
+  /** Shows a section without moving the focus (▲ ▼ on the rail). */
+  const show = (id: ScreenId) => {
     setHomeFocus(null);
     setScreen(id);
-    setRailIndex(RAIL.findIndex((r) => r.id === id));
     keys.current = null; // the new screen registers its own handler when it renders
+  };
+  /** Shows a section and puts the focus in it. */
+  const open = (id: ScreenId) => {
+    show(id);
+    setRailIndex(RAIL.findIndex((r) => r.id === id));
     setZone('content');
+  };
+  const toRail = () => {
+    setRailIndex(RAIL.findIndex((it) => it.id === screen));
+    setZone('rail');
   };
 
   // The listener is registered once and calls the handler of the latest render, so the
@@ -103,19 +112,19 @@ export function App({ backend }: { backend: Backend }) {
         return;
       }
       if (zone === 'rail') {
-        if (key === 'up') setRailIndex((i) => Math.max(0, i - 1));
-        else if (key === 'down') setRailIndex((i) => Math.min(RAIL.length - 1, i + 1));
-        else if (key === 'ok') open(RAIL[railIndex].id);
-        else if (key === 'right') setZone('content');
+        // ▲ ▼ switch sections right away, the focus stays on the rail; OK / ▶ go into the section.
+        if (key === 'up' || key === 'down') {
+          const i = Math.max(0, Math.min(RAIL.length - 1, railIndex + (key === 'up' ? -1 : 1)));
+          if (i !== railIndex) { setRailIndex(i); show(RAIL[i].id); }
+        } else if (key === 'ok' || key === 'right') setZone('content');
         else if (key === 'back') { if (screen === 'home') exit(); else open('home'); }
         return;
       }
       const r = keys.current ? keys.current(key) : false;
-      if (r === 'rail') {
-        setRailIndex(RAIL.findIndex((it) => it.id === screen));
-        setZone('rail');
-      } else if (!r && key === 'back') {
-        if (screen === 'home') exit(); else open('home');
+      if (r === 'rail') toRail();
+      else if (!r && key === 'back') {
+        // Back from a section returns to the rail; on Home it exits.
+        if (screen === 'home') exit(); else toRail();
       }
     };
     onKeyRef.current = onKey;
