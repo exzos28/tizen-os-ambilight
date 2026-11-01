@@ -151,6 +151,7 @@ export function Outputs(p: ScreenProps) {
   const startEdit = (id: FieldId) => {
     if (!shown) return;
     if (!draft) setDraft(shown);
+    if (error?.where === 'hdr') setError(null);
     setEditing({ id, before: shown[id] });
   };
   const endEdit = (how: EditEnd) => {

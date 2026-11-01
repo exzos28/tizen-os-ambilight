@@ -203,4 +203,4 @@
 .out-conn-title.tone-warn { color: var(--ui-warn-text); }
 .out-conn-title.tone-bad { color: var(--ui-bad-text); }
 .out-conn-title.tone-off { color: var(--ui-muted); }
-.out-conn .out-card-sub { font-size: 17px; }
+.out-conn .out-card-sub { font-size: 17px; white-space: normal; }
