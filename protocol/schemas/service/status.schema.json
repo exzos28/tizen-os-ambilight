@@ -7,7 +7,7 @@
   "additionalProperties": false,
   "required": ["version", "capture", "esp32", "hyperhdr", "configWarnings"],
   "properties": {
-    "version": { "type": "string", "description": "TV package version (the project version, e.g. `1.1.0`)." },
+    "version": { "type": ["string", "null"], "description": "TV package version (the project version, e.g. `1.1.0`); null if the service could not read it (app_get_version)." },
     "capture": { "$ref": "#/$defs/CaptureStatus" },
     "esp32": { "$ref": "#/$defs/Esp32OutputStatus" },
     "hyperhdr": { "$ref": "#/$defs/HyperHdrOutputStatus" },

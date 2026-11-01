@@ -85,7 +85,7 @@ describe('parseServiceReply', () => {
 })
 
 describe('parseServiceStatus', () => {
-  for (const name of ['service/status', 'service/status.failed', 'service/status.paused']) {
+  for (const name of ['service/status', 'service/status.failed', 'service/status.paused', 'service/status.unknown-version']) {
     it(`accepts ${name}`, () => {
       assert.deepEqual(parseServiceStatus(fixtureText(name)), fixture(name))
     })

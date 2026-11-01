@@ -78,7 +78,7 @@ export function parseCommandResult(json: string): ServiceCommandResult {
 type Json = Record<string, unknown>
 
 function checkServiceStatus(s: Json): ServiceStatus {
-  expect(typeof s.version === 'string', 'status.version')
+  expect(s.version === null || typeof s.version === 'string', 'status.version')
   expect(Array.isArray(s.configWarnings) && s.configWarnings.every((w) => typeof w === 'string'), 'status.configWarnings')
 
   const c = object(s.capture, 'status.capture')

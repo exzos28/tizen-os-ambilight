@@ -1,0 +1,21 @@
+{
+  "version": null,
+  "capture": {
+    "state": "waiting",
+    "failure": null,
+    "error": null,
+    "failedAttempts": 0,
+    "frames": 0
+  },
+  "esp32": {
+    "enabled": true,
+    "hosts": [],
+    "framesSent": 0,
+    "sendErrors": 0,
+    "lastError": null
+  },
+  "hyperhdr": {
+    "enabled": false
+  },
+  "configWarnings": []
+}

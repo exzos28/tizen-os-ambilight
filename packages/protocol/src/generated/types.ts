@@ -645,8 +645,11 @@ export interface ServiceStatusRequest {
  * "status"} (see status-reply.schema.json).
  */
 export interface ServiceStatus {
-  /** TV package version (the project version, e.g. `1.1.0`). */
-  version: string
+  /**
+   * TV package version (the project version, e.g. `1.1.0`); null if the service could not read it
+   * (app_get_version).
+   */
+  version: string | null
   /**
    * Screen capture state. The frame fields (`frameMs` … `rgb`) are present once a frame was
    * captured since the last (re)start.
