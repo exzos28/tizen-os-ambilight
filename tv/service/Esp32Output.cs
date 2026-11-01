@@ -48,6 +48,7 @@ namespace Service
             foreach (var endpoint in _endpoints)
             {
                 try { _udp.Send(_packet, _packet.Length, endpoint); sent = true; }
+                catch (ObjectDisposedException) { return; }   // turned off by set-outputs while this frame was in flight
                 catch (Exception ex)
                 {
                     _lastError = $"{endpoint.Address}: {ex.Message}";
@@ -74,6 +75,7 @@ namespace Service
             w.WriteEndObject();
         }
 
+        // Safe while Send runs on the capture thread: that frame is then dropped.
         public void Dispose() => _udp.Dispose();
     }
 }

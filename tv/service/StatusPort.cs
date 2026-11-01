@@ -10,8 +10,9 @@ namespace Service
     //
     //   { "request": "status" }
     //       → { "status": "<JSON>" }   (format: StatusJson.WriteService, CaptureStatus.WriteJson)
-    //   { "request": "command", "command": "pause" | "resume" | "rediscover" }
-    //       → { "result": "{\"ok\": bool, \"error\": string|null}" }   (ServiceCommands)
+    //   { "request": "command", "command": "pause" | "resume" | "rediscover", "id"?: "<id>" }
+    //   { "request": "command", "command": "set-outputs", "outputs": "<JSON>", "id"?: "<id>" }
+    //       → { "result": "{\"ok\": bool, \"error\": string|null}", "id"?: "<id>" }   (ServiceCommands)
     //
     // Other requests get no reply. Not a trusted port: nothing here is secret or harmful, and
     // an untrusted port works no matter how the package was signed.
@@ -21,24 +22,23 @@ namespace Service
 
         private readonly MessagePort _port;
         private readonly Func<string> _buildStatus;
-        private readonly Func<string, string> _runCommand;
+        private readonly ICommandTarget _commands;
 
-        private StatusPort(Func<string> buildStatus, Func<string, string> runCommand)
+        private StatusPort(Func<string> buildStatus, ICommandTarget commands)
         {
             _buildStatus = buildStatus;
-            _runCommand = runCommand;
+            _commands = commands;
             _port = new MessagePort(PortName, false);
             _port.MessageReceived += OnMessage;
             _port.Listen();
         }
 
-        // Must be called on the main thread (messages are delivered on its loop). Returns
-        // null if the port can't be opened — the service then runs without the panel.
-        // runCommand gets the "command" value (null if missing or not a string) and returns
-        // the result JSON.
-        public static StatusPort TryStart(Func<string> buildStatus, Func<string, string> runCommand, Action<string, string> log)
+        // Must be called on the main thread (messages are delivered on its loop, and commands
+        // run there). Returns null if the port can't be opened — the service then runs
+        // without the panel.
+        public static StatusPort TryStart(Func<string> buildStatus, ICommandTarget commands, Action<string, string> log)
         {
-            try { return new StatusPort(buildStatus, runCommand); }
+            try { return new StatusPort(buildStatus, commands); }
             catch (Exception ex)
             {
                 log("StatusPortError", ex.Message);
@@ -46,13 +46,16 @@ namespace Service
             }
         }
 
+        // A bundle value, or null if it is missing or not a string.
+        private static string Item(Bundle bundle, string key) => bundle.TryGetItem(key, out string value) ? value : null;
+
         private void OnMessage(object sender, MessageReceivedEventArgs e)
         {
             try
             {
                 var remote = e.Remote;
                 if (remote == null || string.IsNullOrEmpty(remote.AppId) || string.IsNullOrEmpty(remote.PortName)) return;
-                if (!e.Message.TryGetItem("request", out string request)) return;
+                string request = Item(e.Message, "request");
 
                 using var reply = new Bundle();
                 if (request == "status")
@@ -61,8 +64,9 @@ namespace Service
                 }
                 else if (request == "command")
                 {
-                    if (!e.Message.TryGetItem("command", out string command)) command = null;
-                    reply.AddItem("result", _runCommand(command));
+                    var (result, id) = ServiceCommands.Handle(Item(e.Message, "id"), Item(e.Message, "command"), Item(e.Message, "outputs"), _commands);
+                    reply.AddItem("result", result);
+                    if (id != null) reply.AddItem("id", id);
                 }
                 else return;
                 _port.Send(reply, remote.AppId, remote.PortName);

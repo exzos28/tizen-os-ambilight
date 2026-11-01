@@ -152,9 +152,10 @@ namespace Service
 
         // The whole reply for the launcher's status panel (StatusPort). version is the package
         // version (null if it could not be read); a null output writer means that output is
-        // disabled in ambilight.json.
+        // off. outputs is the output configuration in effect (the "outputs" section); its
+        // Warnings are the configWarnings.
         public static void WriteService(Utf8JsonWriter w, string version, CaptureStatus capture,
-            Action<Utf8JsonWriter> esp32, Action<Utf8JsonWriter> hyperHdr, IReadOnlyList<string> configWarnings)
+            Action<Utf8JsonWriter> esp32, Action<Utf8JsonWriter> hyperHdr, OutputConfig outputs)
         {
             w.WriteStartObject();
             w.WriteString("version", version);
@@ -164,8 +165,10 @@ namespace Service
             WriteOutput(w, esp32);
             w.WritePropertyName("hyperhdr");
             WriteOutput(w, hyperHdr);
+            w.WritePropertyName("outputs");
+            outputs.WriteJson(w);
             w.WriteStartArray("configWarnings");
-            foreach (var warning in configWarnings) w.WriteStringValue(warning);
+            foreach (var warning in outputs.Warnings) w.WriteStringValue(warning);
             w.WriteEndArray();
             w.WriteEndObject();
         }

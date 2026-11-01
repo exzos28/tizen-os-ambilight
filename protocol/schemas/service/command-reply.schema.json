@@ -12,6 +12,10 @@
       "contentMediaType": "application/json",
       "contentSchema": { "$ref": "command-result.schema.json" },
       "description": "ServiceCommandResult as a JSON string."
+    },
+    "id": {
+      "$ref": "command-request.schema.json#/$defs/commandId",
+      "description": "The request's `id`, echoed; absent when the request had none (or one that was too long)."
     }
   }
 }

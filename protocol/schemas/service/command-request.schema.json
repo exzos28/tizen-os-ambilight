@@ -3,18 +3,50 @@
   "$id": "https://raw.githubusercontent.com/exzos28/tizen-os-ambilight/main/protocol/schemas/service/command-request.schema.json",
   "title": "ServiceCommandRequest",
   "description": "Command the UI sends to the service's local message port `ambilight.status`, with `ambilight.ui` as the reply port. A bundle of string key/values. The service replies with ServiceCommandReply.",
-  "type": "object",
-  "additionalProperties": false,
-  "required": ["request", "command"],
-  "properties": {
-    "request": { "const": "command" },
-    "command": { "$ref": "#/$defs/ServiceCommand" }
-  },
+  "oneOf": [
+    { "$ref": "#/$defs/ServiceSimpleCommandRequest" },
+    { "$ref": "#/$defs/ServiceSetOutputsRequest" }
+  ],
   "$defs": {
     "ServiceCommand": {
       "title": "ServiceCommand",
       "enum": ["pause", "resume", "rediscover"],
-      "description": "`pause`: stop capture (state `paused`) until `resume`. `resume`: restart capture after `pause`. `rediscover`: probe for controllers now."
+      "description": "Commands without arguments. `pause`: stop capture (state `paused`) until `resume`. `resume`: restart capture after `pause`. `rediscover`: probe for controllers now."
+    },
+    "ServiceSimpleCommandRequest": {
+      "title": "ServiceSimpleCommandRequest",
+      "description": "A command without arguments.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["request", "command"],
+      "properties": {
+        "request": { "const": "command" },
+        "command": { "$ref": "#/$defs/ServiceCommand" },
+        "id": { "$ref": "#/$defs/commandId" }
+      }
+    },
+    "ServiceSetOutputsRequest": {
+      "title": "ServiceSetOutputsRequest",
+      "description": "`set-outputs`: turn the ESP32 and HyperHDR outputs on or off and set the HyperHDR target, live, and save that for the next start.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["request", "command", "outputs"],
+      "properties": {
+        "request": { "const": "command" },
+        "command": { "const": "set-outputs" },
+        "outputs": {
+          "type": "string",
+          "contentMediaType": "application/json",
+          "contentSchema": { "$ref": "outputs.schema.json" },
+          "description": "ServiceOutputs as a JSON string."
+        },
+        "id": { "$ref": "#/$defs/commandId" }
+      }
+    },
+    "commandId": {
+      "type": "string",
+      "maxLength": 64,
+      "description": "Optional request id, chosen by the UI; the service echoes it as `id` in the reply, so a late reply can't be taken for the answer to another command. Without it the reply has no `id` (older UIs). A longer id is answered with ok: false and no `id`, without running the command."
     }
   }
 }

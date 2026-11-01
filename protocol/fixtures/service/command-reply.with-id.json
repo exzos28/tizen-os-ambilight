@@ -1,0 +1,4 @@
+{
+  "result": "{\"ok\":false,\"error\":\"invalid outputs: hyperhdr.host is required when hyperhdr.enabled is true\"}",
+  "id": "7"
+}

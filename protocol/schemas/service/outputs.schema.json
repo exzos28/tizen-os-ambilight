@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/exzos28/tizen-os-ambilight/main/protocol/schemas/service/outputs.schema.json",
+  "title": "ServiceOutputs",
+  "description": "Which outputs the service streams to: the JSON carried as a string in the `outputs` value of the `set-outputs` command (see command-request.schema.json). The service rejects the whole command (ok: false) if anything is invalid; otherwise it applies the settings right away and saves them, so they replace res/ambilight.json from the next start on. The HyperHDR image size isn't part of it and stays as it was.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["esp32", "hyperhdr"],
+  "properties": {
+    "esp32": { "$ref": "#/$defs/Esp32OutputSettings" },
+    "hyperhdr": { "$ref": "#/$defs/HyperHdrOutputSettings" }
+  },
+  "$defs": {
+    "Esp32OutputSettings": {
+      "title": "Esp32OutputSettings",
+      "description": "UDP output to the ESP32 controllers found by discovery. Discovery itself keeps running when this is off (it also finds tools/server.py for the event log).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled"],
+      "properties": {
+        "enabled": { "type": "boolean", "description": "Stream to the discovered controllers." }
+      }
+    },
+    "HyperHdrOutputSettings": {
+      "title": "HyperHdrOutputSettings",
+      "description": "TCP output to a HyperHDR server's FlatBuffers input.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled", "host", "port"],
+      "properties": {
+        "enabled": { "type": "boolean", "description": "Stream to HyperHDR." },
+        "host": { "$ref": "#/$defs/hyperhdrHost" },
+        "port": { "$ref": "#/$defs/hyperhdrPort" },
+        "priority": { "$ref": "#/$defs/hyperhdrPriority" }
+      }
+    },
+    "hyperhdrHost": {
+      "type": "string",
+      "description": "IP address or host name of the HyperHDR machine; surrounding spaces are ignored. Must not be empty while `enabled` is true (not expressible in the schema; the service checks it)."
+    },
+    "hyperhdrPort": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 65535,
+      "default": 19400,
+      "description": "HyperHDR's Flatbuffers server port."
+    },
+    "hyperhdrPriority": {
+      "type": "integer",
+      "minimum": 50,
+      "maximum": 250,
+      "default": 150,
+      "description": "HyperHDR shows the source with the lowest number; its own grabbers use 240/245."
+    }
+  }
+}

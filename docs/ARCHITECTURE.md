@@ -46,9 +46,10 @@ wiring in [HARDWARE.md](HARDWARE.md).
 
 ### Lifecycle
 
-1. Loads the output settings from `res/ambilight.json` (bundled at build time; see
-   [Configuration](#4-configuration-reference)). A missing or invalid file falls back to
-   ESP32 only.
+1. Loads the output settings: the ones the launcher saved with
+   [`set-outputs`](#commands) if there are valid ones, otherwise `res/ambilight.json`
+   (bundled at build time; see [Configuration](#4-configuration-reference)). A missing or
+   invalid `res/ambilight.json` falls back to ESP32 only.
 2. Starts discovery (`Discovery.cs`) in the background: broadcasts `AMBILIGHT_DISCOVER` on
    UDP 9003 and collects **all** replies for 2 s. While nobody is known it retries — 30
    quick attempts, then every 10 s; once hosts are known it re-probes every 30 s, so new
@@ -77,6 +78,14 @@ can block capture or another output.
 |--------|-----------|---------|-------|
 | `Esp32Output` | UDP 9001 to every discovered host | capture thread (UDP never blocks) | [Frame format](NETWORKING.md#color-frame-udp-9001) |
 | `HyperHdrOutput` | TCP to HyperHDR's FlatBuffers server | own sender + reader threads, one-frame mailbox | Renders a small image (`EdgeImage.cs`); reply-based liveness, reconnect backoff 1–5 s. **Untested on a TV** — see [HYPERHDR.md](HYPERHDR.md) |
+
+Which outputs run can change while the service runs ([`set-outputs`](#commands),
+`App.ApplyOutputs`): an output that is turned off is stopped, one that is turned on is
+started, and one whose settings stay the same keeps running with its counters and
+connection. A HyperHDR output whose target changed is replaced by a new one; the old one is
+disposed on a background thread (closing its socket releases its priority in HyperHDR), so
+the command's reply doesn't wait for it. Discovery is not affected — it also feeds the event
+log, so it keeps running with the ESP32 output off.
 
 ### Capture pipeline (`Capture.cs`)
 
@@ -213,8 +222,8 @@ Once per second while the page is visible (`visibilitychange` pauses it) the lau
 `{request: "status"}` to the service's local message port `ambilight.status` (Tizen
 MessagePort — IPC between the two apps on the TV, not a network connection), with its own
 port `ambilight.ui` as the reply port. The service answers `{status: "<JSON>"}`. Commands go
-the same way: `{request: "command", command: "pause" | "resume" | "rediscover"}` → `{result:
-"{ok, error}"}`.
+the same way: `{request: "command", command: "pause" | "resume" | "rediscover" | "set-outputs",
+id?}` → `{result: "{ok, error}", id?}` ([Commands](#commands)).
 
 | Section | Fields | Shown as |
 |---|---|---|
@@ -222,7 +231,8 @@ the same way: `{request: "command", command: "pause" | "resume" | "rediscover"}`
 | `capture` | `state` (`waiting` / `starting` / `running` / `paused` / `failed`), `failure` (`library` / `symbols` / `hardware`; `null` with `failed` = unexpected exception), `error`, `failedAttempts`, `retryInMs`, `hw` (HwCondition), `frames`, `frameMs`, `lastFrameAgoMs`, `reads`, `badReads`, `lastBadRet`, `h`, `v`, `rgb` (hex, `EdgeFrame` order) | *Screen capture* line, problem banner, live preview |
 | `esp32` | `enabled`, `hosts` (discovered; also `tools/server.py`), `framesSent`, `sendErrors`, `lastError` | One line per controller. *Streaming* when its `/metrics` `last_frame_ms` < 2 s; without it, *Sending* when `framesSent` grows (handed to the network, not confirmed) |
 | `hyperhdr` | `enabled`, `endpoint`, `connected`, `replies`, `lastError` | *HyperHDR* line |
-| `configWarnings` | `ambilight.json` problems | Problem banner |
+| `outputs` | The output settings in effect, as `set-outputs` takes them: `esp32.enabled`, `hyperhdr.enabled` / `host` / `port` / `priority`, and `source` (`package` = `res/ambilight.json`, `saved` = set with `set-outputs`). An invalid HyperHDR section of `res/ambilight.json` shows as `enabled: false` | Not shown yet (settings screen to come) |
+| `configWarnings` | Problems in `res/ambilight.json`, or saved outputs that couldn't be used; empty after a successful `set-outputs` | Problem banner |
 
 `library` / `symbols` failures mean the TV doesn't expose the capture API; `hardware`
 means `get_rgb_measure_condition` reported an unusable state (retried). A `running` capture
@@ -237,8 +247,8 @@ service samples.
 
 ### Commands
 
-The same port takes commands (`ServiceCommands.cs`): `{request: "command", command: "<name>"}`,
-answered to the reply port with `{result: "<JSON>"}`, where the JSON is
+The same port takes commands (`ServiceCommands.cs`): `{request: "command", command: "<name>",
+id?}`, answered to the reply port with `{result: "<JSON>", id?}`, where the JSON is
 `{"ok": true|false, "error": null|"<why>"}`.
 
 | `command` | Effect |
@@ -246,10 +256,26 @@ answered to the reply port with `{result: "<JSON>"}`, where the JSON is
 | `pause` | Stops capture and keeps it stopped — no retries — until `resume` (or AppControl `command=start`, or a restart of the service). Outputs stay connected; `capture.state` becomes `paused` |
 | `resume` | Re-initialises capture right away, like AppControl `command=start` does for capture (also skips a pending retry delay) |
 | `rediscover` | Probes for ESP32s / `tools/server.py` now instead of at the next scheduled attempt |
+| `set-outputs` | Takes `outputs`: a JSON string `{"esp32": {"enabled"}, "hyperhdr": {"enabled", "host", "port", "priority"?}}` ([schema](../protocol/schemas/service/outputs.schema.json)). Saves it, then starts / stops the outputs to match — no restart ([Outputs](#outputs)). Same ranges and defaults as `res/ambilight.json` (port 1–65535, priority 50–250, default 150; a host is required while HyperHDR is enabled), but strict: an unknown key, a missing one (only `priority` may be left out) or any invalid value rejects the whole command and changes nothing. The HyperHDR image size isn't part of it and stays as it was |
 
 A missing, unknown (names are case-sensitive) or failing command answers `ok: false` with the
 reason in `error`. A pause is not saved: the service starts capturing again when it restarts
 (e.g. with the TV).
+
+**Request id.** A command may carry `id` (a string of up to 64 characters); the reply then
+carries the same `id` next to `result`. Replies are otherwise matched to requests by order, so
+a reply that arrives after the launcher gave up on it (3 s) would be taken for the answer to
+the next command; with ids the launcher can tell. A request without `id` (older launchers)
+gets a reply without one. A longer id is not run and answered `ok: false` without an `id`.
+
+**Saved outputs.** `set-outputs` writes `outputs.json` to the app's data directory (Tizen
+`DirectoryInfo.Data`; atomically, through a temp file) before applying it, so `ok: true` means
+applied *and* kept. From the next start on it replaces `res/ambilight.json` entirely (with the
+HyperHDR image size in effect when it was saved); the status says `outputs.source: "saved"`.
+A saved file that can't be read or isn't valid is ignored: the service falls back to
+`res/ambilight.json` and reports it as the first `configWarnings` entry / `ConfigWarning`
+event. The file goes away with the app's data (reinstalling after an uninstall, or clearing
+the app's data).
 
 ---
 
@@ -402,6 +428,7 @@ The firmware uses the `min_spiffs.csv` partition table: two 1.875 MB OTA app slo
 | `DiscoveryRetryDelayMs` | 10000 | Interval between attempts after that (discovery never gives up) |
 | `DiscoveryRefreshMs` | 30000 | Re-probe interval once hosts are known |
 | `OutputConfigFile` | `ambilight.json` | Output settings file in the package's `res/` folder |
+| `SavedOutputsFile` | `outputs.json` | Output settings saved by `set-outputs`, in the app's data directory; wins over `OutputConfigFile` |
 | `TargetCaptureW` | 4 | Sample points per horizontal edge |
 | `TargetCaptureH` | 3 | Sample points per vertical edge |
 | `EdgeInsetPx` | 250 | Distance of sample points from the screen edge, in HW pixels (3840 × 2160 on 4K) |
@@ -412,7 +439,8 @@ The firmware uses the `min_spiffs.csv` partition table: two 1.875 MB OTA app slo
 JSON (comments allowed), bundled into the package. `esp32.enabled` (default `true`) and the
 `hyperhdr` section (host, port, priority, image size; disabled by default). Keys, defaults and
 validation: [HYPERHDR.md](HYPERHDR.md#setup). Invalid sections are disabled and reported as
-`ConfigWarning` events.
+`ConfigWarning` events. These are the settings until the launcher saves its own with the
+[`set-outputs`](#commands) command, which then replace them — see *Saved outputs* there.
 
 ### ESP32 settings (NVS)
 

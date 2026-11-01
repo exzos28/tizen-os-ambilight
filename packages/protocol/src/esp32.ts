@@ -147,6 +147,21 @@ export function formBody(fields: object): string {
   return params.toString()
 }
 
+/**
+ * Whether the device's settings may differ from the GET /config read at revision `readAt`, so
+ * /config should be read again: true when `metrics.config_rev` differs from it (revisions are
+ * compared for equality only). `readAt` null — no revision known for the config in hand (e.g.
+ * /config was read before the first /metrics) — counts as changed. Firmware that doesn't send
+ * `config_rev` (older than the field) can't tell: false.
+ *
+ *   if (configChanged(rev, metrics)) { config = await esp.getConfig(); rev = metrics.config_rev }
+ */
+export function configChanged(readAt: number | null, metrics: Esp32Metrics): boolean {
+  const rev: unknown = metrics.config_rev
+  if (typeof rev !== 'number') return false
+  return readAt === null || rev !== readAt
+}
+
 function messageOf(body: unknown): string | undefined {
   if (typeof body === 'object' && body !== null && typeof (body as { message?: unknown }).message === 'string') {
     return (body as { message: string }).message

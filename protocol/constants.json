@@ -81,6 +81,8 @@
       "uiPort": { "value": "ambilight.ui", "description": "Local port the UI listens on and passes as the reply port." },
       "requestKey": { "value": "request", "description": "Request kind: `status` or `command`." },
       "commandKey": { "value": "command", "description": "Command of a `command` request." },
+      "outputsKey": { "value": "outputs", "description": "ServiceOutputs JSON of a `set-outputs` command." },
+      "idKey": { "value": "id", "description": "Optional request id of a `command` request, echoed in its reply." },
       "statusKey": { "value": "status", "description": "Reply value with the ServiceStatus JSON." },
       "resultKey": { "value": "result", "description": "Reply value with the ServiceCommandResult JSON." }
     }
