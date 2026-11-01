@@ -93,7 +93,8 @@ await esp.saveMode({ led_mode: LedMode.dynamic })
   (`reason`, `status`, `path`; `message` is the firmware's own message when it sent one).
 - `buildStatusRequest()` / `buildCommandRequest(command)` build the `[{key, value}]` array for
   `tizen.messageport`; `parseServiceReply(data)` reads a `status` or `result` reply with a light
-  runtime check and throws `ServiceReplyError` on a malformed one.
+  runtime check and throws `ServiceReplyError` on a malformed one; its `reply` says which kind
+  (`status` / `result`) was malformed, so a bad `result` can still fail the pending command.
 
 Hooking it into an app (the root has no npm workspaces — see below):
 

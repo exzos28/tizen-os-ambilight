@@ -64,6 +64,24 @@ describe('parseServiceReply', () => {
       ServiceReplyError,
     )
   })
+
+  it('tells which reply was malformed', () => {
+    const replyOf = (data: MessagePortDataItem[]) => {
+      try {
+        parseServiceReply(data)
+      } catch (e) {
+        assert.ok(e instanceof ServiceReplyError)
+        return e.reply
+      }
+      return assert.fail('no ServiceReplyError')
+    }
+    assert.equal(replyOf([{ key: 'status', value: '{' }]), 'status')
+    assert.equal(replyOf([{ key: 'status', value: '{"version":1}' }]), 'status')
+    assert.equal(replyOf([{ key: 'result', value: 'nope' }]), 'result')
+    assert.equal(replyOf([{ key: 'result', value: ['{}'] }]), 'result')
+    assert.equal(replyOf([{ key: 'result', value: '{"error":null}' }]), 'result')
+    assert.equal(replyOf([{ key: 'status', value: '{}' }, { key: 'result', value: '{}' }]), null)
+  })
 })
 
 describe('parseServiceStatus', () => {
@@ -101,6 +119,7 @@ describe('parseCommandResult', () => {
   })
 
   it('rejects a result without ok', () => {
-    assert.throws(() => parseCommandResult('{"error":null}'), ServiceReplyError)
+    assert.throws(() => parseCommandResult('{"error":null}'), (e) => e instanceof ServiceReplyError && e.reply === 'result')
+    assert.throws(() => parseServiceStatus('[]'), (e) => e instanceof ServiceReplyError && e.reply === 'status')
   })
 })
