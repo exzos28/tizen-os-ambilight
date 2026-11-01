@@ -21,8 +21,15 @@ Please include:
 Install the TV apps and open *Ambilight*: Home says whether screen capture works on this TV
 (a problem banner with the reason if it doesn't) and whether the colors reach the LED
 controllers or HyperHDR. *Test pattern* fills the screen with a rotating color wheel: the strip
-should follow it, and the *Live preview* on Home shows the colors the TV captured. Put what Home
-shows (the banner text and the *Screen capture* line) in your report.
+should follow it, and the *Live preview* on Home shows the colors the TV captured.
+
+*Diagnostics* (in the menu on the left) has the details for a report: the verdict, the model,
+what the TV's video processor reports (the same values as the service's `HwCondition` log
+line), frame time and failed reads, and what the LED controllers and HyperHDR report back.
+Its *Report this TV* QR code opens a TV compatibility report on your phone with the model, the
+result and those values already filled in; add the software version and what you tested.
+Without a phone, put what Home shows (the banner text and the *Screen capture* line) and the
+values from *Diagnostics* in your report.
 
 ### Getting the service log
 
