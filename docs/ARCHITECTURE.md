@@ -359,7 +359,8 @@ into equal on / off slots of ≈ 333 ms and ending on an off slot (timeline in
 `LightOutput::Identify`), driven from `update()` without blocking, at the configured
 brightness and power limit. It covers every LED that may be lit — the driven count, LEDs
 a longer calibration preview left lit and the calibrated layout (`Identify::coverage()`)
-— and clears them all when it ends, before `repaint()`. It works with the lighting off.
+— and clears them all when it ends, in the same `FastLED.show()` as the `repaint()` that
+restores the output (one show, no black frame in between). It works with the lighting off.
 While it runs, other redraws (`setNumLeds()`, `repaint()` after a mode, power or color
 change, brightness and power-limit updates, a new preview) only update state
 (`LightOutput::redrawsNow()`): the blink re-applies its current phase on the next update,
