@@ -14,7 +14,7 @@
 #
 # Needs: .NET SDK 8 with the Tizen workload (Samsung/Tizen.NET workload-install.sh), the Tizen-Core
 # CLI ($TIZEN_SDK/tools/tizen-core/tz, default ~/tizen-sdk) with the certificate generator,
-# rsync, zip, unzip, python3, node.
+# rsync, zip, unzip, python3, Node.js 24 with npm (builds the launcher from tv/app).
 #
 # Usage: tv/scripts/make_package.sh [output-dir]   (default: tv/release)
 set -euo pipefail
@@ -49,8 +49,10 @@ for f in tizen-manifest.xml bin/Service.dll bin/Google.FlatBuffers.dll res/ambil
 done
 
 echo "== Launcher"
+# tv/app (Preact) builds the web app into tv/ui, next to config.xml and icon.png.
+( cd "$ROOT/tv/app" && npm ci --no-audit --no-fund && npm run build )
 mkdir -p "$WORK/ui"
-( cd "$ROOT/tv/ui" && cp -R config.xml index.html main.js icon.png css "$WORK/ui/" )
+( cd "$ROOT/tv/ui" && cp -R config.xml icon.png index.html assets "$WORK/ui/" )
 
 # Runs a CLI command; on failure prints the Tizen CLI logs.
 run_cli() {
@@ -75,7 +77,7 @@ run_cli "$TZ" pack -t wgt -k "$TPK" -b "$WORK/web.wgt" -o "$WGT"
 NAME="ambilight-tv-v$VERSION.wgt"
 cp "$WGT" "$OUT/$NAME"
 unzip -l "$OUT/$NAME"
-for f in config.xml index.html Service.dll ambilight.json; do
+for f in config.xml index.html assets/app.js assets/app.css Service.dll ambilight.json; do
     unzip -l "$OUT/$NAME" | grep -q "$f" || { echo "$f is missing from the .wgt" >&2; exit 1; }
 done
 (cd "$OUT" && sha256sum "$NAME" > SHA256SUMS-tv.txt)
