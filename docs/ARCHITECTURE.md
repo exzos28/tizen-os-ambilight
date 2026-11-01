@@ -216,6 +216,28 @@ form-urlencoded with a 3 s timeout. A change goes to every controller that answe
 | Follow the picture / Static color | `POST /save/mode led_mode=1\|0` |
 | Static color swatch | `POST /save/leds color=#rrggbb` (+ `led_mode=0`) |
 
+### Picture
+
+`src/screens/Picture.tsx`: the color correction and power settings of `POST /save/leds`, with
+the ranges and defaults of `limits` from `@ambilight/protocol`. ▲ ▼ move between rows, ◀ ▶
+change the focused value at once (brightness 5%, gamma and saturation 0.1, white balance 5,
+limit 5 W, LED power 0.01 W; the two long ranges move ten steps at a time while the key
+repeats). The screen shows the change right away and sends it 300 ms after the last key (also
+when the screen is left), one `saveLeds` with every changed field, to every controller that
+answers. With several controllers it shows the first one's values and *Mixed* where they
+differ; a change then sets all of them.
+
+| Part | What |
+|---|---|
+| Color | Brightness, gamma, saturation, white balance R / G / B |
+| Power | Limit (`power_limit_w`, 0 = off), one LED at full white (`pixel_watts`), *Using now* from `/metrics` `power_w` with a meter against the limit (no limit: against full white at this brightness) and whether `power_limited` reduced the frame |
+| Presets | *Natural* (the defaults), *Cinema* (gamma 2.4, saturation 1.2, white balance 255/236/214), *Vivid* (saturation 1.6); they set gamma, saturation and white balance only. *Save as preset* keeps the current ones as *My preset* in the TV's `localStorage` (this TV only) |
+| Before and after | The current frame's edge colors (`capture.rgb`) and an approximation of what the controller makes of them: saturation in HSV, then white balance. Gamma is left out (it shapes the LEDs' response, not the screen's) |
+| Reset to defaults | OK twice: brightness, gamma, saturation and white balance back to the defaults; the power settings stay (they describe the supply and the strip) |
+
+No answering controller: an empty state with *Open Outputs*; ◀ there moves to the rail. On the
+value rows ◀ ▶ adjust, so the rail is reached with Back (Home) or from there.
+
 ### Status
 
 Once per second while the page is visible (`visibilitychange` pauses it) the launcher sends
