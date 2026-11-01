@@ -1,5 +1,8 @@
 #include "Config.h"
-#include "LEDController.h"   // MAX_LEDS
+#include <esp_system.h>   // esp_random()
+#include "generated/ProtocolLimits.h"   // defaults and ranges, generated from protocol/
+
+using namespace protocol;
 
 Config& Config::instance() {
     static Config inst;
@@ -7,48 +10,51 @@ Config& Config::instance() {
 }
 
 void Config::begin() {
+    // Random start, so a value a client cached before a reboot can't match by accident.
+    _revision = esp_random();
     _prefs.begin("ambilight", false);
-    wifiSSID     = _prefs.getString("wifi_ssid",  "");
-    wifiPassword = _prefs.getString("wifi_pass",  "");
-    otaHostname  = _prefs.getString("ota_host",   "ambilight");
-    otaPassword  = _prefs.getString("ota_pass",   "123456");
-    preferredLastOctet = _prefs.getUChar("ip_octet", 245);
-    numLeds      = _prefs.getUShort("num_leds",    300);
-    brightness   = _prefs.getUChar ("brightness",  100);
-    colorR       = _prefs.getUChar ("color_r",     255);
-    colorG       = _prefs.getUChar ("color_g",     255);
-    colorB       = _prefs.getUChar ("color_b",     255);
-    ledTop       = _prefs.getUChar ("led_top",     10);
-    ledRight     = _prefs.getUChar ("led_right",   6);
-    ledBottom    = _prefs.getUChar ("led_bottom",  10);
-    ledLeft      = _prefs.getUChar ("led_left",    6);
-    startCorner  = _prefs.getUChar ("start_corner", 0);
-    clockwise    = _prefs.getBool  ("clockwise",   true);
-    ledMode      = _prefs.getUChar ("led_mode",    1);
-    gamma        = _prefs.getFloat ("gamma",       2.2f);
-    saturation   = _prefs.getFloat ("saturation",  1.0f);
-    whiteBalanceR = _prefs.getUChar ("wb_r",       255);
-    whiteBalanceG = _prefs.getUChar ("wb_g",       255);
-    whiteBalanceB = _prefs.getUChar ("wb_b",       255);
-    powerLimitW   = _prefs.getUShort("pwr_limit",  0);
-    pixelWatts    = _prefs.getFloat ("px_watts",   0.72f);
+    wifiSSID     = _prefs.getString("wifi_ssid",  WIFI_SSID_DEFAULT);
+    wifiPassword = _prefs.getString("wifi_pass",  WIFI_PASS_DEFAULT);
+    otaHostname  = _prefs.getString("ota_host",   OTA_HOST_DEFAULT);
+    otaPassword  = _prefs.getString("ota_pass",   OTA_PASS_DEFAULT);
+    preferredLastOctet = _prefs.getUChar("ip_octet", IP_OCTET_DEFAULT);
+    numLeds      = _prefs.getUShort("num_leds",    NUM_LEDS_DEFAULT);
+    brightness   = _prefs.getUChar ("brightness",  BRIGHTNESS_DEFAULT);
+    colorR       = _prefs.getUChar ("color_r",     (COLOR_DEFAULT_RGB >> 16) & 0xFF);
+    colorG       = _prefs.getUChar ("color_g",     (COLOR_DEFAULT_RGB >> 8) & 0xFF);
+    colorB       = _prefs.getUChar ("color_b",     COLOR_DEFAULT_RGB & 0xFF);
+    ledTop       = _prefs.getUChar ("led_top",     LED_TOP_DEFAULT);
+    ledRight     = _prefs.getUChar ("led_right",   LED_RIGHT_DEFAULT);
+    ledBottom    = _prefs.getUChar ("led_bottom",  LED_BOTTOM_DEFAULT);
+    ledLeft      = _prefs.getUChar ("led_left",    LED_LEFT_DEFAULT);
+    startCorner  = _prefs.getUChar ("start_corner", START_CORNER_DEFAULT);
+    clockwise    = _prefs.getBool  ("clockwise",   CLOCKWISE_DEFAULT);
+    ledMode      = _prefs.getUChar ("led_mode",    LED_MODE_DEFAULT);
+    power        = _prefs.getBool  ("power",       POWER_DEFAULT);
+    gamma        = _prefs.getFloat ("gamma",       GAMMA_DEFAULT);
+    saturation   = _prefs.getFloat ("saturation",  SATURATION_DEFAULT);
+    whiteBalanceR = _prefs.getUChar ("wb_r",       WB_R_DEFAULT);
+    whiteBalanceG = _prefs.getUChar ("wb_g",       WB_G_DEFAULT);
+    whiteBalanceB = _prefs.getUChar ("wb_b",       WB_B_DEFAULT);
+    powerLimitW   = _prefs.getUShort("pwr_limit",  POWER_LIMIT_W_DEFAULT);
+    pixelWatts    = _prefs.getFloat ("px_watts",   PIXEL_WATTS_DEFAULT);
     sanitize();
 }
 
 void Config::sanitize() {
-    if (!isfinite(gamma))      gamma = 2.2f;
-    if (!isfinite(saturation)) saturation = 1.0f;
-    if (!isfinite(pixelWatts)) pixelWatts = 0.72f;
-    pixelWatts  = constrain(pixelWatts, 0.05f, 5.0f);
-    powerLimitW = min(powerLimitW, (uint16_t)2000);
-    gamma       = constrain(gamma,      0.5f, 3.0f);
-    saturation  = constrain(saturation, 0.0f, 2.0f);
-    numLeds     = constrain(numLeds, (uint16_t)1, MAX_LEDS);
-    if (startCorner > 3) startCorner = 0;
-    if (ledMode > 1)     ledMode = 1;
+    if (!isfinite(gamma))      gamma = GAMMA_DEFAULT;
+    if (!isfinite(saturation)) saturation = SATURATION_DEFAULT;
+    if (!isfinite(pixelWatts)) pixelWatts = PIXEL_WATTS_DEFAULT;
+    pixelWatts  = constrain(pixelWatts, PIXEL_WATTS_MIN, PIXEL_WATTS_MAX);
+    powerLimitW = min(powerLimitW, POWER_LIMIT_W_MAX);
+    gamma       = constrain(gamma,      GAMMA_MIN, GAMMA_MAX);
+    saturation  = constrain(saturation, SATURATION_MIN, SATURATION_MAX);
+    numLeds     = constrain(numLeds, NUM_LEDS_MIN, NUM_LEDS_MAX);
+    if (startCorner > START_CORNER_MAX) startCorner = START_CORNER_DEFAULT;
+    if (ledMode > LED_MODE_MAX)         ledMode = LED_MODE_DEFAULT;
     // Whether the address fits the network (router's own address, broadcast, subnet) is
     // checked at connect time against the real gateway and mask — see StaticIp.h.
-    if (preferredLastOctet == 255) preferredLastOctet = 0;
+    if (preferredLastOctet > IP_OCTET_MAX) preferredLastOctet = 0;
 }
 
 void Config::reset() {
@@ -76,6 +82,7 @@ void Config::save() {
     _prefs.putUChar ("start_corner", startCorner);
     _prefs.putBool  ("clockwise",   clockwise);
     _prefs.putUChar ("led_mode",    ledMode);
+    _prefs.putBool  ("power",       power);
     _prefs.putFloat ("gamma",       gamma);
     _prefs.putFloat ("saturation",  saturation);
     _prefs.putUChar ("wb_r",        whiteBalanceR);
@@ -83,4 +90,5 @@ void Config::save() {
     _prefs.putUChar ("wb_b",        whiteBalanceB);
     _prefs.putUShort("pwr_limit",   powerLimitW);
     _prefs.putFloat ("px_watts",    pixelWatts);
+    _revision++;
 }

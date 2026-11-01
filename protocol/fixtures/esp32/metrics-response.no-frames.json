@@ -1,0 +1,12 @@
+{
+  "heap_free": 201876,
+  "heap_total": 337540,
+  "heap_min": 196344,
+  "uptime_s": 42,
+  "cpu_mhz": 240,
+  "power_w": 0,
+  "power_limited": false,
+  "frames_rx": 0,
+  "last_frame_ms": -1,
+  "config_rev": 91027
+}

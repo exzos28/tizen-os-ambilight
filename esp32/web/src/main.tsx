@@ -1,12 +1,8 @@
-import { StrictMode } from 'react'
-import { createRoot } from 'react-dom/client'
-import App from './App'
-import './styles/base.css'
-import './styles/components.css'
-import './styles/calibration.css'
+import { render } from 'preact'
+import '@ambilight/ui/tokens.css'
+import '@ambilight/ui/base.css'
+import { App } from './App'
+// After App: its imports bring the kit's component styles, which app.css adjusts.
+import './app.css'
 
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <App />
-  </StrictMode>
-)
+render(<App />, document.getElementById('app')!)

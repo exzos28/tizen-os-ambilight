@@ -26,9 +26,22 @@ The TV measures 14 points along the screen edges (~7 updates/s). For HyperHDR th
 - *Smoothing*: consider raising the time from the default to ~250 ms. Frames arrive every ~140 ms, so a longer smoothing window hides the steps.
 - If the TV is in a different subnet than HyperHDR, allow its address in HyperHDR's network settings — otherwise HyperHDR closes the connection right after it opens (the service log then says so).
 
-**2. TV service configuration**
+**2. On the TV: the launcher's Outputs screen**
 
-Edit `tv/service/res/ambilight.json` **before building** the TV package (it is bundled into the package):
+Open the Ambilight app on the TV, then *Outputs* in the menu (on the first start the setup
+wizard asks *What lights do you have?*: pick *HyperHDR server* or *Both*). In the *HyperHDR*
+card enter the host (OK opens the TV keyboard), the port (`19400`) and, if needed, the
+priority, then *Apply and test*: the card shows *Connected · answering* once HyperHDR replies,
+or the connection error. The switch turns the output on and off; the ESP32 card has its own
+switch, so both can run at once. Changes apply at once — no rebuild or reinstall — and are
+saved on the TV, where they take precedence over those keys of `res/ambilight.json` (the
+image size still comes from the file) ([ARCHITECTURE.md § Outputs](ARCHITECTURE.md#outputs-1)).
+
+**Or: the package defaults**
+
+`tv/service/res/ambilight.json` holds the outputs a fresh install starts with (bundled into
+the package, so changing it means rebuilding and reinstalling — see
+[INSTALL.md § TV apps](INSTALL.md#4-tv-apps)):
 
 ```jsonc
 {
@@ -44,8 +57,6 @@ Edit `tv/service/res/ambilight.json` **before building** the TV package (it is b
 }
 ```
 
-Then build and install as described in [INSTALL.md § TV apps](INSTALL.md#4-tv-apps). Changing the settings later means editing the file, rebuilding and reinstalling.
-
 | Key | Default | Notes |
 |-----|---------|-------|
 | `esp32.enabled` | `true` | Stream to ESP32 controllers found by discovery |
@@ -55,13 +66,13 @@ Then build and install as described in [INSTALL.md § TV apps](INSTALL.md#4-tv-a
 | `hyperhdr.priority` | `150` | HyperHDR shows the source with the **lowest** number. Its own USB/system grabbers use 240/245, so 150 overrides them while the TV is streaming |
 | `hyperhdr.imageWidth` / `imageHeight` | `64` / `36` | 8–256. Larger doesn't add detail (there are only 14 samples), only makes each LED area smoother |
 
-An invalid section is disabled and reported as a `ConfigWarning` event in the service log (see [tools/server.py](../tools/README.md)).
+An invalid section is disabled and reported as a `ConfigWarning` event in the service log (see [tools/server.py](../tools/README.md)). Settings sent with `set-outputs` use the same keys, ranges and defaults (without the image size, which always comes from `res/ambilight.json`), but an invalid value there rejects the whole change instead.
 
 ## Behaviour
 
 - **Connection**: connects with a 3 s timeout, registers as `Tizen Ambilight` with the configured priority, then sends one image per captured frame.
 - **Dead server detection**: HyperHDR answers every message. If no answer arrives within 3 s (e.g. the HyperHDR machine lost power), the connection is dropped and re-established.
-- **Reconnect**: after 1 s, then 2 s, 4 s and every 5 s while the server stays down. Pressing *Start* in the TV launcher reconnects immediately.
+- **Reconnect**: after 1 s, then 2 s, 4 s and every 5 s while the server stays down. Launching the service again (AppControl `command=start`, the launcher's *Start* while the service is not running) reconnects immediately.
 - **Releasing the LEDs**: when the TV service stops or the connection drops, HyperHDR removes the source and falls back to its next one.
 - **ESP32 in parallel**: with `esp32.enabled` the ESP32 output keeps working at the same time; neither output can slow the other down.
 - **Diagnostics**: `HyperHdrConnected`, `HyperHdrDisconnected` (with the reason; repeated failures are logged about once a minute) and `HyperHdrReplyError` events go to the service log. Events from before a log host was found (including `ConfigWarning`) are queued and delivered once `tools/server.py` is discovered.
@@ -71,7 +82,7 @@ An invalid section is disabled and reported as a `ConfigWarning` event in the se
 - **Untested on a TV** — see the warning above.
 - **TV standby**: what capture returns while the TV is in standby has not been measured. If the service keeps sending black frames, the TV source keeps its priority in HyperHDR until the service stops.
 - **Same samples for every output**: the number of sample points is shared by all outputs; raising it for HyperHDR also lowers the ESP32 frame rate.
-- **No on-TV settings screen**: configuration is a file in the package.
+- **No on-TV settings screen yet**: the service supports changing the outputs at run time (`set-outputs`), but the launcher has no screen for it yet, so for now configuration is a file in the package.
 
 ## Third-party code
 

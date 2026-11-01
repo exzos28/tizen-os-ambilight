@@ -1,0 +1,3 @@
+{
+  "message": "ip_octet must be 0 (DHCP) or 1-254. Nothing was saved."
+}

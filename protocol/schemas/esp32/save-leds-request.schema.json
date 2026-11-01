@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/exzos28/tizen-os-ambilight/main/protocol/schemas/esp32/save-leds-request.schema.json",
+  "title": "SaveLedsRequest",
+  "description": "POST /save/leds body (application/x-www-form-urlencoded; shown here as the values before encoding). Omitted fields keep their value, out-of-range values are clamped. Saved; `brightness`, `power_limit_w` and `pixel_watts` apply immediately (the strip is redrawn in both modes), `num_leds` and `color` show right away only in plain mode, color correction applies to the next TV frame. Replies with Esp32Message.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "num_leds": { "$ref": "settings.schema.json#/$defs/num_leds" },
+    "brightness": { "$ref": "settings.schema.json#/$defs/brightness" },
+    "color": { "$ref": "settings.schema.json#/$defs/color" },
+    "gamma": { "$ref": "settings.schema.json#/$defs/gamma" },
+    "saturation": { "$ref": "settings.schema.json#/$defs/saturation" },
+    "wb_r": { "$ref": "settings.schema.json#/$defs/wb_r" },
+    "wb_g": { "$ref": "settings.schema.json#/$defs/wb_g" },
+    "wb_b": { "$ref": "settings.schema.json#/$defs/wb_b" },
+    "power_limit_w": { "$ref": "settings.schema.json#/$defs/power_limit_w" },
+    "pixel_watts": { "$ref": "settings.schema.json#/$defs/pixel_watts" }
+  }
+}

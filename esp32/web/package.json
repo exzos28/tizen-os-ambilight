@@ -5,17 +5,16 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:mock": "vite build --mode mock --outDir dist-mock",
     "type-check": "tsc --noEmit",
     "preview": "vite preview"
   },
   "dependencies": {
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "@ambilight/protocol": "file:../../packages/protocol",
+    "@ambilight/ui": "file:../../packages/ui",
+    "preact": "^11.1.1"
   },
   "devDependencies": {
-    "@types/react": "^18.3.1",
-    "@types/react-dom": "^18.3.1",
-    "@vitejs/plugin-react": "^4.3.1",
     "typescript": "^5.5.3",
     "vite": "^5.4.1",
     "vite-plugin-singlefile": "^2.0.1"

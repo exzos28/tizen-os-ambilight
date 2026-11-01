@@ -22,7 +22,7 @@ HEADER_FILE = os.path.join(PROJECT_DIR, 'src', 'web_ui.h')
 
 # ---------------------------------------------------------------------------
 
-print('\n[embed_web] Building React app...')
+print('\n[embed_web] Building the web app...')
 
 npm = 'npm.cmd' if sys.platform == 'win32' else 'npm'
 result = subprocess.run([npm, 'run', 'build'], cwd=WEB_DIR)

@@ -1,0 +1,76 @@
+.ui-dot {
+  display: inline-block;
+  flex-shrink: 0;
+  width: var(--ui-dot);
+  height: var(--ui-dot);
+  border-radius: 50%;
+  background: var(--ui-off);
+}
+.ui-tone-ok .ui-dot, .ui-dot.ui-tone-ok { background: var(--ui-ok); }
+.ui-tone-warn .ui-dot, .ui-dot.ui-tone-warn { background: var(--ui-warn); }
+.ui-tone-bad .ui-dot, .ui-dot.ui-tone-bad { background: var(--ui-bad); }
+
+/* ---- pill */
+.ui-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5em;
+  height: 2.4em;
+  padding: 0 1em;
+  border-radius: 1.2em;
+  font-size: var(--ui-fs-status-value);
+  font-weight: 600;
+  white-space: nowrap;
+  background: var(--ui-off-soft);
+  color: var(--ui-muted);
+}
+.ui-pill .ui-dot { width: 0.5em; height: 0.5em; }
+.ui-pill.ui-tone-ok { background: var(--ui-ok-soft); color: var(--ui-ok-text); }
+.ui-pill.ui-tone-warn { background: var(--ui-warn-soft); color: var(--ui-warn-text); }
+.ui-pill.ui-tone-bad { background: var(--ui-bad-soft); color: var(--ui-bad-text); }
+[data-density='tv'] .ui-pill { height: 48px; padding: 0 20px; font-size: 20px; }
+
+/* ---- line */
+.ui-line {
+  display: grid;
+  grid-template-columns: var(--ui-dot) minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: calc(var(--ui-dot) + 4px);
+  min-height: calc(var(--ui-fs-status) * 3.4);
+}
+.ui-lines { display: flex; flex-direction: column; }
+.ui-lines > .ui-line + .ui-line { border-top: 1px solid var(--ui-line); }
+
+.ui-line-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.ui-line-title {
+  font-size: var(--ui-fs-status);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ui-line-detail {
+  font-size: var(--ui-fs-status-detail);
+  color: var(--ui-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ui-line-value { font-size: var(--ui-fs-status-value); color: var(--ui-muted); white-space: nowrap; text-align: right; }
+.ui-tone-ok .ui-line-value { color: var(--ui-ok-text); }
+.ui-tone-warn .ui-line-value { color: var(--ui-warn-text); }
+.ui-tone-bad .ui-line-value { color: var(--ui-bad-text); }
+
+.ui-line.card {
+  padding: 0 var(--ui-pad-card);
+  border-radius: var(--ui-radius-card);
+  background: var(--ui-panel);
+  border: 1px solid var(--ui-panel-line);
+}
+[data-density='tv'] .ui-line-text { gap: 4px; }
+[data-density='tv'] .ui-line.card { column-gap: 16px; padding: 24px 28px; border-radius: 20px; }
+[data-density='tv'] .ui-line.card .ui-line-text { gap: 2px; }
+[data-density='tv'] .ui-line.card .ui-line-title { font-size: 21px; }
+.ui-line.card.ui-tone-warn { background: var(--ui-warn-bg); border-color: var(--ui-warn-line); }
+.ui-line.card.ui-tone-warn .ui-line-detail { color: var(--ui-warn-body); }
+.ui-line.card.ui-tone-bad { background: var(--ui-bad-bg); border-color: var(--ui-bad-line); }

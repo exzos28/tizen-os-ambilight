@@ -1,6 +1,9 @@
 #include "DiscoveryResponder.h"
 #include "RemoteLogger.h"
+#include "generated/ProtocolLimits.h"
 #include <WiFi.h>
+
+using namespace protocol;
 
 DiscoveryResponder& DiscoveryResponder::instance() {
     static DiscoveryResponder inst;
@@ -8,9 +11,9 @@ DiscoveryResponder& DiscoveryResponder::instance() {
 }
 
 void DiscoveryResponder::begin() {
-    if (_udp.begin(DISCOVERY_PORT)) {
+    if (_udp.begin(PORT_DISCOVERY)) {
         _started = true;
-        Log.printf("[Discovery] Listening for discovery probes on port %d\n", DISCOVERY_PORT);
+        Log.printf("[Discovery] Listening for discovery probes on port %u\n", (unsigned)PORT_DISCOVERY);
     } else {
         Log.println("[Discovery] Failed to bind discovery socket");
     }
@@ -26,10 +29,10 @@ void DiscoveryResponder::handle() {
     int n = _udp.read(buf, sizeof(buf) - 1);
     if (n <= 0) return;
 
-    if (strncmp(buf, MAGIC, strlen(MAGIC)) != 0) return;
+    if (strncmp(buf, DISCOVERY_MAGIC, strlen(DISCOVERY_MAGIC)) != 0) return;
 
     // Reply: "AMBILIGHT_DISCOVER:<our_ip>"
-    String reply = String(MAGIC) + ":" + WiFi.localIP().toString();
+    String reply = String(DISCOVERY_MAGIC) + DISCOVERY_REPLY_SEPARATOR + WiFi.localIP().toString();
     _udp.beginPacket(_udp.remoteIP(), _udp.remotePort());
     _udp.write((const uint8_t*)reply.c_str(), reply.length());
     _udp.endPacket();

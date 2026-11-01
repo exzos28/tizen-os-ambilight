@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/exzos28/tizen-os-ambilight/main/protocol/schemas/esp32/save-network-request.schema.json",
+  "title": "SaveNetworkRequest",
+  "description": "POST /save/network body (application/x-www-form-urlencoded; shown here as the values before encoding). Omitted fields keep their value; empty passwords keep the current ones. An `ip_octet` outside 0–254 (or not a number) is rejected with HTTP 400 and nothing is saved. On success the device replies with Esp32Message and restarts.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "wifi_ssid": { "$ref": "settings.schema.json#/$defs/wifi_ssid" },
+    "wifi_pass": { "$ref": "settings.schema.json#/$defs/wifi_pass" },
+    "ota_host": { "$ref": "settings.schema.json#/$defs/ota_host" },
+    "ota_pass": { "$ref": "settings.schema.json#/$defs/ota_pass" },
+    "ip_octet": { "$ref": "settings.schema.json#/$defs/ip_octet" }
+  }
+}

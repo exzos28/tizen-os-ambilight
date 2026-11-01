@@ -1,0 +1,148 @@
+/* The launcher's shell on @ambilight/ui (<html data-density="tv">): the 1920×1080 CSS px
+   canvas, the rail, header and footer, and where each screen puts the kit's cards. The kit
+   draws the cards, controls and status. Kept cheap for the TV: no blur, shadows or transitions. */
+
+/* The 1920×1080 stage is scaled to the window by src/fit.ts; the page itself fills it. */
+html, body { width: 100%; height: 100%; overflow: hidden; }
+
+/* ---------------------------------------------------------------- shell */
+
+.shell { display: flex; width: 1920px; height: 1080px; }
+
+.rail {
+  width: 320px;
+  flex-shrink: 0;
+  padding: 54px 28px 40px;
+  background: var(--ui-rail);
+  border-right: 1px solid var(--ui-line);
+  display: flex;
+  flex-direction: column;
+  gap: 40px;
+}
+
+.brand { display: flex; align-items: center; gap: 16px; padding: 0 12px; }
+.brand-text { display: flex; flex-direction: column; gap: 2px; }
+.brand-name { font-size: 28px; font-weight: 700; }
+.brand-version { font-size: 18px; color: var(--ui-muted); }
+
+.rail-items { display: flex; flex-direction: column; gap: 8px; }
+
+.rail-item {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  height: 68px;
+  padding: 0 20px;
+  border-radius: 14px;
+  font-size: 24px;
+  font-weight: 500;
+  color: var(--ui-text-2);
+}
+.rail-item.current { background: var(--ui-accent-soft); color: var(--ui-accent); font-weight: 600; }
+.rail-item.focused { outline: 4px solid var(--ui-accent); outline-offset: -4px; color: var(--ui-text); }
+.rail-item.current.focused { color: var(--ui-accent); }
+
+.badge {
+  margin-left: auto;
+  min-width: 30px;
+  height: 30px;
+  padding: 0 8px;
+  border-radius: 15px;
+  background: var(--ui-warn);
+  color: var(--ui-badge-text);
+  font-size: 17px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.rail-note { margin-top: auto; padding: 0 12px; font-size: 18px; line-height: 1.5; color: var(--ui-muted); }
+
+.main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 54px 72px 0 64px;
+}
+
+.header { display: flex; align-items: flex-end; justify-content: space-between; gap: 32px; }
+.header-titles { display: flex; flex-direction: column; gap: 8px; }
+.header h1 { font-size: var(--ui-fs-h1); font-weight: 700; }
+.subtitle { font-size: 22px; color: var(--ui-muted); }
+
+.footer {
+  display: flex;
+  align-items: center;
+  gap: 36px;
+  height: 92px;
+  margin-top: auto;
+  flex-shrink: 0;
+  font-size: 19px;
+  color: var(--ui-muted);
+}
+.footer .ui-kbd { min-width: 40px; height: 36px; border-color: var(--ui-border); }
+.footer-note { margin-left: auto; }
+
+/* ---------------------------------------------------------------- Home: banner, tiles */
+
+.main > .ui-banner { margin-top: 36px; }
+
+.tiles {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr) minmax(0, 1.15fr);
+  gap: 28px;
+  margin-top: 36px;
+}
+.tiles-compact { grid-template-columns: repeat(3, minmax(0, 1fr)); margin-top: 28px; }
+
+.tiles .tile-big { align-items: flex-start; gap: 22px; }
+.tiles .tile-mode { gap: 16px; }
+
+.tiles-compact .ui-card { padding: 26px 30px; border-radius: 22px; }
+.tiles-compact .tile-row { flex-direction: row; align-items: center; gap: 24px; }
+.tiles-compact .tile-center { justify-content: center; gap: 12px; }
+.tiles-compact .ui-label { font-size: 20px; font-weight: 400; }
+.tiles-compact .ui-bar { --ui-bar-h: 12px; }
+
+.spread { display: flex; align-items: center; justify-content: space-between; align-self: stretch; }
+.stack { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+
+.tile-hint { margin-top: auto; display: inline-flex; align-items: center; gap: 10px; font-size: 19px; color: var(--ui-muted); }
+
+.modes { display: flex; flex-direction: column; gap: 12px; align-self: stretch; }
+
+.tiles .ui-swatches { margin-top: 6px; }
+.tiles .ui-swatches.small { margin-top: 4px; }
+
+/* ---------------------------------------------------------------- Home: lower half */
+
+.lower {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+  gap: 28px;
+  margin-top: 28px;
+}
+.lower .ui-card { border-radius: 22px; }
+
+.lower .preview-panel { flex-direction: row; align-items: center; gap: 36px; padding: 26px 32px; }
+.preview-text { display: flex; flex-direction: column; align-items: flex-start; gap: 14px; min-width: 0; }
+.preview-text h2 { font-size: 26px; font-weight: 600; }
+.preview-text .ui-btn { margin-top: 8px; }
+.fps { font-size: 22px; color: var(--ui-text-2); }
+
+.lower .status-panel { padding: 10px 32px; }
+.status-panel .ui-lines, .status-panel .ui-line { flex: 1; }
+
+.status-cards { display: flex; gap: 28px; margin-top: 28px; }
+.status-cards .ui-line { flex: 1 1 0; min-width: 0; }
+.status-cards .ui-btn { flex-shrink: 0; border-radius: 20px; }
+
+/* ---------------------------------------------------------------- other screens */
+
+.main > .placeholder { margin-top: 36px; padding: 48px 56px; gap: 14px; border-radius: 22px; }
+.placeholder h2 { font-size: 34px; font-weight: 700; }
+.placeholder .ui-muted { font-size: 21px; }

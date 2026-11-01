@@ -1,144 +1,202 @@
-import { useState, useEffect } from 'react'
-import { getConfig, saveMode, saveCalibration } from './api'
-import type { ConfigResponse } from './api'
-import { useDeviceData } from './hooks/useDeviceData'
-import { Header } from './components/Header'
-import { TabNav } from './components/TabNav'
-import type { Tab } from './components/TabNav'
-import { StatusTab } from './tabs/StatusTab'
-import { WiFiTab } from './tabs/WiFiTab'
-import { LedsTab } from './tabs/LedsTab'
+// Shell: polls the controller, owns its state and the writes, shows the Wi-Fi setup first when
+// the controller runs its setup hotspot, otherwise the four tabs.
 
-export default function App() {
-  const [tab, setTab] = useState<Tab>('status')
-  const { status, metrics } = useDeviceData()
+import { useEffect, useMemo, useRef, useState } from 'preact/hooks'
+import { configChanged, type Esp32Config, type Esp32Metrics, type Esp32Status, LedMode, type SaveLedsRequest } from '@ambilight/protocol'
+import { Logo } from '@ambilight/ui'
+import { errorText, esp } from './api'
+import { Header, TABS, TabBar, type TabId } from './components/chrome'
+import type { Ctl } from './ctl'
+import { findProblems, summary } from './problems'
+import { Device } from './screens/Device'
+import { Home } from './screens/Home'
+import { Layout } from './screens/Layout'
+import { Picture } from './screens/Picture'
+import { Setup } from './screens/Setup'
 
-  const [ledMode,    setLedMode]    = useState(0)
-  const [savingMode, setSavingMode] = useState(false)
+const POLL_MS = 2000
+/** Status (Wi-Fi signal) every this many polls. */
+const STATUS_EVERY = 5
+/** Failed polls in a row before the controller counts as not answering. */
+const OFFLINE_AFTER = 2
 
-  // Network settings
-  const [wifiSSID,  setWifiSSID]  = useState('')
-  const [wifiPass,  setWifiPass]  = useState('')
-  const [otaHost,   setOtaHost]   = useState('ambilight')
-  const [otaPass,   setOtaPass]   = useState('')
-  const [ipOctet,   setIpOctet]   = useState('245')
+const SUBTITLE: Record<TabId, string> = {
+  home: '',
+  picture: 'Color and power',
+  layout: 'Where the LEDs are',
+  device: 'Network and updates',
+}
 
-  // LED settings
-  const [numLeds,    setNumLeds]    = useState(300)
-  const [maxLeds,    setMaxLeds]    = useState<number | undefined>(undefined)
-  const [brightness, setBrightness] = useState(100)
-  const [color,      setColor]      = useState('#ffffff')
+const tabFromHash = (): TabId => TABS.find((t) => `#${t.id}` === location.hash)?.id ?? 'home'
 
-  // Calibration
-  const [ledTop,      setLedTop]      = useState(10)
-  const [ledRight,    setLedRight]    = useState(6)
-  const [ledBottom,   setLedBottom]   = useState(10)
-  const [ledLeft,     setLedLeft]     = useState(6)
-  const [startCorner, setStartCorner] = useState(0)
-  const [clockwise,   setClockwise]   = useState(true)
+export function App() {
+  const [status, setStatus] = useState<Esp32Status | null>(null)
+  const [cfg, setCfg] = useState<Esp32Config | null>(null)
+  const [metrics, setMetrics] = useState<Esp32Metrics | null>(null)
+  const [failures, setFailures] = useState(0)
+  const [visible, setVisible] = useState(!document.hidden)
+  const [tab, setTab] = useState<TabId>(tabFromHash)
+  const [skipSetup, setSkipSetup] = useState(false)
+  const [toast, setToast] = useState<{ text: string; tone: 'ok' | 'bad'; id: number } | null>(null)
 
-  // Color correction
-  const [gamma,      setGamma]      = useState(2.2)
-  const [saturation, setSaturation] = useState(1.0)
-  const [wbR,        setWbR]        = useState(255)
-  const [wbG,        setWbG]        = useState(255)
-  const [wbB,        setWbB]        = useState(255)
+  const cfgRef = useRef(cfg)
+  cfgRef.current = cfg
+  const statusRef = useRef(status)
+  statusRef.current = status
+  const failuresRef = useRef(failures)
+  failuresRef.current = failures
+  const reloadRef = useRef(false)
+  // config_rev of the /config we show: another client (the TV app) changing a setting bumps it.
+  const revRef = useRef<number | null>(null)
 
-  // Power limit (kept as strings while editing)
-  const [powerLimit, setPowerLimit] = useState('0')
-  const [pixelWatts, setPixelWatts] = useState('0.72')
-
+  // ---------------------------------------------------------------- poll
   useEffect(() => {
-    getConfig()
-      .then((cfg: ConfigResponse) => {
-        setWifiSSID(cfg.wifi_ssid)
-        setOtaHost(cfg.ota_host)
-        setIpOctet(String(cfg.ip_octet ?? 245))
-        setPowerLimit(String(cfg.power_limit_w ?? 0))
-        // toPrecision strips float32 noise (0.7200000286 → 0.72) without rounding real digits away
-        setPixelWatts(String(cfg.pixel_watts !== undefined ? Number(cfg.pixel_watts.toPrecision(6)) : 0.72))
-        setNumLeds(cfg.num_leds)
-        setMaxLeds(cfg.max_leds)
-        setBrightness(cfg.brightness)
-        setColor(cfg.color)
-        setLedMode(cfg.led_mode ?? 0)
-        setLedTop(cfg.led_top ?? 10)
-        setLedRight(cfg.led_right ?? 6)
-        setLedBottom(cfg.led_bottom ?? 10)
-        setLedLeft(cfg.led_left ?? 6)
-        setStartCorner(cfg.start_corner ?? 0)
-        setClockwise(cfg.clockwise ?? true)
-        setGamma(cfg.gamma ?? 2.2)
-        setSaturation(cfg.saturation ?? 1.0)
-        setWbR(cfg.wb_r ?? 255)
-        setWbG(cfg.wb_g ?? 255)
-        setWbB(cfg.wb_b ?? 255)
-      })
-      .catch(console.error)
+    const onVis = () => setVisible(!document.hidden)
+    const onHash = () => setTab(tabFromHash())
+    document.addEventListener('visibilitychange', onVis)
+    window.addEventListener('hashchange', onHash)
+    return () => {
+      document.removeEventListener('visibilitychange', onVis)
+      window.removeEventListener('hashchange', onHash)
+    }
   }, [])
 
-  async function handleModeToggle() {
-    const next = ledMode === 0 ? 1 : 0
-    setSavingMode(true)
-    try {
-      await saveMode(next)
-      setLedMode(next)
-      if (next === 1) {
-        // Show calibration preview so the strip lights up while waiting for UDP
-        await saveCalibration({
-          led_top: ledTop, led_right: ledRight,
-          led_bottom: ledBottom, led_left: ledLeft,
-          start_corner: startCorner, clockwise: clockwise ? 1 : 0,
-        })
+  useEffect(() => {
+    if (!visible) return
+    let n = 0
+    let timer = 0
+    let alive = true
+    // One request round at a time (the controller serves one request at a time), then wait.
+    const tick = async () => {
+      const i = n++
+      const wasOffline = failuresRef.current >= OFFLINE_AFTER
+      try {
+        const m = await esp.getMetrics()
+        if (!alive) return
+        setMetrics(m)
+        // Re-read the settings when the revision changed (another client — or our own save,
+        // which then confirms what we show). Not while an edit of ours is waiting or on its
+        // way, and a read answered after we changed something is dropped: an older answer
+        // must never put the old value back on the screen. The next poll catches up.
+        const idle = !Object.keys(pending.current).length && writes.current.inFlight === 0
+        const changed = configChanged(revRef.current, m) && idle
+        const jobs: Promise<unknown>[] = []
+        if (!cfgRef.current || wasOffline || reloadRef.current || changed) {
+          reloadRef.current = false
+          const rev = typeof m.config_rev === 'number' ? m.config_rev : null
+          const seq = writes.current.seq
+          jobs.push(esp.getConfig().then((c) => {
+            if (alive && writes.current.seq === seq) { setCfg(c); revRef.current = rev }
+          }))
+        }
+        if (!statusRef.current || wasOffline || i % STATUS_EVERY === 0) jobs.push(esp.getStatus().then((s) => alive && setStatus(s)))
+        await Promise.all(jobs)
+        if (alive) setFailures(0)
+      } catch {
+        if (alive) setFailures((f) => f + 1)
       }
-    } catch {
-      console.error('Failed to switch mode')
-    } finally {
-      setSavingMode(false)
+      if (alive) timer = window.setTimeout(tick, POLL_MS)
     }
+    tick()
+    return () => { alive = false; clearTimeout(timer) }
+  }, [visible])
+
+  const offline = failures >= OFFLINE_AFTER
+  const problems = useMemo(() => findProblems(cfg, metrics, offline), [cfg, metrics, offline])
+
+  // ---------------------------------------------------------------- writes
+  const pending = useRef<SaveLedsRequest>({})
+  // Our own writes: `seq` grows with every change shown optimistically, `inFlight` counts the
+  // requests not answered yet (see the poll above).
+  const writes = useRef({ seq: 0, inFlight: 0 })
+  const track = <T,>(p: Promise<T>) => {
+    writes.current.inFlight++
+    return p.finally(() => { writes.current.inFlight-- })
+  }
+  const saveTimer = useRef(0)
+
+  const notify = (text: string, tone: 'ok' | 'bad' = 'ok') => setToast({ text, tone, id: Date.now() })
+  useEffect(() => {
+    if (!toast) return
+    const id = setTimeout(() => setToast(null), toast.tone === 'bad' ? 6000 : 3000)
+    return () => clearTimeout(id)
+  }, [toast])
+
+  const reload = () => {
+    reloadRef.current = true
+    esp.getConfig().then(setCfg, () => undefined)
+  }
+  const failed = (e: unknown) => {
+    notify(`Not saved: ${errorText(e)}`, 'bad')
+    reload()
+  }
+  const patch = (p: Partial<Esp32Config>) => {
+    writes.current.seq++
+    setCfg((c) => (c ? { ...c, ...p } : c))
   }
 
+  const flush = () => {
+    const body = pending.current
+    pending.current = {}
+    if (Object.keys(body).length) track(esp.saveLeds(body)).catch(failed)
+  }
+
+  const ctl: Ctl = {
+    status, cfg, metrics, offline, problems, patch, reload, notify,
+    saveLeds(body, delayMs = 300) {
+      patch(body)
+      Object.assign(pending.current, body)
+      clearTimeout(saveTimer.current)
+      saveTimer.current = window.setTimeout(flush, delayMs)
+    },
+    setPower(on) {
+      patch({ power: on })
+      track(esp.savePower({ power: on ? 1 : 0 })).catch(failed)
+    },
+    setMode(mode) {
+      patch({ led_mode: mode })
+      track(esp.saveMode({ led_mode: mode })).catch(failed)
+    },
+    setColor(color, delayMs = 0) {
+      ctl.saveLeds({ color }, delayMs)
+      if (cfg?.led_mode !== LedMode.plain) ctl.setMode(LedMode.plain)
+    },
+    go(t) {
+      if (location.hash !== `#${t}`) location.hash = t
+      setTab(t)
+      window.scrollTo(0, 0)
+    },
+  }
+
+  // ---------------------------------------------------------------- view
+  if (!status && !offline) {
+    return (
+      <main class="splash" aria-busy="true">
+        <Logo size={64} />
+        <p class="ui-desc">Connecting to the controller…</p>
+      </main>
+    )
+  }
+
+  if (status?.mode === 'AP' && !skipSetup) return <Setup ctl={ctl} onSkip={() => setSkipSetup(true)} />
+
+  const pill = summary(cfg, metrics, problems, offline)
+  const title = tab === 'home' ? 'Ambilight' : TABS.find((t) => t.id === tab)!.label
+  const sub = tab === 'home'
+    ? [status?.mode === 'AP' ? 'Setup hotspot' : status?.ip, status?.version ? `v${status.version}` : ''].filter(Boolean).join(' · ')
+    : SUBTITLE[tab]
+
   return (
-    <div className="wrap">
-      <Header status={status} />
-      <TabNav active={tab} onChange={setTab} />
-
-      {tab === 'status' && (
-        <StatusTab status={status} metrics={metrics} />
-      )}
-
-      {tab === 'wifi' && (
-        <WiFiTab
-          wifiSSID={wifiSSID}   setWifiSSID={setWifiSSID}
-          wifiPass={wifiPass}   setWifiPass={setWifiPass}
-          otaHost={otaHost}     setOtaHost={setOtaHost}
-          otaPass={otaPass}     setOtaPass={setOtaPass}
-          ipOctet={ipOctet}     setIpOctet={setIpOctet}
-          gateway={status?.gateway}
-        />
-      )}
-
-      {tab === 'leds' && (
-        <LedsTab
-          ledMode={ledMode}       savingMode={savingMode}  onModeToggle={handleModeToggle}
-          numLeds={numLeds}       setNumLeds={setNumLeds}  maxLeds={maxLeds}
-          brightness={brightness} setBrightness={setBrightness}
-          color={color}           setColor={setColor}
-          ledTop={ledTop}         setLedTop={setLedTop}
-          ledRight={ledRight}     setLedRight={setLedRight}
-          ledBottom={ledBottom}   setLedBottom={setLedBottom}
-          ledLeft={ledLeft}       setLedLeft={setLedLeft}
-          startCorner={startCorner} setStartCorner={setStartCorner}
-          clockwise={clockwise}   setClockwise={setClockwise}
-          gamma={gamma}           setGamma={setGamma}
-          saturation={saturation} setSaturation={setSaturation}
-          wbR={wbR}               setWbR={setWbR}
-          wbG={wbG}               setWbG={setWbG}
-          wbB={wbB}               setWbB={setWbB}
-          powerLimit={powerLimit} setPowerLimit={setPowerLimit}
-          pixelWatts={pixelWatts} setPixelWatts={setPixelWatts}
-        />
-      )}
+    <div class="shell">
+      <Header title={title} subtitle={sub} pill={pill} />
+      <main class="screen">
+        {tab === 'home' && <Home ctl={ctl} />}
+        {tab === 'picture' && <Picture ctl={ctl} />}
+        {tab === 'layout' && <Layout ctl={ctl} />}
+        {tab === 'device' && <Device ctl={ctl} />}
+      </main>
+      <div class={`toast${toast ? ' show' : ''}${toast?.tone === 'bad' ? ' bad' : ''}`} role="status" aria-live="polite">{toast?.text}</div>
+      <TabBar current={tab} problems={problems.length} onChange={ctl.go} />
     </div>
   )
 }

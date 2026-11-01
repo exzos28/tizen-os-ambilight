@@ -1,0 +1,110 @@
+/* First-run setup wizard: the whole 1920×1080 stage, no rail. Opened from Outputs it lies over
+   the shell (the stage element is the positioned ancestor). */
+
+.setup {
+  width: 1920px;
+  height: 1080px;
+  display: flex;
+  flex-direction: column;
+  padding: 54px 96px 0;
+  background: var(--ui-bg);
+  color: var(--ui-text);
+  overflow: hidden;
+}
+.setup.inline { position: absolute; left: 0; top: 0; z-index: 10; }
+
+.setup-header { display: flex; align-items: center; justify-content: space-between; gap: 32px; }
+.setup-brand { display: flex; align-items: center; gap: 16px; }
+.setup-brand-text { display: flex; flex-direction: column; gap: 2px; }
+.setup-brand-name { font-size: 28px; font-weight: 700; }
+.setup-brand-version { font-size: 18px; color: var(--ui-muted); }
+
+.setup-steps { display: flex; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.setup-steps li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 48px;
+  padding: 0 18px;
+  border-radius: 24px;
+  background: var(--ui-panel);
+  border: 1px solid var(--ui-panel-line);
+  font-size: 19px;
+  color: var(--ui-muted);
+}
+.setup-steps li.current { background: var(--ui-accent-soft); border: 2px solid var(--ui-accent); font-weight: 600; color: #fff; }
+
+.setup-body { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.setup-titles { display: flex; flex-direction: column; gap: 12px; margin-top: 60px; }
+.setup-titles h1 { font-size: 60px; font-weight: 700; line-height: 1.1; }
+.setup-step-title { display: flex; align-items: baseline; gap: 18px; }
+.setup-step-title > span { font-size: 22px; color: var(--ui-muted); }
+.setup-step-title h2 { font-size: 36px; font-weight: 600; }
+.setup-titles p { font-size: 22px; line-height: 1.5; color: var(--ui-muted); }
+
+/* ---- step 1: three choices */
+.setup-options { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 32px; margin-top: 44px; }
+.setup-option {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 30px 32px 32px;
+  border-radius: 24px;
+  border: 1px solid var(--ui-panel-line);
+  background: var(--ui-panel);
+}
+.setup-option.checked { background: var(--ui-panel-focus); }
+.setup-option.focused { outline: var(--ui-focus-width) solid var(--ui-focus-color); outline-offset: -1px; }
+.setup-option-top { display: flex; align-items: center; justify-content: space-between; height: 38px; }
+.setup-radio {
+  width: 32px;
+  height: 32px;
+  border-radius: 16px;
+  border: 3px solid var(--ui-off);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.setup-option.checked .setup-radio { border-color: var(--ui-accent); }
+.setup-option.checked .setup-radio::after { content: ''; width: 14px; height: 14px; border-radius: 7px; background: var(--ui-accent); }
+.setup-badge {
+  display: inline-flex;
+  align-items: center;
+  height: 38px;
+  padding: 0 16px;
+  border-radius: 19px;
+  background: var(--ui-accent-soft);
+  color: var(--ui-accent);
+  font-size: 18px;
+  font-weight: 600;
+}
+.setup-art { display: flex; align-items: center; justify-content: center; height: 196px; border-radius: 16px; background: #10151d; }
+.setup-option-text { display: flex; flex-direction: column; gap: 10px; }
+.setup-option-title { font-size: 32px; font-weight: 700; line-height: 1.2; }
+.setup-option-desc { font-size: 21px; line-height: 1.45; color: var(--ui-text-2); }
+.setup-found { display: inline-flex; align-items: center; gap: 10px; font-size: 19px; color: var(--ui-ok-text); }
+.setup-found .ui-dot { width: 10px; height: 10px; }
+.setup-foot { font-size: 19px; color: var(--ui-muted); }
+
+.setup-actions { display: flex; align-items: center; justify-content: space-between; gap: 32px; margin-top: 36px; }
+.setup-actions p { font-size: 20px; line-height: 1.5; color: var(--ui-muted); }
+.setup-actions .ui-btn { flex-shrink: 0; height: 60px; min-height: 0; border-color: var(--ui-border); color: var(--ui-text-2); font-size: 21px; }
+
+.setup-error {
+  margin-top: 24px;
+  padding: 14px 20px;
+  border-radius: 12px;
+  background: var(--ui-bad-bg);
+  border: 1px solid var(--ui-bad-line);
+  color: var(--ui-bad-text);
+  font-size: 20px;
+  line-height: 1.4;
+}
+
+/* ---- step 2: the HyperHDR address */
+.setup-form { display: flex; flex-direction: column; gap: 12px; width: 960px; margin-top: 44px; }
+.setup-form .out-conn { margin-top: 12px; }
+.setup-form .setup-error { margin-top: 0; }
+.setup-form-actions { display: flex; gap: 20px; margin-top: 20px; }
+.setup-form-actions .ui-btn { min-width: 220px; }
+.setup-form-actions .ui-btn-secondary { height: 68px; min-height: 0; border-color: var(--ui-border); font-size: 21px; }

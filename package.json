@@ -2,16 +2,23 @@
   "name": "tizen-os-ambilight",
   "version": "1.1.0",
   "private": true,
-  "description": "DIY ambilight for Samsung Tizen TVs. This file only drives project versioning with changesets; the web UI has its own package in esp32/web.",
+  "description": "DIY ambilight for Samsung Tizen TVs. This file drives project versioning with changesets and the protocol tooling (protocol/, packages/protocol); the web UI has its own package in esp32/web.",
   "repository": "github:exzos28/tizen-os-ambilight",
   "license": "MIT",
   "scripts": {
     "changeset": "changeset",
     "version-packages": "changeset version && node scripts/sync-versions.mjs",
-    "release": "changeset publish"
+    "release": "changeset publish",
+    "protocol:gen": "node protocol/scripts/gen.mjs",
+    "protocol:check": "node protocol/scripts/check.mjs",
+    "protocol:test": "node --test \"packages/protocol/test/*.test.ts\"",
+    "protocol:type-check": "tsc -p packages/protocol && tsc -p packages/protocol/test"
   },
   "devDependencies": {
     "@changesets/changelog-github": "^1.0.1",
-    "@changesets/cli": "^3.0.3"
+    "@changesets/cli": "^3.0.3",
+    "@types/node": "^24.19.2",
+    "ajv": "^8.20.0",
+    "typescript": "^5.9.3"
   }
 }

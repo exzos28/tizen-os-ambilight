@@ -21,8 +21,17 @@ namespace Service
         {
             if (width < MinSize || width > MaxSize) throw new ArgumentOutOfRangeException(nameof(width));
             if (height < MinSize || height > MaxSize) throw new ArgumentOutOfRangeException(nameof(height));
+            return Render(frame, width, height, new byte[width * height * 3]);
+        }
 
-            var img = new byte[width * height * 3];
+        // Renders into img (exactly width × height × 3 bytes), overwriting every pixel, so the
+        // HyperHDR sender can reuse one buffer for every frame. Returns img.
+        public static byte[] Render(EdgeFrame frame, int width, int height, byte[] img)
+        {
+            if (width < MinSize || width > MaxSize) throw new ArgumentOutOfRangeException(nameof(width));
+            if (height < MinSize || height > MaxSize) throw new ArgumentOutOfRangeException(nameof(height));
+            if (img == null || img.Length != width * height * 3) throw new ArgumentException("img must be width*height*3 bytes", nameof(img));
+
             var rgb = frame.Rgb;
 
             for (int y = 0; y < height; y++)

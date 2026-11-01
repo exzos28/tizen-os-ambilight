@@ -1,0 +1,79 @@
+/* Diagnostics screen: two columns of cards that scroll to the focused one. */
+
+.diag-body {
+  position: relative; /* offsetParent of the sections: scrolling to the focused one */
+  flex: 1;
+  min-height: 0;
+  margin-top: 36px;
+  overflow: hidden;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: start;
+  gap: 28px;
+}
+.diag-col { display: flex; flex-direction: column; gap: 28px; min-width: 0; padding: 5px; }
+
+.diag .ui-card { padding: 28px 32px; gap: 18px; border-radius: 22px; }
+.diag .ui-card-title { font-size: 26px; font-weight: 600; }
+
+/* ---- verdict */
+.diag-verdict { display: flex; align-items: center; gap: 16px; }
+.diag-verdict-icon {
+  width: 48px;
+  height: 48px;
+  flex-shrink: 0;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--ui-off-soft);
+  color: var(--ui-muted);
+}
+.diag-verdict.ui-tone-ok .diag-verdict-icon { background: var(--ui-ok-soft); color: var(--ui-ok); }
+.diag-verdict.ui-tone-warn .diag-verdict-icon { background: var(--ui-warn-soft); color: var(--ui-warn); }
+.diag-verdict.ui-tone-bad .diag-verdict-icon { background: var(--ui-bad-soft); color: var(--ui-bad); }
+.diag-verdict-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; font-size: 18px; color: var(--ui-muted); }
+.diag-verdict-text h2 { font-size: 26px; font-weight: 600; color: var(--ui-text); }
+
+/* ---- label / value table */
+.diag-facts {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  column-gap: 28px;
+  row-gap: 10px;
+  margin: 0;
+  font-size: 20px;
+}
+.diag-facts dt { color: var(--ui-muted); white-space: nowrap; }
+.diag-facts dd {
+  margin: 0;
+  font-family: monospace;
+  font-size: 19px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.diag-wrap { white-space: normal; word-break: break-word; }
+.diag-bad { color: var(--ui-bad-text); }
+.diag-warn { color: var(--ui-warn-text); }
+
+/* ---- outputs */
+.diag-output { display: flex; flex-direction: column; gap: 6px; padding-bottom: 16px; }
+.diag-output + .diag-output { border-top: 1px solid var(--ui-line); }
+.diag-output .diag-facts { padding-left: 32px; font-size: 18px; row-gap: 6px; }
+.diag-output .diag-facts dd { font-size: 17px; }
+.diag-output > .diag-facts:only-child { padding-top: 14px; }
+
+/* ---- settings */
+.diag-note { font-size: 20px; color: var(--ui-text-2); }
+.diag-warnings { margin: 0; padding-left: 24px; font-size: 19px; line-height: 1.45; color: var(--ui-warn-text); }
+
+/* ---- report */
+.diag-report { flex-direction: row; align-items: center; gap: 28px; }
+.diag-qr { width: 232px; height: 232px; flex-shrink: 0; border-radius: 10px; }
+.diag-report-text { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.diag-report-text h2 { font-size: 24px; font-weight: 600; }
+.diag-report-text p { font-size: 18px; line-height: 1.5; color: var(--ui-muted); }
+.diag-url { font-family: monospace; font-size: 17px; color: var(--ui-text-2); }
+
+.diag-muted { font-size: 18px; color: var(--ui-muted); }

@@ -19,8 +19,8 @@ wiring in [HARDWARE.md](HARDWARE.md).
 │                                                                    │
 │  Service_App.cs — lifecycle, outputs, event log                    │
 │  Discovery.cs — finds ESP32s in the background                     │
-│  StatusPort.cs — answers the launcher's status requests            │
-│  tv/ui — launcher web app (Start / Stop, status panel)             │
+│  StatusPort.cs — answers the launcher's status requests, commands  │
+│  tv/ui — launcher web app (built from tv/app: controls, status)    │
 └──────────────────┬───────────────────────────────────┬─────────────┘
                    │ UDP 9001 (same LAN)               │ TCP 19400 (optional)
                    ▼                                   ▼
@@ -31,7 +31,7 @@ wiring in [HARDWARE.md](HARDWARE.md).
 │  UDPReceiver  ──►  LEDController  ──►  WS2811 LED strip     │
 │                                                             │
 │  DiscoveryResponder  (answers TV broadcast on UDP 9003)     │
-│  WebPortal  ──►  React UI (served from flash)               │
+│  WebPortal  ──►  Preact app (served from flash)             │
 │  NetworkManager  (STA / AP captive-portal fallback)         │
 │  OTAManager  (Arduino OTA)                                  │
 │  RemoteLogger  (Telnet, port 2323)                          │
@@ -46,25 +46,29 @@ wiring in [HARDWARE.md](HARDWARE.md).
 
 ### Lifecycle
 
-1. Loads the output settings from `res/ambilight.json` (bundled at build time; see
-   [Configuration](#4-configuration-reference)). A missing or invalid file falls back to
-   ESP32 only.
+1. Loads the output settings: `res/ambilight.json` (bundled at build time; see
+   [Configuration](#4-configuration-reference)), with the ones the launcher saved with
+   [`set-outputs`](#commands) over it if there are valid ones. A missing or invalid
+   `res/ambilight.json` falls back to ESP32 only.
 2. Starts discovery (`Discovery.cs`) in the background: broadcasts `AMBILIGHT_DISCOVER` on
    UDP 9003 and collects **all** replies for 2 s. While nobody is known it retries — 30
    quick attempts, then every 10 s; once hosts are known it re-probes every 30 s, so new
    controllers and IP changes are picked up while streaming. A host is dropped after
    2 minutes without a reply.
-3. Starts the enabled outputs and, after 2 s, the capture loop (`Capture.Run()`). Capture
-   does **not** wait for discovery — frames go to whichever outputs have somewhere to send.
+3. Starts the enabled outputs and, after 2 s, the capture loop (`Capture.Run()`, run and
+   restarted by `CaptureLoop.cs` on its own thread). Capture does **not** wait for
+   discovery — frames go to whichever outputs have somewhere to send.
 4. If capture fails (library or symbols missing, invalid HW condition), retries after
-   5 s, 10 s, then every 30 s.
-5. AppControl `command=start` (the launcher's *Start*) probes for hosts, reconnects
-   HyperHDR and re-initialises capture (re-reading the hardware condition) immediately;
-   `command=stop` exits the service.
+   1, 2, 3, 5 and 10 s (the video processor is often not ready right after the TV boots), then
+   every 30 s.
+5. AppControl `command=start` (the launcher's *Start*, shown while the service is not
+   running) probes for hosts, reconnects HyperHDR and re-initialises capture (re-reading the
+   hardware condition) immediately, also ending a pause; `command=stop` exits the service.
+   Capture can also be paused and resumed over the message port ([commands](#commands)).
 6. Events logged before any log host is known (config, capture init) are queued — up to
    100 — and sent once discovery finds one.
 7. Opens the local message port `ambilight.status` (`StatusPort.cs`) for the launcher's
-   status panel — see [TV launcher](#2-tv-launcher-tvui).
+   status and commands — see [TV launcher](#2-tv-launcher-tvui).
 
 ### Outputs
 
@@ -75,6 +79,14 @@ can block capture or another output.
 |--------|-----------|---------|-------|
 | `Esp32Output` | UDP 9001 to every discovered host | capture thread (UDP never blocks) | [Frame format](NETWORKING.md#color-frame-udp-9001) |
 | `HyperHdrOutput` | TCP to HyperHDR's FlatBuffers server | own sender + reader threads, one-frame mailbox | Renders a small image (`EdgeImage.cs`); reply-based liveness, reconnect backoff 1–5 s. **Untested on a TV** — see [HYPERHDR.md](HYPERHDR.md) |
+
+Which outputs run can change while the service runs ([`set-outputs`](#commands),
+`App.ApplyOutputs`): an output that is turned off is stopped, one that is turned on is
+started, and one whose settings stay the same keeps running with its counters and
+connection. A HyperHDR output whose target changed is replaced by a new one; the old one is
+disposed on a background thread (closing its socket releases its priority in HyperHDR), so
+the command's reply doesn't wait for it. Discovery is not affected — it also feeds the event
+log, so it keeps running with the ESP32 output off.
 
 ### Capture pipeline (`Capture.cs`)
 
@@ -130,37 +142,279 @@ Defaults: `hCount = 4`, `vCount = 3` → 14 points → 7 batches × 20 ms ≈ 14
 
 `SendLog()` posts JSON events (`CaptureStart`, `HwCondition`, `Frame`, `CaptureError`, …)
 over HTTP to port 9000 of every discovered host. Only `tools/server.py` listens there;
-failures are ignored.
+failures are ignored. The `Runtime` event at startup reports the package version, the .NET
+version, the GC mode (see [Memory](#memory)) and the culture. Numbers in events and in the
+status are formatted culture-independently (`InvariantCulture`): Tizen sets the process
+culture from the TV's region settings.
+
+### Memory
+
+The service starts with the TV and runs all the time, on TVs with little free RAM, so it
+avoids memory it doesn't need:
+
+- **GC**: `GCSettings.LatencyMode = Batch`, set at the start of `Main` — full collections
+  block instead of running in the background, so there is no background GC thread and no
+  extra memory while one runs; with a heap this small the pauses don't matter. Runtime
+  options in `Service.csproj` (`InvariantGlobalization`, `ConcurrentGarbageCollection`,
+  `TieredCompilation`, …) would have **no effect**: they only go into
+  `Service.runtimeconfig.json`, and Tizen's `dotnet-launcher` starts CoreCLR itself with a
+  fixed set of properties (often in a pre-started candidate process) without reading it.
+  That's also why there is no invariant-globalization mode — ICU is the platform's.
+- **Lazy loading**: the event log's `HttpClient` (and `System.Net.Http`) is created only
+  once a host is known; `Google.FlatBuffers` is loaded only by `HyperHdrProtocol`, which only
+  the HyperHDR output's threads call — so only when HyperHDR is enabled (a CI test checks
+  that config parsing and the status JSON don't load it).
+- **Per frame**: a still picture reuses the previous `EdgeFrame` instead of allocating a new
+  one (a frame is never changed once handed out, since outputs may keep it); the HyperHDR
+  sender reuses its image buffer and wait-handle array.
 
 ---
 
 ## 2. TV launcher (`tv/ui/`)
 
-Plain JavaScript Tizen web app. *Start* / *Stop* send an AppControl with
-`command=start|stop` to `fCAYP0k0uD.Service`; *Debug* shows an animated color wheel
-for testing the strip response. Navigation: ◀ ▶ and OK on the remote; Back exits.
+Preact + TypeScript web app. The source is `tv/app/`; Vite (`npm run build` there) builds it into `tv/ui`, next to
+the tracked `config.xml`: one classic deferred script and one stylesheet (`assets/app.js`,
+`assets/app.css`) for Chromium M94, the web engine of Tizen 7.0 (2023 TVs), the oldest
+supported. `preact` is the only runtime dependency besides two packages linked with `file:`
+(no dependencies of their own): [`@ambilight/protocol`](../protocol/README.md#using-ambilightprotocol)
+(`packages/protocol`): the wire types, ESP32 setting limits, constants (port names, app IDs),
+the ESP32 HTTP client and the service message helpers, all generated from or written against
+`protocol/`; and the UI kit [`@ambilight/ui`](../packages/ui/README.md) (`packages/ui`).
 
-### Status panel
+The TV is short on memory, so the app stays small: only the current screen is mounted, system
+fonts only, no blur, shadows or transitions; the only animations are in the *Test pattern*. The
+widget is not preloaded (no `prelaunch.support`), and Back on Home exits it.
 
-Tells the user whether their TV is supported without a PC on the network. Every 500 ms the
-launcher sends `{request: "status"}` to the service's local message port `ambilight.status`
-(Tizen MessagePort — IPC between the two apps on the TV, not a network connection), with its
-own port `ambilight.ui` as the reply port. The service answers `{status: "<JSON>"}`:
+| Path | What |
+|---|---|
+| `src/App.tsx` | Shell: section rail + the one mounted screen, remote keys, status poll |
+| `src/focus.ts` | Focus manager: focusable elements as rows with column positions, explicit neighbours where needed |
+| `src/screens/Home.tsx` | Lighting on/off, brightness, mode + static colors, live preview, status, problem banner |
+| `src/screens/TestPattern.tsx` | Full-screen test patterns for the strip and its calibration, ◀ ▶ to switch ([Test pattern](#test-pattern)) |
+| `src/screens/Layout.tsx` | Strip layout: start corner, direction, LEDs per side; preview and save ([Strip layout](#strip-layout)) |
+| `src/screens/Outputs.tsx` | The two outputs, each with its own switch: ESP32 controllers (list, *Blink to identify*, *Search again*) and HyperHDR (host, port, priority, connection); sends `set-outputs` |
+| `src/screens/Setup.tsx` | First-run wizard *What lights do you have?*; `shouldShowSetup(status)` |
+| `src/screens/hyperhdr.tsx` | The HyperHDR fields and connection line Outputs and the wizard share |
+| `src/screens/Diagnostics.tsx` | Whether this TV supports capture, what its hardware reports, the outputs' counters, settings warnings, the QR code of a pre-filled TV report ([Diagnostics](#diagnostics)) |
+| `src/qr.ts` | QR code encoder (byte mode, level L) for the report link |
+| `src/status.ts` | Status lines, problems (most important first) and the header pill from the service status |
+| `src/controllers.ts` | The discovered controllers over HTTP: `/status` + `/config` once, `/metrics` every second while Home is shown; writes |
+| `src/data/` | Adapters: `service.ts` (Tizen message port and AppControl glue around the `@ambilight/protocol` message helpers), `index.ts` (picks the backend; one `createEsp32Client` per controller, 3 s timeout), `mock.ts` (desktop browser, `?state=ok\|lost\|none\|off\|unsupported\|two`), `api.ts` (what the screens use) |
+
+The launcher is drawn with the UI kit `@ambilight/ui` ([`packages/ui`](../packages/ui/README.md)),
+the same as the controller's web app: tokens, icons, cards, switch, slider, mode options,
+swatches, status pill and lines, problem banner, buttons, key hints and the live preview, at
+the kit's TV density (`<html data-density="tv">`). The launcher passes the focus to them as
+`focused` props; `src/style.css` keeps only the shell (rail, header, footer) and the screens'
+grids.
+
+Remote: ◀ ▶ ▲ ▼ move, OK activates, Back exits on Home (closes the test pattern, as does OK; returns
+to Home from other sections). ◀ from the leftmost element moves to the rail.
+
+### Controls
+
+Settings live on the controllers: the launcher talks to every ESP32 the service discovered
+(`status.esp32.hosts`) over its HTTP API ([NETWORKING.md](NETWORKING.md#esp32-http-api)),
+form-urlencoded with a 3 s timeout. A change goes to every controller that answers.
+
+| Control | Request |
+|---|---|
+| Lighting off / on | `POST /save/power power=0\|1` to every controller. Capture keeps running for other outputs (HyperHDR) and for a strip switched back on from its web app |
+| Brightness (◀ ▶ in 5% steps, after OK) | `POST /save/leds brightness=0..255`, sent 300 ms after the last key |
+| Follow the picture / Static color | `POST /save/mode led_mode=1\|0` |
+| Static color swatch | `POST /save/leds color=#rrggbb` (+ `led_mode=0`) |
+
+### Test pattern
+
+`src/screens/TestPattern.tsx`, opened from Home: full-screen patterns to check the strip and
+its calibration. ◀ ▶ switch (wrapping around), OK or Back close it; the last pattern is kept
+until the app exits. A label in the middle of the screen (name, what the strip should do,
+the keys) hides after 3 s and comes back on any key; it stays away from the edges where the
+service samples. Only the current pattern is mounted: static ones are plain DOM, animated ones
+CSS animations, except the color wheel, the only `requestAnimationFrame` loop, which runs only
+while it is shown. The status poll pauses while the test pattern is open. Desktop preview:
+`?screen=test&pattern=<id>`.
+
+The regions are laid out around the sample points ([Capture pipeline](#capture-pipeline-capturecs)):
+on the 1920×1080 stage, 8×8 px blocks 125 px in from each edge, at the middle of each quarter
+(top, bottom) and third (left, right) of the edge. Edge bands are 160 px deep, so every point
+sits inside its own side's band.
+
+| `id` | Pattern | What to look for |
+|---|---|---|
+| `wheel` | Color wheel (animated): a rotating hue wheel on a 96×54 canvas, scaled up | The strip follows the colors at the edges |
+| `red`, `green`, `blue`, `white`, `grey`, `black` | Solid colors (each its own pattern; grey is `#808080`) | The whole strip in that color; white and grey even and neutral; black: the strip goes dark |
+| `sides` | Top red, right green, bottom yellow, left blue: the colors of the controller's calibration preview | Compare with the calibration preview: mapping and direction of each side |
+| `quadrants` | Red top-left, green top-right, blue bottom-right, white bottom-left | Each corner its own color. The middle points of the left and right edges sit on the split and show a mix of the two |
+| `chase` | A white 320 px block running clockwise along the edge from the top-left corner, one lap in 6 s (animated) | Order and direction of the strip |
+| `ramp` | Grey steps from black to white along each edge, clockwise, one step per sample point (4 on top and bottom, 3 on the sides) | Gamma (even steps) and white balance (no tint) |
+| `hue` | The whole screen cycling through the hue circle in 20 s (animated) | Color accuracy without spatial detail |
+| `flicker` | 96 px patches of 1 px checkerboard around each sample point, with moving 1-on-2-off stripes or a scrolling line of text-like blocks (animated) | Aliasing of the 8 px sampling as flicker: compare smoothing settings |
+
+### Picture
+
+`src/screens/Picture.tsx`: the color correction and power settings of `POST /save/leds`, with
+the ranges and defaults of `limits` from `@ambilight/protocol`. ▲ ▼ move between rows, ◀ ▶
+change the focused value at once (brightness 5%, gamma and saturation 0.1, white balance 5,
+limit 5 W, LED power 0.01 W; the two long ranges move ten steps at a time while the key
+repeats). The screen shows the change right away and sends it 300 ms after the last key (also
+when the screen is left), one `saveLeds` with every changed field, to every controller that
+answers. With several controllers it shows the first one's values and *Mixed* where they
+differ; a change then sets all of them.
+
+| Part | What |
+|---|---|
+| Color | Brightness, gamma, saturation, white balance R / G / B |
+| Power | Limit (`power_limit_w`, 0 = off), one LED at full white (`pixel_watts`), *Using now* from `/metrics` `power_w` with a meter against the limit (no limit: against full white at this brightness) and whether `power_limited` reduced the frame |
+| Presets | *Natural* (the defaults), *Cinema* (gamma 2.4, saturation 1.2, white balance 255/236/214), *Vivid* (saturation 1.6); they set gamma, saturation and white balance only. *Save as preset* keeps the current ones as *My preset* in the TV's `localStorage` (this TV only) |
+| Before and after | The current frame's edge colors (`capture.rgb`) and an approximation of what the controller makes of them: saturation in HSV, then white balance. Gamma is left out (it shapes the LEDs' response, not the screen's) |
+| Reset to defaults | OK twice: brightness, gamma, saturation and white balance back to the defaults; the power settings stay (they describe the supply and the strip) |
+
+No answering controller: an empty state with *Open Outputs*; ◀ there moves to the rail. On the
+value rows ◀ ▶ adjust, so the rail is reached with Back (Home) or from there.
+
+### Strip layout
+
+`src/screens/Layout.tsx`, the same flow as the web app's *Layout* tab: a step indicator (Start
+corner · Direction · LEDs per side · Check on the strip, following the focus), the
+`StripLayoutDiagram` seen from the front (sides in the colors the calibration preview lights:
+top red, right green, bottom yellow, left blue; LED 1 at the start corner; arrows for the
+direction), a stepper per side (0–255, `limits.led_*`) with the total, *Light up the strip* and
+*Save layout*.
+
+Edits change a local draft. 400 ms after the last change (so a held key sends once) the draft
+goes to `POST /preview/calibration` (10 s on the strip, not saved); *Light up the strip* sends
+it at once. Only *Save layout* stores it (`POST /save/calibration`, which also sets `num_leds`
+to the sum of the sides); the draft then follows `/config` again when `config_rev` changes.
+Back with unsaved changes asks first (*Keep editing* / *Discard*, inline in the screen); leaving
+through the rail keeps the draft for the next visit in this session.
+
+Remote: on the diagram the arrows move between the corners and sides, OK on a corner starts
+the strip there, OK on a side reverses the direction; ▶ from the right edge goes to the
+steppers. There ▲ ▼ pick the side, ◀ ▶ remove / add one LED, and the number keys type a count
+(digits within 1.5 s make one number; on the TV only once `tvinputdevice.registerKeyBatch`
+succeeds, which needs the `tv.inputdevice` privilege, otherwise the hint is hidden). ◀ from
+*Light up the strip* returns to the diagram.
+
+The layout is stored on each controller, so the screen edits one: the first that answers.
+With several, a picker above the diagram chooses which (switching with unsaved changes asks
+first). No controller with its settings read: an empty state with *Open Outputs*.
+
+### Outputs
+
+`src/screens/Outputs.tsx`: where the colors go. Two cards side by side, each with its own
+switch, both can be on at once. Every change is one `set-outputs` with both outputs
+([Commands](#commands)): the settings in effect from `status.outputs` with the one change; the
+service applies it live and saves it. On `ok: false` the card shows the service's `error` text
+and nothing changed.
+
+| Card | What |
+|---|---|
+| LED controllers (ESP32) | The switch sets `esp32.enabled`. The controllers in `status.esp32.hosts` with their state (as on Home), address, Wi-Fi signal (`/status` `rssi`) and firmware version; *Blink to identify* sends `POST /identify` to every answering controller, *Search again* the `rediscover` command. Off: the TV sends them nothing and Home reports no missing controller |
+| HyperHDR | Host, port, priority as text inputs: OK focuses the real `<input>`, so the TV opens its on-screen keyboard; OK / Done keeps the value, Back / Cancel restores it, ▲ ▼ keep it and move on. Typed values are a draft (*not applied*) until *Apply and test* (or *Turn on and test* while off), which sends them with `enabled: true` and watches `status.hyperhdr` for 8 s: *Connected · answering* once replies arrive, otherwise the connection error. The switch turns it on with the fields as shown, or off keeping the address. Port and priority must be digits; ranges and the required host are checked by the service |
+
+◀ ▶ move between the cards, ◀ from the ESP32 card goes to the rail. *Run setup again* opens the
+[setup wizard](#setup-wizard) over the screen; Back closes it.
+
+### Setup wizard
+
+`src/screens/Setup.tsx`, full screen without the rail. Step 1, *What lights do you have?*:
+*LED strip with an ESP32* (with the number of controllers found), *HyperHDR server* or *Both*;
+◀ ▶ choose, OK continues, ▼ *Skip for now*. The strip alone sends `set-outputs` at once
+(ESP32 on, HyperHDR off with its address kept) and closes. HyperHDR or Both go to step 2, host
+and port: *Connect* sends `set-outputs` (HyperHDR on, ESP32 on only for Both), then shows the
+connection like Outputs does and turns into *Done*. Back returns to step 1.
+
+`shouldShowSetup(status)` is true while `status.outputs.source` is `package` (the outputs were
+never set on this TV) and the wizard was not finished or skipped here (`localStorage`
+`ambilight.setupDone`; without storage it shows again until the outputs are saved). In the
+desktop preview `?screen=outputs&setup=1` opens it; the mock takes `?outputs=package|both|hyperhdr`.
+
+### Status
+
+Once per second while the page is visible (`visibilitychange` pauses it) the launcher sends
+`{request: "status"}` to the service's local message port `ambilight.status` (Tizen
+MessagePort — IPC between the two apps on the TV, not a network connection), with its own
+port `ambilight.ui` as the reply port. The service answers `{status: "<JSON>"}`. Commands go
+the same way: `{request: "command", command: "pause" | "resume" | "rediscover" | "set-outputs",
+id?}` → `{result: "{ok, error}", id?}` ([Commands](#commands)).
 
 | Section | Fields | Shown as |
 |---|---|---|
-| `capture` | `state` (`waiting` / `starting` / `running` / `failed`), `failure` (`library` / `symbols` / `hardware`), `error`, `retryInMs`, `hw` (HwCondition), `frameMs`, `lastFrameAgoMs`, `reads`, `badReads`, `lastBadRet`, `h`, `v`, `rgb` (hex, `EdgeFrame` order) | Verdict, *Screen capture* row, preview of the captured colors |
-| `esp32` | `enabled`, `hosts` (discovered; also `tools/server.py`), `framesSent`, `sendErrors`, `lastError` | *ESP32* row. UDP has no replies, so *Sending* means handed to the network, not received |
-| `hyperhdr` | `enabled`, `endpoint`, `connected`, `replies`, `lastError` | *HyperHDR* row |
-| `configWarnings` | `ambilight.json` problems | Detail line |
+| `version` | Package version (`tizen-manifest.xml` / `config.xml`, synced from `package.json`), read at run time with `app_get_version`; `null` if it can't be read | — |
+| `capture` | `state` (`waiting` / `starting` / `running` / `paused` / `failed`), `failure` (`library` / `symbols` / `hardware`; `null` with `failed` = unexpected exception), `error`, `failedAttempts`, `retryInMs`, `hw` (HwCondition), `frames`, `frameMs`, `lastFrameAgoMs`, `reads`, `badReads`, `lastBadRet`, `h`, `v`, `rgb` (hex, `EdgeFrame` order) | *Screen capture* line, problem banner, live preview |
+| `esp32` | `enabled`, `hosts` (discovered; also `tools/server.py`), `framesSent`, `sendErrors`, `lastError` | One line per controller. *Streaming* when its `/metrics` `last_frame_ms` < 2 s; without it, *Sending* when `framesSent` grows (handed to the network, not confirmed) |
+| `hyperhdr` | `enabled`, `endpoint`, `connected`, `replies`, `lastError` | *HyperHDR* line |
+| `outputs` | The output settings in effect, as `set-outputs` takes them: `esp32.enabled`, `hyperhdr.enabled` / `host` / `port` / `priority`, and `source` (`package` = `res/ambilight.json`, `saved` = set with `set-outputs`). An invalid HyperHDR section of `res/ambilight.json` shows as `enabled: false` | [Outputs](#outputs-1) switches and fields; `source: "package"` shows the [setup wizard](#setup-wizard) |
+| `configWarnings` | Problems in `res/ambilight.json`, or saved outputs that couldn't be used; empty after a successful `set-outputs` | Problem banner |
 
 `library` / `symbols` failures mean the TV doesn't expose the capture API; `hardware`
 means `get_rgb_measure_condition` reported an unusable state (retried). A `running` capture
-whose reads all fail, or with no frame for 2 s, is shown as not working. No reply from the
-port means the service isn't running (or doesn't answer for 3 s).
+whose reads all fail, or with no frame for 2 s, is shown as not working. `paused` keeps the
+last frame's fields; `retryInMs` is left out, since nothing is retried while paused. No
+message port means the service isn't running (*Start* launches it with AppControl
+`command=start`); no reply for 3 s means it doesn't respond. No controller in `hosts`, or
+one that stops answering HTTP, shows *Search now* (`rediscover`).
 
-The panel and the log stay at least ~125 px away from the screen edges, where the service
-samples, so they don't cover the Debug color wheel there.
+### Diagnostics
+
+The *Diagnostics* section shows the same status in full, for a TV compatibility report:
+
+| Section | Content |
+|---|---|
+| This TV | Verdict (same reading as Home's banner: *This TV is supported*, *does not expose the capture API* for a `library` / `symbols` failure, *hardware is not ready* for `hardware`, stalled / failing reads), model (`tizen.systeminfo` `model_name`), app and service versions, the capture library and whether it loaded, `hw` (`ret`, screen, slots, block size, delay in use and the one the hardware asks for), frame time and fps, failed reads per frame with `lastBadRet`; while `failed`, the attempts, the retry time and `error` |
+| Output settings | `outputs.source` and `configWarnings` |
+| Outputs | Per controller: its status line (as on Home), firmware and Wi-Fi from `/status`, uptime, heap (free, lowest, total), `frames_rx` and the last frame's age from `/metrics`; the service's `framesSent` / `sendErrors` / `lastError`; HyperHDR: connection, `replies`, `lastError` |
+| Report this TV | QR code of `issues/new?template=tv-compatibility.yml` with `title`, `model`, `result` (*Works* / *Partially works* / *Doesn't work* from the verdict; left out while the status can't tell) and `log` filled in: the `HwCondition` line in the service's event format, the capture state with `frameMs` / `reads` / `badReads` / `lastBadRet`, or the `CaptureError` with `failure` and `error` |
+
+The report is rebuilt only when the verdict, the hardware reply or the versions change, so the
+QR code holds still while a phone reads it (frame counts and retry times stay out of it).
+`src/qr.ts` encodes it (byte mode, level L, smallest version; about 1.6 kB gzipped); a typical
+report is version 13 (69×69 modules).
+
+There is no event log on this screen: the service keeps none, it only POSTs its events to
+`tools/server.py` ([Event log](#event-log)).
+
+Remote: ▲ ▼ move between the sections (left column, then right) and scroll a section that
+is taller than the screen; ◀ goes to the rail.
+
+### Commands
+
+The same port takes commands (`ServiceCommands.cs`): `{request: "command", command: "<name>",
+id?}`, answered to the reply port with `{result: "<JSON>", id?}`, where the JSON is
+`{"ok": true|false, "error": null|"<why>"}`.
+
+| `command` | Effect |
+|---|---|
+| `pause` | Stops capture and keeps it stopped — no retries — until `resume` (or AppControl `command=start`, or a restart of the service). Outputs stay connected; `capture.state` becomes `paused` |
+| `resume` | Re-initialises capture right away, like AppControl `command=start` does for capture (also skips a pending retry delay) |
+| `rediscover` | Probes for ESP32s / `tools/server.py` now instead of at the next scheduled attempt |
+| `set-outputs` | Takes `outputs`: a JSON string `{"esp32": {"enabled"}, "hyperhdr": {"enabled", "host", "port", "priority"?}}` ([schema](../protocol/schemas/service/outputs.schema.json)). Saves it, then starts / stops the outputs to match — no restart ([Outputs](#outputs)). Same ranges and defaults as `res/ambilight.json` (port 1–65535, priority 50–250, default 150; a host is required while HyperHDR is enabled), but strict: an unknown key, a missing one (only `priority` may be left out) or any invalid value rejects the whole command and changes nothing. The HyperHDR image size isn't part of it and stays as it was |
+
+A missing, unknown (names are case-sensitive) or failing command answers `ok: false` with the
+reason in `error`. A pause is not saved: the service starts capturing again when it restarts
+(e.g. with the TV).
+
+**Request id.** A command may carry `id` (a string of up to 64 characters); the reply then
+carries the same `id` next to `result`. Replies are otherwise matched to requests by order, so
+a reply that arrives after the launcher gave up on it (3 s) would be taken for the answer to
+the next command; with ids the launcher can tell. A request without `id` (older launchers)
+gets a reply without one. A longer id is not run and answered `ok: false` without an `id`.
+
+**Saved outputs.** `set-outputs` writes `outputs.json` to the app's data directory (Tizen
+`DirectoryInfo.Data`) before applying it, so `ok: true` means applied *and* kept. The file is
+written to a temp file, flushed to the disk and renamed over the old one, so a power cut
+leaves either the old or the new settings, never half a file. It holds only what
+`set-outputs` sets — `esp32.enabled` and `hyperhdr.enabled` / `host` / `port` / `priority`.
+From the next start on it is merged over `res/ambilight.json`: those keys come from the
+saved file, everything else (the HyperHDR image size) from the package, so a newer package's
+values apply even after `set-outputs`; the status says `outputs.source: "saved"`. Problems
+of `res/ambilight.json` with the image size are still reported in `configWarnings`. Saved
+files from older versions also carry `hyperhdr.imageWidth` / `imageHeight`; those keys are
+ignored. A saved file that can't be read or isn't valid is ignored: the service falls back to
+`res/ambilight.json` and reports it as the first `configWarnings` entry / `ConfigWarning`
+event. The file goes away with the app's data (reinstalling after an uninstall, or clearing
+the app's data).
 
 ---
 
@@ -176,7 +430,8 @@ driven in `loop()`.
 2. NetworkManager               connect STA (12 s timeout); fall back to AP "ambilight-setup"
 3. OTAManager::begin()          Arduino OTA
 4. RemoteLogger::begin()        Telnet log server on port 2323
-5. LEDController::begin()       FastLED init, static color
+5. LEDController::begin()       FastLED init, then repaint(): static color in plain mode,
+                                dark in dynamic mode (until frames arrive) or with the lighting off
 6. WebPortal::begin()           HTTP config UI on port 80
 7. UDPReceiver::begin()         listen on UDP 9001 for frames
 8. DiscoveryResponder::begin()  answer discovery probes on UDP 9003
@@ -205,6 +460,17 @@ driven in `loop()`.
 | Plain | 0 | All LEDs show `colorR/G/B`; UDP frames are ignored |
 | Dynamic | 1 | UDP frames drive the strip; fades to black 5 s after the last frame |
 
+**Power gating**: with the `power` setting off the strip is dark in both modes and UDP
+frames are ignored; brightness, color and mode are kept and come back when it is turned
+on. What owns the strip is decided in `LightOutput.h` (host-tested), highest priority
+first: identify blink → calibration preview → dark (power off) → plain / dynamic. Boot,
+every change of power or mode, and the end of a preview or identify go through
+`repaint()`, which draws the current owner: the static color in plain mode, black
+otherwise (dynamic frames then blend back in). While frames aren't applied (power off,
+plain mode, preview) `repaint()` also drops the last decoded frame, so turning the lighting
+or dynamic mode back on stays dark until a fresh frame arrives instead of fading in an old
+one.
+
 Frame processing (`applyAmbilight()`):
 
 1. **Interpolate** each side's samples to the configured LED count for that side
@@ -216,22 +482,66 @@ Frame processing (`applyAmbilight()`):
 
 `showCalibrationPreview()` lights the sides red / green / yellow / blue
 (top / right / bottom / left) and the first LED white for 10 s. When it expires,
-`update()` clears it and, in plain mode, restores the static color.
+`update()` clears it and `repaint()`s the current output.
+
+**Identify** (`POST /identify`, `startIdentify()`): blinks white
+`ESP32_IDENTIFY_BLINKS` (3) times over exactly `ESP32_IDENTIFY_DURATION_MS` (2 s), split
+into equal on / off slots of ≈ 333 ms and ending on an off slot (timeline in
+`LightOutput::Identify`), driven from `update()` without blocking, at the configured
+brightness and power limit. It covers every LED that may be lit — the driven count, LEDs
+a longer calibration preview left lit and the calibrated layout (`Identify::coverage()`)
+— and clears them all when it ends, in the same `FastLED.show()` as the `repaint()` that
+restores the output (one show, no black frame in between). It works with the lighting off.
+While it runs, other redraws (`setNumLeds()`, `repaint()` after a mode, power or color
+change, brightness and power-limit updates, a new preview) only update state
+(`LightOutput::redrawsNow()`): the blink re-applies its current phase on the next update,
+and the end of the blink shows the new state. Frames keep updating the dynamic target
+during the blink. Not saved.
 
 `UDPReceiver` drains all queued datagrams each loop and applies only the newest frame.
+It counts every valid datagram (`frames_rx`, `last_frame_ms` in `GET /metrics`), applied
+or not.
 
 Limits: `MAX_LEDS = 1500`, up to 255 LEDs per side, data on GPIO 23, color order BRG
 (see [HARDWARE.md](HARDWARE.md#led-color-order)).
 
 ### Web portal (`WebPortal`)
 
-The React app in `esp32/web/` is built by `scripts/embed_web.py` (a PlatformIO pre-build
-step running `npm run build`) into a single HTML file, gzipped, embedded as `src/web_ui.h`
-and served from flash with `Content-Encoding: gzip` — no SPIFFS/LittleFS. Three tabs:
-Status, WiFi, LEDs. The LEDs tab has a Dynamic / Plain switch: Dynamic shows brightness,
-color correction and the strip layout editor; Plain shows LED count, brightness and the
-static color. Settings are saved to NVS on change; `Config::sanitize()` clamps them to
-valid ranges on every load and save. Only network changes restart the device.
+The phone web app in `esp32/web/` (Preact + TypeScript; `preact`, `@ambilight/protocol` and
+`@ambilight/ui` are its only runtime dependencies) is built by `scripts/embed_web.py` (a
+PlatformIO pre-build step running `npm run build`) into a single HTML file, gzipped (≈ 23 KB),
+embedded as `src/web_ui.h` and served from flash with `Content-Encoding: gzip` — no
+SPIFFS/LittleFS, no webfonts or external requests (the captive portal is offline). It talks
+to the API through `@ambilight/protocol` (`createEsp32Client`, generated types, slider ranges
+and defaults from `limits`; see [protocol/README.md](../protocol/README.md#using-ambilightprotocol))
+and looks like the TV launcher: the same tokens and components from the UI kit
+[`packages/ui`](../packages/ui/README.md), at phone density.
+
+**First-time setup comes first:** while `GET /status` reports `mode: "AP"` (captive portal
+on `ambilight-setup`) the app opens a Wi-Fi setup screen instead of the tabs: network name
+and password → `POST /save/network` (an empty `wifi_ssid` / `ota_host` is never sent), then
+what happens next: the controller restarts and joins the network, it is found at
+`http://<ota_host>.local` or `<subnet>.<ip_octet>`, and the TV finds it by itself. *Skip*
+opens the tabs anyway.
+
+Otherwise a bottom tab bar with four tabs (the URL hash keeps the tab: `#home`, `#picture`,
+`#layout`, `#device`):
+
+| Tab | What | Requests |
+|---|---|---|
+| Home | Problem banner (no frames for 30 s while following the picture, power limit dimming, controller not answering); *Lighting* switch; *Brightness*; *Mode*: Follow the picture / Static color with the TV's six swatches and a custom color; live status: receiving from the TV (`last_frame_ms` < 2 s) with frames and age, estimated strip power, Wi-Fi signal | `POST /save/power`, `/save/leds` (brightness, color; 300 ms after the last change), `/save/mode`; `GET /metrics` every 2 s while the page is visible, `GET /status` every 10 s |
+| Picture | Gamma, saturation, white balance R/G/B, *Reset color to defaults*; power limit and one LED's power, power used now | `POST /save/leds` |
+| Layout | Strip diagram (corners: start, sides: direction, colored as the preview lights them), LEDs per side, *Light up the strip*, *Save layout* | `POST /preview/calibration` 400 ms after each change, `POST /save/calibration` on save |
+| Device | Firmware, uptime, memory, Wi-Fi; *Blink to identify*; *Restart* (after a confirmation); Wi-Fi, fixed address, OTA name and password | `POST /identify`, `/restart`, `/save/network` |
+
+Settings are saved to NVS on change; `Config::sanitize()` clamps them to
+valid ranges on every load and save. Every `Config::save()` (one per successful save
+request; rejected requests return before it) bumps the settings revision, `config_rev` in
+`GET /metrics`, which starts at a random value at boot, so clients polling the metrics
+notice changes made by another client (see
+[NETWORKING.md](NETWORKING.md#esp32-http-api)). Only network changes and `POST /restart`
+restart the device. Every response carries `Access-Control-Allow-Origin: *` and `OPTIONS` on any
+path answers the CORS preflight (see [NETWORKING.md](NETWORKING.md#esp32-http-api)).
 
 The firmware uses the `min_spiffs.csv` partition table: two 1.875 MB OTA app slots.
 
@@ -258,6 +568,7 @@ The firmware uses the `min_spiffs.csv` partition table: two 1.875 MB OTA app slo
 | `DiscoveryRetryDelayMs` | 10000 | Interval between attempts after that (discovery never gives up) |
 | `DiscoveryRefreshMs` | 30000 | Re-probe interval once hosts are known |
 | `OutputConfigFile` | `ambilight.json` | Output settings file in the package's `res/` folder |
+| `SavedOutputsFile` | `outputs.json` | Output settings saved by `set-outputs`, in the app's data directory; merged over `OutputConfigFile` (wins for the keys `set-outputs` sets) |
 | `TargetCaptureW` | 4 | Sample points per horizontal edge |
 | `TargetCaptureH` | 3 | Sample points per vertical edge |
 | `EdgeInsetPx` | 250 | Distance of sample points from the screen edge, in HW pixels (3840 × 2160 on 4K) |
@@ -268,7 +579,8 @@ The firmware uses the `min_spiffs.csv` partition table: two 1.875 MB OTA app slo
 JSON (comments allowed), bundled into the package. `esp32.enabled` (default `true`) and the
 `hyperhdr` section (host, port, priority, image size; disabled by default). Keys, defaults and
 validation: [HYPERHDR.md](HYPERHDR.md#setup). Invalid sections are disabled and reported as
-`ConfigWarning` events.
+`ConfigWarning` events. These are the settings until the launcher saves its own with the
+[`set-outputs`](#commands) command, which then replace them — see *Saved outputs* there.
 
 ### ESP32 settings (NVS)
 
@@ -285,6 +597,7 @@ Stored in the `ambilight` NVS namespace, editable in the web UI (`esp32/src/Conf
 | `startCorner` | `start_corner` | 0 | 0 = top-left, 1 = top-right, 2 = bottom-right, 3 = bottom-left |
 | `clockwise` | `clockwise` | true | Strip direction from the start corner |
 | `ledMode` | `led_mode` | 1 | 0 = plain, 1 = dynamic |
+| `power` | `power` | true | Lighting on/off (`POST /save/power`, `0`/`1`). Off: dark in both modes, UDP frames ignored; other settings kept |
 | `gamma` | `gamma` | 2.2 | Gamma correction (UI range 0.5–3.0) |
 | `saturation` | `saturation` | 1.0 | Saturation multiplier (UI range 0–2) |
 | `whiteBalanceR/G/B` | `wb_r` / `wb_g` / `wb_b` | 255 | Per-channel scale |

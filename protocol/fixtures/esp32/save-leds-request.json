@@ -1,0 +1,12 @@
+{
+  "num_leds": 32,
+  "brightness": 128,
+  "color": "#ff8800",
+  "gamma": 2.2,
+  "saturation": 1.2,
+  "wb_r": 255,
+  "wb_g": 240,
+  "wb_b": 220,
+  "power_limit_w": 60,
+  "pixel_watts": 0.72
+}

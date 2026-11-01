@@ -3,6 +3,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text.Json;
 using System.Threading;
+using static System.FormattableString;
 
 namespace Service
 {
@@ -47,12 +48,13 @@ namespace Service
             foreach (var endpoint in _endpoints)
             {
                 try { _udp.Send(_packet, _packet.Length, endpoint); sent = true; }
+                catch (ObjectDisposedException) { return; }   // turned off by set-outputs while this frame was in flight
                 catch (Exception ex)
                 {
                     _lastError = $"{endpoint.Address}: {ex.Message}";
                     int failures = Interlocked.Increment(ref _failures);
                     if (failures % 30 == 1)
-                        _log("UdpSendError", $"target={endpoint.Address} failures={failures} err={ex.Message}");
+                        _log("UdpSendError", Invariant($"target={endpoint.Address} failures={failures} err={ex.Message}"));
                 }
             }
             if (sent) Interlocked.Increment(ref _framesSent);
@@ -73,6 +75,7 @@ namespace Service
             w.WriteEndObject();
         }
 
+        // Safe while Send runs on the capture thread: that frame is then dropped.
         public void Dispose() => _udp.Dispose();
     }
 }

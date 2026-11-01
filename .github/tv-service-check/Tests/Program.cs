@@ -1,7 +1,8 @@
 // Tests for the Tizen-independent parts of tv/service. No test framework on purpose:
 // it runs as a plain console app in CI.
 //
-//   dotnet run                          unit tests; writes FlatBuffers samples to ./out
+//   dotnet run                          unit tests; writes FlatBuffers samples to ./out and the
+//                                       service's status / command JSON to ./out/contract
 //   dotnet run -- -e2e HOST PORT HTTP   live session against a running HyperHDR
 using System;
 using System.Collections.Generic;
@@ -23,11 +24,18 @@ namespace Service
             if (args.Length >= 1 && args[0] == "-e2e")
                 return EndToEnd(args[1], int.Parse(args[2]), int.Parse(args[3]));
 
+            LazyLoadTests();   // first: before anything else touches Google.FlatBuffers
             EdgeImageTests();
             ProtocolTests();
             ConfigTests();
+            CommandConfigTests();
+            SavedConfigTests();
             StatusTests();
+            ServiceStatusTests();
+            CommandTests();
+            CaptureLoopTests();
             WriteSamples("out");
+            WriteContractSamples(Path.Combine("out", "contract"));
 
             Console.WriteLine(_failures == 0 ? "ALL TESTS PASSED" : $"{_failures} FAILURE(S)");
             return _failures == 0 ? 0 : 1;
@@ -37,6 +45,29 @@ namespace Service
         {
             Console.WriteLine($"{(ok ? "ok  " : "FAIL")} {what}");
             if (!ok) _failures++;
+        }
+
+        // ---------------------------------------------------------------- Lazy loading
+
+        private static bool IsLoaded(string assemblyName)
+        {
+            foreach (var a in AppDomain.CurrentDomain.GetAssemblies())
+                if (a.GetName().Name == assemblyName) return true;
+            return false;
+        }
+
+        // The service must not load Google.FlatBuffers unless HyperHDR is enabled: config
+        // parsing (which validates the HyperHDR section), the status JSON with HyperHDR off and
+        // the edge image must all work without it.
+        private static void LazyLoadTests()
+        {
+            var cfg = OutputConfig.Parse(@"{ ""hyperhdr"": { ""enabled"": true, ""host"": ""10.0.0.5"", ""priority"": 100 } }");
+            OutputConfig.ParseCommand(@"{ ""esp32"": { ""enabled"": true }, ""hyperhdr"": { ""enabled"": true, ""host"": ""h"", ""port"": 1, ""priority"": 50 } }", null, out _);
+            var status = new CaptureStatus();
+            status.Frame(DistinctFrame(), 140, 14, 0, 0);
+            StatusJson.Build(w => StatusJson.WriteService(w, "1.0.0", status, null, null, cfg));
+            EdgeImage.Render(DistinctFrame(), 16, 9);
+            Check(!IsLoaded("Google.FlatBuffers"), "config, set-outputs parsing, status JSON and edge image don't load Google.FlatBuffers");
         }
 
         // ---------------------------------------------------------------- EdgeImage
@@ -93,6 +124,12 @@ namespace Service
             bool between = true;
             for (int c = 0; c < 3; c++) between &= mid[c] >= Math.Min(a[c], b[c]) && mid[c] <= Math.Max(a[c], b[c]);
             Check(between, "top-centre pixel is interpolated between the two middle top samples");
+
+            // Rendering into a reused buffer gives the same image, whatever was in it before.
+            var reused = new byte[w * h * 3];
+            for (int i = 0; i < reused.Length; i++) reused[i] = 0xAB;
+            Check(ReferenceEquals(EdgeImage.Render(f, w, h, reused), reused) && reused.AsSpan().SequenceEqual(img),
+                "rendering into a reused buffer overwrites it with the same image");
 
             // Uniform frame → uniform image.
             var red = new byte[2 * (4 + 3) * 3];
@@ -190,6 +227,158 @@ namespace Service
             Check(missing.Esp32Enabled && missing.Warnings.Count == 1, "missing file → defaults with a warning");
         }
 
+        // ---------------------------------------------------------------- set-outputs payload
+
+        // A file of the repository (the tests run from Tests/bin/<config>/net8.0).
+        private static string RepoPath(string relative) =>
+            Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../../..", relative));
+
+        private const string OutputsBoth = @"{ ""esp32"": { ""enabled"": true }, ""hyperhdr"": { ""enabled"": true, ""host"": "" 192.168.1.50 "", ""port"": 19400, ""priority"": 100 } }";
+
+        private static void CommandConfigTests()
+        {
+            string error = OutputConfig.ParseCommand(OutputsBoth, null, out var cfg);
+            Check(error == null && cfg.Esp32Enabled && cfg.HyperHdr.Enabled && cfg.HyperHdr.Host == "192.168.1.50"
+                  && cfg.HyperHdr.Priority == 100 && cfg.Source == OutputSource.Saved && cfg.Warnings.Count == 0,
+                "set-outputs: valid outputs are taken, host trimmed, source saved");
+
+            error = OutputConfig.ParseCommand(@"{ ""esp32"": { ""enabled"": false }, ""hyperhdr"": { ""enabled"": false, ""host"": """", ""port"": 19400 } }", null, out cfg);
+            Check(error == null && !cfg.Esp32Enabled && !cfg.HyperHdr.Enabled && cfg.HyperHdr.Priority == 150,
+                "set-outputs: both off, empty host allowed while disabled, priority defaults to 150");
+
+            var custom = OutputConfig.Parse(@"{ ""hyperhdr"": { ""imageWidth"": 32, ""imageHeight"": 18 } }").HyperHdr;
+            OutputConfig.ParseCommand(OutputsBoth, custom, out cfg);
+            Check(cfg.HyperHdr.ImageWidth == 32 && cfg.HyperHdr.ImageHeight == 18, "set-outputs keeps the image size in effect");
+
+            var rejected = new (string json, string expect, string what)[]
+            {
+                ("{ not json", "not valid JSON", "invalid JSON"),
+                ("[]", "JSON object", "not an object"),
+                (@"{ ""esp32"": { ""enabled"": true } }", "hyperhdr is missing", "a missing section"),
+                (@"{ ""esp32"": true, ""hyperhdr"": { ""enabled"": false, ""host"": """", ""port"": 1 } }", "esp32 must be an object", "a section that isn't an object"),
+                (@"{ ""esp32"": {}, ""hyperhdr"": { ""enabled"": false, ""host"": """", ""port"": 1 } }", "esp32.enabled is missing", "a missing enabled"),
+                (@"{ ""esp32"": { ""enabled"": 1 }, ""hyperhdr"": { ""enabled"": false, ""host"": """", ""port"": 1 } }", "esp32.enabled must be true or false", "a non-boolean enabled"),
+                (@"{ ""esp32"": { ""enabled"": true }, ""hyperhdr"": { ""enabled"": true, ""host"": ""  "", ""port"": 19400 } }", "host is required", "enabled HyperHDR without a host"),
+                (@"{ ""esp32"": { ""enabled"": true }, ""hyperhdr"": { ""enabled"": false, ""port"": 19400 } }", "hyperhdr.host is missing", "a missing host"),
+                (@"{ ""esp32"": { ""enabled"": true }, ""hyperhdr"": { ""enabled"": false, ""host"": 5, ""port"": 19400 } }", "hyperhdr.host must be a string", "a non-string host"),
+                (@"{ ""esp32"": { ""enabled"": true }, ""hyperhdr"": { ""enabled"": false, ""host"": """" } }", "hyperhdr.port is missing", "a missing port"),
+                (@"{ ""esp32"": { ""enabled"": true }, ""hyperhdr"": { ""enabled"": false, ""host"": """", ""port"": 65536 } }", "hyperhdr.port must be an integer 1..65535", "port out of range"),
+                (@"{ ""esp32"": { ""enabled"": true }, ""hyperhdr"": { ""enabled"": false, ""host"": """", ""port"": 19400.5 } }", "hyperhdr.port must be an integer", "a fractional port"),
+                (@"{ ""esp32"": { ""enabled"": true }, ""hyperhdr"": { ""enabled"": false, ""host"": """", ""port"": 1, ""priority"": 49 } }", "hyperhdr.priority must be an integer 50..250", "priority out of range"),
+                (@"{ ""esp32"": { ""enabled"": true }, ""hyperhdr"": { ""enabled"": false, ""host"": """", ""port"": 1, ""imageWidth"": 32 } }", "unknown key hyperhdr.imageWidth", "the image size (not part of the command)"),
+                (@"{ ""esp32"": { ""enabled"": true, ""hosts"": [] }, ""hyperhdr"": { ""enabled"": false, ""host"": """", ""port"": 1 } }", "unknown key esp32.hosts", "an unknown key"),
+                (@"{ ""esp32"": { ""enabled"": true }, ""hyperhdr"": { ""enabled"": false, ""host"": """", ""port"": 1 }, ""wled"": {} }", "unknown key wled", "an unknown section"),
+            };
+            foreach (var (json, expect, what) in rejected)
+            {
+                error = OutputConfig.ParseCommand(json, null, out cfg);
+                Check(error != null && error.Contains(expect) && cfg == null, $"set-outputs rejects {what} (\"{expect}\")");
+            }
+            error = OutputConfig.ParseCommand(@"{ ""esp32"": {}, ""hyperhdr"": { ""enabled"": true, ""host"": """", ""port"": 0 } }", null, out _);
+            Check(error != null && error.Contains("esp32.enabled") && error.Contains("hyperhdr.port") && error.Contains("host is required"),
+                "set-outputs lists every problem at once");
+
+            // What protocol/ says is a valid payload, the service takes (the other direction of
+            // the contract check in CI).
+            foreach (var name in new[] { "outputs.json", "outputs.esp32-only.json", "outputs.hyperhdr-only.json" })
+            {
+                error = OutputConfig.ParseCommand(File.ReadAllText(RepoPath($"protocol/fixtures/service/{name}")), null, out _);
+                Check(error == null, $"protocol/fixtures/service/{name} is accepted ({error ?? "ok"})");
+            }
+            var request = JsonDocument.Parse(File.ReadAllText(RepoPath("protocol/fixtures/service/command-request.set-outputs.json"))).RootElement;
+            var target = new FakeTarget();
+            var reply = ServiceCommands.Handle(request.GetProperty("id").GetString(), request.GetProperty("command").GetString(),
+                request.GetProperty("outputs").GetString(), target);
+            Check(Result(reply.Result).ok && reply.Id == "7" && target.Calls.Contains("set-outputs"),
+                "protocol/fixtures/service/command-request.set-outputs.json runs and echoes its id");
+        }
+
+        // ---------------------------------------------------------------- saved outputs
+
+        private static string TempDir()
+        {
+            string dir = Path.Combine(Path.GetTempPath(), "ambilight-tests-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(dir);
+            return dir;
+        }
+
+        private static void SavedConfigTests()
+        {
+            string dir = TempDir();
+            string package = RepoPath("tv/service/res/ambilight.json");
+            string saved = Path.Combine(dir, "data", "outputs.json");
+
+            var cfg = OutputConfig.LoadEffective(package, saved);
+            Check(cfg.Source == OutputSource.Package && cfg.Esp32Enabled && !cfg.HyperHdr.Enabled && cfg.Warnings.Count == 0,
+                "no saved outputs → res/ambilight.json, source package");
+
+            var custom = OutputConfig.Parse(@"{ ""hyperhdr"": { ""imageWidth"": 32, ""imageHeight"": 18 } }").HyperHdr;
+            OutputConfig.ParseCommand(OutputsBoth, custom, out var set);
+            set.Save(saved);   // creates the data directory
+            Check(!File.Exists(saved + ".tmp"), "saving leaves no temp file behind");
+            var savedKeys = new List<string>();
+            foreach (var p in JsonDocument.Parse(File.ReadAllText(saved)).RootElement.GetProperty("hyperhdr").EnumerateObject()) savedKeys.Add(p.Name);
+            Check(string.Join(",", savedKeys) == "enabled,host,port,priority", "the saved file holds only the set-outputs keys (no image size)");
+            cfg = OutputConfig.LoadEffective(package, saved);
+            Check(cfg.Source == OutputSource.Saved && cfg.Esp32Enabled && cfg.HyperHdr.Enabled && cfg.HyperHdr.Host == "192.168.1.50"
+                  && cfg.HyperHdr.Port == 19400 && cfg.HyperHdr.Priority == 100 && cfg.Warnings.Count == 0,
+                "saved outputs win over res/ambilight.json at the next start");
+            Check(cfg.HyperHdr.ImageWidth == 64 && cfg.HyperHdr.ImageHeight == 36,
+                "the image size comes from res/ambilight.json, not the size in effect when it was saved");
+
+            // A newer package with another image size: picked up even with saved outputs.
+            string newer = Path.Combine(dir, "ambilight.newer.json");
+            File.WriteAllText(newer, @"{ ""hyperhdr"": { ""enabled"": false, ""imageWidth"": 48, ""imageHeight"": 27 } }");
+            cfg = OutputConfig.LoadEffective(newer, saved);
+            Check(cfg.Source == OutputSource.Saved && cfg.HyperHdr.Enabled && cfg.HyperHdr.Host == "192.168.1.50"
+                  && cfg.HyperHdr.ImageWidth == 48 && cfg.HyperHdr.ImageHeight == 27 && cfg.Warnings.Count == 0,
+                "a newer package's image size applies over saved outputs; the saved target is kept");
+
+            // A saved file from an older version, with the image size in it: loads, the size ignored.
+            string old = Path.Combine(dir, "outputs.old.json");
+            File.WriteAllText(old, @"{ ""esp32"": { ""enabled"": false }, ""hyperhdr"": { ""enabled"": true, ""host"": ""10.0.0.7"", ""port"": 19401, ""priority"": 120, ""imageWidth"": 32, ""imageHeight"": 18 } }");
+            cfg = OutputConfig.LoadEffective(newer, old);
+            Check(cfg.Source == OutputSource.Saved && !cfg.Esp32Enabled && cfg.HyperHdr.Enabled && cfg.HyperHdr.Host == "10.0.0.7"
+                  && cfg.HyperHdr.Port == 19401 && cfg.HyperHdr.Priority == 120
+                  && cfg.HyperHdr.ImageWidth == 48 && cfg.HyperHdr.ImageHeight == 27 && cfg.Warnings.Count == 0,
+                "an older saved file with imageWidth / imageHeight loads; those keys are ignored");
+
+            // The package's problems with the image size are still reported over saved outputs,
+            // but not its other problems (the saved file replaces those keys).
+            string badSize = Path.Combine(dir, "ambilight.bad-size.json");
+            File.WriteAllText(badSize, @"{ ""hyperhdr"": { ""enabled"": true, ""imageWidth"": 4 } }");
+            cfg = OutputConfig.LoadEffective(badSize, saved);
+            Check(cfg.Source == OutputSource.Saved && cfg.HyperHdr.Enabled && cfg.HyperHdr.ImageWidth == 64 && cfg.HyperHdr.ImageHeight == 36
+                  && cfg.Warnings.Count == 1 && cfg.Warnings[0].Contains("hyperhdr.imageWidth") && cfg.Warnings[0].Contains("default"),
+                "an invalid image size in the package → the default size and one warning, saved outputs kept");
+            cfg = OutputConfig.LoadEffective("/nonexistent/ambilight.json", saved);
+            Check(cfg.Source == OutputSource.Saved && cfg.HyperHdr.Enabled && cfg.HyperHdr.ImageWidth == 64
+                  && cfg.Warnings.Count == 1 && cfg.Warnings[0].Contains("not found") && cfg.Warnings[0].Contains("image size"),
+                "no package file → saved outputs with the default image size, reported");
+
+            OutputConfig.ParseCommand(@"{ ""esp32"": { ""enabled"": false }, ""hyperhdr"": { ""enabled"": false, ""host"": ""10.0.0.9"", ""port"": 19444 } }", null, out set);
+            set.Save(saved);
+            cfg = OutputConfig.LoadEffective(package, saved);
+            Check(!cfg.Esp32Enabled && !cfg.HyperHdr.Enabled && cfg.HyperHdr.Host == "10.0.0.9" && cfg.HyperHdr.Port == 19444,
+                "saving again replaces the file (both outputs off, the host kept for later)");
+
+            File.WriteAllText(saved, "{\"esp32\":{\"enabled\":tr");
+            cfg = OutputConfig.LoadEffective(package, saved);
+            Check(cfg.Source == OutputSource.Package && cfg.Esp32Enabled && cfg.Warnings.Count == 1
+                  && cfg.Warnings[0].Contains("invalid") && cfg.Warnings[0].Contains("ambilight.json"),
+                "a corrupt saved file → res/ambilight.json with a warning");
+
+            File.WriteAllText(saved, @"{ ""esp32"": { ""enabled"": true }, ""hyperhdr"": { ""enabled"": true, ""host"": ""h"", ""port"": 70000 } }");
+            cfg = OutputConfig.LoadEffective(package, saved);
+            Check(cfg.Source == OutputSource.Package && !cfg.HyperHdr.Enabled && cfg.Warnings.Count == 1 && cfg.Warnings[0].Contains("hyperhdr.port"),
+                "an invalid saved file → res/ambilight.json with a warning naming the problem");
+
+            cfg = OutputConfig.LoadEffective("/nonexistent/ambilight.json", saved);
+            Check(cfg.Warnings.Count == 2 && cfg.Esp32Enabled, "invalid saved file and no package file → defaults, both reported");
+
+            Directory.Delete(dir, true);
+        }
+
         // ---------------------------------------------------------------- Status panel JSON
 
         // The launcher (tv/ui/main.js) reads these field names; keep them in sync.
@@ -230,11 +419,244 @@ namespace Service
             status.Frame(frame, 140, 14, 0, 0);
             Check(Json().GetProperty("lastBadRet").GetInt32() == -1, "lastBadRet keeps the last error code after a clean frame");
 
+            status.SetPaused(true);
+            j = Json();
+            Check(j.GetProperty("state").GetString() == "paused" && j.GetProperty("frames").GetInt64() == 2, "paused → state paused, last frame kept");
+            status.Frame(frame, 140, 14, 0, 0);   // a frame still in flight when the pause came
+            Check(Json().GetProperty("state").GetString() == "paused", "a late frame doesn't end the pause");
+            status.Starting();
+            status.Failed(CaptureFailure.Hardware, "invalid HW condition");
+            status.RetryIn(5000);
+            j = Json();
+            Check(j.GetProperty("state").GetString() == "paused" && !j.TryGetProperty("retryInMs", out _), "paused hides a failure's retry countdown (no retries while paused)");
+            status.SetPaused(false);
+            j = Json();
+            Check(j.GetProperty("state").GetString() == "failed" && j.TryGetProperty("retryInMs", out _), "unpaused → the real state again");
+
             var hh = new HyperHdrOutput(OutputConfig.Parse(@"{ ""hyperhdr"": { ""enabled"": true, ""host"": ""10.0.0.5"" } }").HyperHdr, (e, d) => { });
             var hj = JsonDocument.Parse(StatusJson.Build(hh.WriteStatus)).RootElement;
             Check(hj.GetProperty("enabled").GetBoolean() && hj.GetProperty("endpoint").GetString() == "10.0.0.5:19400"
                   && !hj.GetProperty("connected").GetBoolean() && hj.GetProperty("lastError").ValueKind == JsonValueKind.Null,
                 "HyperHDR status before connecting");
+        }
+
+        // ---------------------------------------------------------------- Whole status reply
+
+        private static string ServiceText(string version, CaptureStatus capture, Action<Utf8JsonWriter> esp32, Action<Utf8JsonWriter> hyperHdr, OutputConfig outputs) =>
+            StatusJson.Build(w => StatusJson.WriteService(w, version, capture, esp32, hyperHdr, outputs));
+
+        private static JsonElement ServiceJson(string version, CaptureStatus capture, Action<Utf8JsonWriter> esp32, Action<Utf8JsonWriter> hyperHdr, OutputConfig outputs) =>
+            JsonDocument.Parse(ServiceText(version, capture, esp32, hyperHdr, outputs)).RootElement;
+
+        private static void ServiceStatusTests()
+        {
+            var capture = new CaptureStatus();
+            capture.SetPaused(true);
+            var badHost = OutputConfig.Parse(@"{ ""esp32"": { ""enabled"": false }, ""hyperhdr"": { ""enabled"": true, ""host"": 5 } }");
+            var j = ServiceJson("1.2.3", capture, null, null, badHost);
+            Check(j.GetProperty("version").GetString() == "1.2.3", "status carries the package version");
+            Check(j.GetProperty("capture").GetProperty("state").GetString() == "paused", "status capture.state is paused");
+            Check(!j.GetProperty("esp32").GetProperty("enabled").GetBoolean() && !j.GetProperty("hyperhdr").GetProperty("enabled").GetBoolean(),
+                "disabled outputs report enabled: false");
+            var warnings = j.GetProperty("configWarnings");
+            Check(warnings.GetArrayLength() == 3 && warnings[0].GetString() == "hyperhdr.host must be a string", "config warnings are listed");
+            var outputs = j.GetProperty("outputs");
+            Check(outputs.GetProperty("source").GetString() == "package" && !outputs.GetProperty("esp32").GetProperty("enabled").GetBoolean()
+                  && !outputs.GetProperty("hyperhdr").GetProperty("enabled").GetBoolean() && outputs.GetProperty("hyperhdr").GetProperty("port").GetInt32() == 19400,
+                "outputs echoes the settings in effect: an invalid HyperHDR section shows as disabled");
+
+            j = ServiceJson(null, new CaptureStatus(), null, null, OutputConfig.Parse("{}"));
+            Check(j.TryGetProperty("version", out var v) && v.ValueKind == JsonValueKind.Null, "unknown version is null, not missing");
+            Check(j.GetProperty("capture").GetProperty("state").GetString() == "waiting", "capture.state starts as waiting");
+
+            OutputConfig.ParseCommand(OutputsBoth, null, out var saved);
+            var hh = new HyperHdrOutput(saved.HyperHdr, (e, d) => { });
+            j = ServiceJson("1.2.3", new CaptureStatus(), null, hh.WriteStatus, saved);
+            Check(j.GetProperty("hyperhdr").GetProperty("endpoint").GetString() == "192.168.1.50:19400", "an enabled output writes its own section");
+            outputs = j.GetProperty("outputs");
+            Check(outputs.GetProperty("source").GetString() == "saved" && outputs.GetProperty("hyperhdr").GetProperty("host").GetString() == "192.168.1.50"
+                  && outputs.GetProperty("hyperhdr").GetProperty("priority").GetInt32() == 100 && !outputs.GetProperty("hyperhdr").TryGetProperty("imageWidth", out _),
+                "outputs after set-outputs: source saved, the command's keys only");
+            var keys = new List<string>();
+            foreach (var p in j.EnumerateObject()) keys.Add(p.Name);
+            Check(string.Join(",", keys) == "version,capture,esp32,hyperhdr,outputs,configWarnings", "status sections in order, esp32 / hyperhdr unchanged");
+        }
+
+        // ---------------------------------------------------------------- Launcher commands
+
+        private sealed class FakeTarget : ICommandTarget
+        {
+            public readonly List<string> Calls = new List<string>();
+            public Exception Throw;
+            public OutputConfig Outputs { get; set; } = OutputConfig.Parse("{}");
+            public OutputConfig LastSet;
+            private void Call(string name) { if (Throw != null) throw Throw; Calls.Add(name); }
+            public void Pause() => Call("pause");
+            public void Resume() => Call("resume");
+            public void Rediscover() => Call("rediscover");
+            public void SetOutputs(OutputConfig outputs) { Call("set-outputs"); LastSet = outputs; Outputs = outputs; }
+        }
+
+        private static (bool ok, JsonElement error) Result(string json)
+        {
+            var r = JsonDocument.Parse(json).RootElement;
+            return (r.GetProperty("ok").GetBoolean(), r.GetProperty("error"));
+        }
+
+        private static void CommandTests()
+        {
+            foreach (var name in new[] { "pause", "resume", "rediscover" })
+            {
+                var t = new FakeTarget();
+                var (ok, error) = Result(ServiceCommands.Execute(name, null, t));
+                Check(ok && error.ValueKind == JsonValueKind.Null && t.Calls.Count == 1 && t.Calls[0] == name, $"command {name} → ok, error null, dispatched once");
+            }
+
+            var target = new FakeTarget();
+            var r = Result(ServiceCommands.Execute("reboot", null, target));
+            Check(!r.ok && r.error.GetString().Contains("reboot") && target.Calls.Count == 0, "unknown command → ok false with the name in the error, nothing called");
+            r = Result(ServiceCommands.Execute("PAUSE", null, target));
+            Check(!r.ok && target.Calls.Count == 0, "command names are case-sensitive");
+            r = Result(ServiceCommands.Execute(null, null, target));
+            Check(!r.ok && r.error.GetString().Contains("missing"), "missing command → ok false");
+            r = Result(ServiceCommands.Execute("", null, target));
+            Check(!r.ok && r.error.GetString().Contains("missing"), "empty command → ok false");
+            r = Result(ServiceCommands.Execute("pause", OutputsBoth, target));
+            Check(r.ok && target.Calls.Count == 1 && target.LastSet == null, "an outputs value on another command is ignored");
+
+            // set-outputs
+            target = new FakeTarget { Outputs = OutputConfig.Parse(@"{ ""hyperhdr"": { ""imageWidth"": 32, ""imageHeight"": 18 } }") };
+            r = Result(ServiceCommands.Execute("set-outputs", OutputsBoth, target));
+            Check(r.ok && target.Calls.Count == 1 && target.LastSet.HyperHdr.Host == "192.168.1.50" && target.LastSet.Source == OutputSource.Saved,
+                "set-outputs → ok, the parsed settings handed to the target");
+            Check(target.LastSet.HyperHdr.ImageWidth == 32 && target.LastSet.HyperHdr.ImageHeight == 18, "set-outputs keeps the target's image size");
+            target = new FakeTarget();
+            r = Result(ServiceCommands.Execute("set-outputs", null, target));
+            Check(!r.ok && r.error.GetString().Contains("needs \"outputs\"") && target.Calls.Count == 0, "set-outputs without outputs → ok false, nothing applied");
+            r = Result(ServiceCommands.Execute("set-outputs", @"{ ""esp32"": { ""enabled"": true }, ""hyperhdr"": { ""enabled"": true, ""host"": """", ""port"": 19400 } }", target));
+            Check(!r.ok && r.error.GetString().StartsWith("invalid outputs: ") && r.error.GetString().Contains("host is required") && target.Calls.Count == 0,
+                "set-outputs with invalid outputs → ok false with the reason, nothing applied");
+            target.Throw = new IOException("No space left on device");
+            r = Result(ServiceCommands.Execute("set-outputs", OutputsBoth, target));
+            Check(!r.ok && r.error.GetString() == "set-outputs failed: No space left on device", "set-outputs that can't be saved → ok false with the reason");
+
+            target = new FakeTarget { Throw = new InvalidOperationException("capture is not set up") };
+            r = Result(ServiceCommands.Execute("pause", null, target));
+            Check(!r.ok && r.error.GetString().Contains("capture is not set up"), "a failing command → ok false with the reason");
+
+            Check(ServiceCommands.ResultJson(null) == "{\"ok\":true,\"error\":null}", "result JSON has exactly ok and error");
+
+            // Request ids
+            target = new FakeTarget();
+            var reply = ServiceCommands.Handle("ui-42", "resume", null, target);
+            Check(Result(reply.Result).ok && reply.Id == "ui-42" && target.Calls.Count == 1, "a request id is echoed");
+            reply = ServiceCommands.Handle(null, "resume", null, target);
+            Check(Result(reply.Result).ok && reply.Id == null && target.Calls.Count == 2, "no request id → none in the reply (older launchers)");
+            reply = ServiceCommands.Handle("x", "reboot", null, target);
+            Check(!Result(reply.Result).ok && reply.Id == "x", "the id is echoed for a failed command too");
+            reply = ServiceCommands.Handle(new string('x', ServiceCommands.MaxIdLength), "resume", null, target);
+            Check(Result(reply.Result).ok && reply.Id.Length == 64, "a 64-character id is fine");
+            reply = ServiceCommands.Handle(new string('x', ServiceCommands.MaxIdLength + 1), "resume", null, target);
+            Check(!Result(reply.Result).ok && reply.Id == null && target.Calls.Count == 3, "a longer id → ok false, not echoed, command not run");
+        }
+
+        // ---------------------------------------------------------------- Capture loop
+
+        private static bool WaitFor(Func<bool> condition, int timeoutMs = 3000)
+        {
+            long deadline = Environment.TickCount64 + timeoutMs;
+            while (Environment.TickCount64 < deadline)
+            {
+                if (condition()) return true;
+                Thread.Sleep(10);
+            }
+            return condition();
+        }
+
+        private static void CaptureLoopTests()
+        {
+            var logs = new List<string>();
+            Action<string, string> log = (e, d) => { lock (logs) logs.Add(e); };
+
+            // A fake capture: runs until cancelled, or fails right away while fail != 0.
+            var status = new CaptureStatus();
+            string State() => JsonDocument.Parse(StatusJson.Build(status.WriteJson)).RootElement.GetProperty("state").GetString();
+            int runs = 0, active = 0, fail = 0;
+            CaptureLoop.RunCapture run = token =>
+            {
+                Interlocked.Increment(ref runs);
+                status.Starting();
+                if (Volatile.Read(ref fail) != 0) { status.Failed(CaptureFailure.Library, "no library"); return false; }
+                Interlocked.Increment(ref active);
+                token.WaitHandle.WaitOne();
+                Interlocked.Decrement(ref active);
+                return true;
+            };
+
+            using (var loop = new CaptureLoop(run, status, log, 50, new[] { 100 }))
+            {
+                loop.Start();
+                Check(WaitFor(() => Volatile.Read(ref active) == 1) && Volatile.Read(ref runs) == 1, "capture starts after the start delay");
+
+                loop.Pause();
+                Check(loop.IsPaused && State() == "paused", "pause → state paused right away");
+                Check(WaitFor(() => Volatile.Read(ref active) == 0), "pause stops the running capture");
+                Thread.Sleep(300);
+                Check(Volatile.Read(ref runs) == 1, "paused capture is not started again");
+
+                loop.Restart();
+                Check(WaitFor(() => Volatile.Read(ref active) == 1) && Volatile.Read(ref runs) == 2 && !loop.IsPaused && State() == "starting",
+                    "resume starts capture again right away");
+
+                Volatile.Write(ref fail, 1);
+                loop.Restart();   // re-init: this run fails, then retries every 100 ms
+                Check(WaitFor(() => Volatile.Read(ref runs) >= 5), "a failed capture is retried after the backoff");
+                lock (logs) Check(logs.Contains("CaptureRetry"), "retries are logged");
+
+                loop.Pause();
+                Thread.Sleep(50);   // a retry that was already running finishes
+                int pausedRuns = Volatile.Read(ref runs);
+                Thread.Sleep(400);
+                Check(Volatile.Read(ref runs) == pausedRuns && State() == "paused", "no retries while paused");
+
+                Volatile.Write(ref fail, 0);
+                loop.Restart();
+                Check(WaitFor(() => Volatile.Read(ref active) == 1), "resume after failures starts capture");
+            }
+            Check(WaitFor(() => Volatile.Read(ref active) == 0), "Dispose stops capture");
+            int disposedRuns = Volatile.Read(ref runs);
+            Thread.Sleep(200);
+            Check(Volatile.Read(ref runs) == disposedRuns, "nothing runs after Dispose");
+
+            // Restart (AppControl start / resume) skips a pending retry delay.
+            var status2 = new CaptureStatus();
+            int runs2 = 0;
+            using (var loop = new CaptureLoop(token => { Interlocked.Increment(ref runs2); return false; }, status2, log, 0, new[] { 60_000 }))
+            {
+                loop.Start();
+                Check(WaitFor(() => Volatile.Read(ref runs2) == 1), "first run without start delay");
+                Thread.Sleep(100);
+                Check(Volatile.Read(ref runs2) == 1, "next retry waits for the backoff");
+                loop.Restart();
+                Check(WaitFor(() => Volatile.Read(ref runs2) == 2, 1000), "restart skips the retry delay");
+            }
+
+            // An exception from capture is treated like a failure: reported and retried.
+            var status3 = new CaptureStatus();
+            int runs3 = 0;
+            using (var loop = new CaptureLoop(token =>
+            {
+                if (Interlocked.Increment(ref runs3) == 1) throw new InvalidOperationException("boom");
+                token.WaitHandle.WaitOne();
+                return true;
+            }, status3, log, 0, new[] { 50 }))
+            {
+                loop.Start();
+                Check(WaitFor(() => Volatile.Read(ref runs3) == 2), "a capture that throws is retried");
+                var j = JsonDocument.Parse(StatusJson.Build(status3.WriteJson)).RootElement;
+                Check(j.GetProperty("state").GetString() == "failed" && j.GetProperty("failure").ValueKind == JsonValueKind.Null
+                      && j.GetProperty("error").GetString().Contains("boom"), "…and reported as failed with no failure kind");
+            }
         }
 
         // ---------------------------------------------------------------- Samples for flatc
@@ -246,6 +668,103 @@ namespace Service
             var rgb = EdgeImage.Render(DistinctFrame(), 16, 9);
             File.WriteAllBytes(Path.Combine(dir, "image.bin"), HyperHdrProtocol.EncodeRawImage(rgb, 16, 9));
             Console.WriteLine($"wrote {dir}/register.bin and {dir}/image.bin");
+        }
+
+        // ---------------------------------------------------------------- Contract samples
+
+        // The reply bundle StatusPort.OnMessage sends for a command, as JSON ({key: value}):
+        // "result", plus "id" when ServiceCommands.Handle echoes one.
+        private static string ReplyBundle((string Result, string Id) reply) => StatusJson.Build(w =>
+        {
+            w.WriteStartObject();
+            w.WriteString("result", reply.Result);
+            if (reply.Id != null) w.WriteString("id", reply.Id);
+            w.WriteEndObject();
+        });
+
+        // The service's real JSON, built by the service's own code, for CI to validate against
+        // protocol/schemas (protocol/scripts/validate.mjs; see .github/workflows/build.yml):
+        //   status.*.json          service/status          (the "status" value of a status reply)
+        //   command-result.*.json  service/command-result  (the "result" value of a command reply)
+        //   command-reply.*.json   service/command-reply   (the whole command reply bundle)
+        private static void WriteContractSamples(string dir)
+        {
+            Directory.CreateDirectory(dir);
+            foreach (var old in Directory.GetFiles(dir, "*.json")) File.Delete(old);
+            var written = new List<string>();
+            void Write(string name, string json)
+            {
+                File.WriteAllText(Path.Combine(dir, name), json);
+                written.Add(name);
+            }
+            Action<string, string> quiet = (e, d) => { };
+
+            var package = OutputConfig.Load(RepoPath("tv/service/res/ambilight.json"));
+            OutputConfig.ParseCommand(OutputsBoth, package.HyperHdr, out var saved);
+            var discovery = new Discovery(null);   // not started: no hosts
+            using var esp32 = new Esp32Output(discovery, quiet);
+            esp32.Send(DistinctFrame());           // no hosts: nothing is sent
+
+            // ---- status
+            Write("status.waiting.json", ServiceText("1.2.0", new CaptureStatus(), esp32.WriteStatus, null, package));
+            Write("status.version-null.json", ServiceText(null, new CaptureStatus(), esp32.WriteStatus, null, package));
+
+            var running = new CaptureStatus();
+            running.Starting();
+            running.Hardware(0, 2, 16, 16, 3840, 2160, 20, 20);
+            running.Frame(DistinctFrame(), 140, 14, 1, -5);
+            using (var hh = new HyperHdrOutput(saved.HyperHdr, quiet))   // not started: not connected
+                Write("status.running.json", ServiceText("1.2.0", running, esp32.WriteStatus, hh.WriteStatus, saved));
+
+            running.SetPaused(true);
+            var invalidPort = OutputConfig.Parse(@"{ ""esp32"": { ""enabled"": false }, ""hyperhdr"": { ""enabled"": true, ""host"": ""10.0.0.5"", ""port"": 70000 } }");
+            Write("status.paused.json", ServiceText("1.2.0", running, null, null, invalidPort));
+
+            var failed = new CaptureStatus();
+            failed.Starting();
+            failed.Failed(CaptureFailure.Symbols, "ppi_ve_get_rgb_measure_condition: undefined symbol");
+            failed.RetryIn(10_000);
+            // HyperHDR enabled but nobody listening: the status carries the connection error.
+            var refusedConfig = OutputConfig.Parse(@"{ ""hyperhdr"": { ""enabled"": true, ""host"": ""127.0.0.1"", ""port"": 9 } }");
+            using (var refused = new HyperHdrOutput(refusedConfig.HyperHdr, quiet))
+            {
+                refused.Start();
+                Check(WaitFor(() => JsonDocument.Parse(StatusJson.Build(refused.WriteStatus)).RootElement.GetProperty("lastError").ValueKind == JsonValueKind.String, 5000),
+                    "contract: HyperHDR without a server reports lastError");
+                Write("status.failed.json", ServiceText("1.2.0", failed, esp32.WriteStatus, refused.WriteStatus, refusedConfig));
+            }
+
+            // outputs: saved / package / package after a bad saved file, through LoadEffective
+            string tmp = TempDir();
+            string savedPath = Path.Combine(tmp, "outputs.json");
+            string packagePath = RepoPath("tv/service/res/ambilight.json");
+            Write("status.outputs-package.json", ServiceText("1.2.0", new CaptureStatus(), esp32.WriteStatus, null, OutputConfig.LoadEffective(packagePath, savedPath)));
+            saved.Save(savedPath);
+            var loaded = OutputConfig.LoadEffective(packagePath, savedPath);
+            using (var hh = new HyperHdrOutput(loaded.HyperHdr, quiet))
+                Write("status.outputs-saved.json", ServiceText("1.2.0", new CaptureStatus(), esp32.WriteStatus, hh.WriteStatus, loaded));
+            File.WriteAllText(savedPath, "{ \"esp32\": ");
+            Write("status.outputs-package-fallback.json", ServiceText("1.2.0", new CaptureStatus(), esp32.WriteStatus, null, OutputConfig.LoadEffective(packagePath, savedPath)));
+            Directory.Delete(tmp, true);
+            discovery.Dispose();
+
+            // ---- command results and replies
+            var target = new FakeTarget();
+            Write("command-result.ok.json", ServiceCommands.Execute("pause", null, target));
+            Write("command-result.set-outputs.json", ServiceCommands.Execute("set-outputs", OutputsBoth, target));
+            Write("command-result.unknown.json", ServiceCommands.Execute("reboot", null, target));
+            Write("command-result.missing.json", ServiceCommands.Execute(null, null, target));
+            Write("command-result.no-outputs.json", ServiceCommands.Execute("set-outputs", null, target));
+            Write("command-result.invalid-outputs.json", ServiceCommands.Execute("set-outputs", "{\"esp32\":{\"enabled\":\"yes\"}}", target));
+            Write("command-result.failed.json", ServiceCommands.Execute("pause", null, new FakeTarget { Throw = new InvalidOperationException("capture is not set up") }));
+
+            Write("command-reply.json", ReplyBundle(ServiceCommands.Handle(null, "resume", null, target)));
+            Write("command-reply.with-id.json", ReplyBundle(ServiceCommands.Handle("ui-1730459000123-4", "resume", null, target)));
+            Write("command-reply.set-outputs-with-id.json", ReplyBundle(ServiceCommands.Handle("7", "set-outputs", OutputsBoth, target)));
+            Write("command-reply.error-with-id.json", ReplyBundle(ServiceCommands.Handle("8", "set-outputs", "[]", target)));
+            Write("command-reply.id-too-long.json", ReplyBundle(ServiceCommands.Handle(new string('x', ServiceCommands.MaxIdLength + 1), "resume", null, target)));
+
+            Console.WriteLine($"wrote {written.Count} contract samples to {dir}: {string.Join(", ", written)}");
         }
 
         // ---------------------------------------------------------------- End to end

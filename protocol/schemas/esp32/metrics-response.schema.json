@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/exzos28/tizen-os-ambilight/main/protocol/schemas/esp32/metrics-response.schema.json",
+  "title": "Esp32Metrics",
+  "description": "GET /metrics — runtime metrics.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "heap_free", "heap_total", "heap_min", "uptime_s", "cpu_mhz",
+    "power_w", "power_limited", "frames_rx", "last_frame_ms", "config_rev"
+  ],
+  "properties": {
+    "heap_free": { "type": "integer", "minimum": 0, "x-unit": "bytes", "description": "Free heap." },
+    "heap_total": { "type": "integer", "minimum": 0, "x-unit": "bytes", "description": "Total heap size." },
+    "heap_min": { "type": "integer", "minimum": 0, "x-unit": "bytes", "description": "Lowest free heap since boot." },
+    "uptime_s": { "type": "integer", "minimum": 0, "x-unit": "s", "description": "Time since boot." },
+    "cpu_mhz": { "type": "integer", "minimum": 0, "x-unit": "MHz", "description": "CPU clock." },
+    "power_w": { "type": "number", "minimum": 0, "x-unit": "W", "description": "Estimated LED power of the last frame." },
+    "power_limited": { "type": "boolean", "description": "The power limit reduced the brightness of the last frame." },
+    "frames_rx": { "type": "integer", "minimum": 0, "description": "Valid UDP color frames received since boot." },
+    "last_frame_ms": {
+      "type": "integer",
+      "minimum": -1,
+      "x-unit": "ms",
+      "description": "Time since the last valid UDP frame; -1 if none was received yet."
+    },
+    "config_rev": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 4294967295,
+      "description": "Settings revision: changes after every saved settings change (/save/*), starts at a random value at boot; compare for equality only — any difference means re-read GET /config."
+    }
+  }
+}

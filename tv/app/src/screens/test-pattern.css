@@ -1,0 +1,87 @@
+/* Test patterns (TestPattern.tsx). Geometry in stage px (1920×1080 = half the 3840×2160
+   panel): the service measures 8×8 px blocks 125 px in from each edge; see SAMPLES there. */
+
+.test-pattern { position: relative; width: 1920px; height: 1080px; background: #000; overflow: hidden; }
+.test-pattern canvas { width: 1920px; height: 1080px; image-rendering: pixelated; display: block; }
+.tp-fill { position: absolute; inset: 0; }
+
+/* Edge bands, 160 px: deeper than the samples (125 + 8 px) and shorter than the first left /
+   right sample (176 px), so every point sits inside its own side's band. Segments run
+   clockwise: top left → right, right top → bottom, bottom right → left, left bottom → top. */
+.tp-band { position: absolute; display: flex; }
+.tp-band > i { flex: 1 1 0; }
+.tp-top    { left: 0; top: 0;      width: 1920px; height: 160px; }
+.tp-bottom { left: 0; bottom: 0;   width: 1920px; height: 160px; flex-direction: row-reverse; }
+.tp-right  { right: 0; top: 160px; width: 160px;  height: 760px; flex-direction: column; }
+.tp-left   { left: 0;  top: 160px; width: 160px;  height: 760px; flex-direction: column-reverse; }
+
+.tp-quads { position: absolute; inset: 0; display: grid; grid-template: 1fr 1fr / 1fr 1fr; }
+
+/* A 320 px block along the edge, clockwise from the top-left corner, one lap in 6 s at a
+   constant speed: the path is 1600 + 760 + 1600 + 760 px. */
+.tp-chase {
+  position: absolute; left: 0; top: 0; width: 320px; height: 320px; background: #fff;
+  animation: tp-chase 6s linear infinite;
+}
+@keyframes tp-chase {
+  0%      { transform: translate(0, 0); }
+  33.898% { transform: translate(1600px, 0); }
+  50%     { transform: translate(1600px, 760px); }
+  83.898% { transform: translate(0, 760px); }
+  100%    { transform: translate(0, 0); }
+}
+
+/* Interpolating between the primaries and secondaries in sRGB is exactly the HSV hue circle. */
+.tp-hue { animation: tp-hue 20s linear infinite; }
+@keyframes tp-hue {
+  0%      { background: #f00; }
+  16.667% { background: #ff0; }
+  33.333% { background: #0f0; }
+  50%     { background: #0ff; }
+  66.667% { background: #00f; }
+  83.333% { background: #f0f; }
+  100%    { background: #f00; }
+}
+
+/* Flicker torture: a 96 px patch of 1 px checkerboard around each sample point, with either
+   moving 1-on-2-off stripes (an 8 px block sees 2 or 3 white columns: 25% ↔ 37.5%) or a
+   "subtitle" of glyph blocks scrolling through it. Both move in whole pixels. */
+.tp-patch {
+  position: absolute; width: 96px; height: 96px; overflow: hidden;
+  background: repeating-conic-gradient(#fff 0 25%, #000 0 50%) 0 0 / 2px 2px;
+}
+.tp-stripes {
+  position: absolute; left: 24px; top: 24px; width: 48px; height: 48px;
+  background: repeating-linear-gradient(90deg, #fff 0 1px, #000 1px 3px);
+  animation: tp-stripes 0.3s steps(3) infinite;
+}
+@keyframes tp-stripes { to { background-position: 3px 0; } }
+/* Glyphs and gaps of one 80 px period, alternating white and black. */
+.tp-ticker {
+  position: absolute; left: 0; top: 42px; width: 96px; height: 12px;
+  background: linear-gradient(90deg,
+    #fff 0 5px, #000 5px 7px, #fff 7px 10px, #000 10px 12px, #fff 12px 18px, #000 18px 25px,
+    #fff 25px 29px, #000 29px 31px, #fff 31px 33px, #000 33px 35px, #fff 35px 42px, #000 42px 44px,
+    #fff 44px 48px, #000 48px 57px, #fff 57px 60px, #000 60px 62px, #fff 62px 68px, #000 68px 70px,
+    #fff 70px 75px, #000 75px 80px) 0 0 / 80px 12px;
+  animation: tp-ticker 2s steps(80) infinite;
+}
+@keyframes tp-ticker { to { background-position: -80px 0; } }
+
+/* The label: centred, far from the edges the service samples. */
+.test-hint {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  max-width: 900px;
+  padding: 16px 28px;
+  border-radius: 16px;
+  background: rgba(11, 14, 19, 0.85);
+  font-size: 22px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.test-hint b { font-size: 26px; }

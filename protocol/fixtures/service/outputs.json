@@ -1,0 +1,4 @@
+{
+  "esp32": { "enabled": true },
+  "hyperhdr": { "enabled": true, "host": "192.168.1.50", "port": 19400, "priority": 150 }
+}

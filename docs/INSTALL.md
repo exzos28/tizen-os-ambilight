@@ -9,7 +9,7 @@ Build the hardware first — see [HARDWARE.md](HARDWARE.md).
 | What | Why |
 |------|-----|
 | [PlatformIO](https://platformio.org/install) (CLI or VS Code extension) | Builds and flashes the ESP32 firmware |
-| [Node.js](https://nodejs.org/) 18+ and npm | The firmware build compiles the React web UI and embeds it into the binary (`esp32/scripts/embed_web.py` runs `npm run build`) |
+| [Node.js](https://nodejs.org/) 18+ and npm (24 for the TV launcher) | The firmware build compiles the web app (Preact) and embeds it into the binary (`esp32/scripts/embed_web.py` runs `npm run build`); the TV launcher is built from `tv/app` |
 | [Tizen Studio](https://developer.samsung.com/smarttv/develop/getting-started/setting-up-sdk/installing-tv-sdk.html) or VS Code with the Tizen extension, plus *TV Extensions* and *Samsung Certificate Extension* | Builds, signs and installs the TV apps |
 | A Samsung account | Required to issue the Samsung certificate for your TV |
 | TV, ESP32 and PC on the same LAN | Discovery uses UDP broadcast; guest networks and AP/client isolation block it |
@@ -73,15 +73,15 @@ cd esp32
 pio run -e ota -t upload
 ```
 
-`[env:ota]` in `platformio.ini` uploads to `ambilight.local` (the OTA hostname, resolved via mDNS) with the password `123456`. If you changed the hostname or password in the web UI (*WiFi* tab), or mDNS doesn't resolve on your network, update `upload_port` (the device IP works too) and `--auth` there.
+`[env:ota]` in `platformio.ini` uploads to `ambilight.local` (the OTA hostname, resolved via mDNS) with the password `123456`. If you changed the hostname or password in the web app (*Device* tab, *Updates over Wi-Fi*), or mDNS doesn't resolve on your network, update `upload_port` (the device IP works too) and `--auth` there.
 
 ## 2. Connect to Wi-Fi
 
 1. With no saved credentials (or if the saved network can't be reached within 12 s), the ESP32 starts an **open** access point `ambilight-setup`.
 2. Connect a phone or laptop to it. The captive portal opens automatically; if it doesn't, open `http://192.168.4.1`.
-3. On the *WiFi* tab enter your network's SSID and password and save. The ESP32 restarts and joins your network.
+3. The page opens on **Connect the controller to your Wi-Fi**: enter the network name (2.4 GHz: the ESP32 has no 5 GHz radio) and the password, then *Connect*. The ESP32 restarts and joins your network, and the page tells you how to find it again: connect the phone back to your Wi-Fi and open `http://ambilight.local` (the OTA hostname, via mDNS) or the address ending in `.245` (below). The TV finds the controller by itself.
 
-**Finding the device IP.** After connecting, the ESP32 switches to the address `<your subnet>.245` (e.g. `192.168.1.245`) so it stays predictable without a DHCP reservation. If that address doesn't fit the router's network (e.g. it is the router's own address or outside a small subnet), the ESP32 keeps the DHCP address and logs why. It does not check whether another device already uses the address. Change the number on the *WiFi* tab (*Static IP — last number*):
+**Finding the device IP.** After connecting, the ESP32 switches to the address `<your subnet>.245` (e.g. `192.168.1.245`) so it stays predictable without a DHCP reservation. If that address doesn't fit the router's network (e.g. it is the router's own address or outside a small subnet), the ESP32 keeps the DHCP address and logs why. It does not check whether another device already uses the address. Change the number on the *Device* tab (*Fixed address, last number*):
 - if `.245` is taken on your network, pick another number (1–254), or `0` to keep the address the router assigns (DHCP);
 - **with several ESP32 controllers**, give each one its own number (or `0`) — otherwise they all take the same address.
 
@@ -91,25 +91,23 @@ The current IP is also printed in the serial log and in the Telnet log (port 232
 
 ## 3. Calibrate the strip
 
-Open `http://<esp32-ip>` → *LEDs* tab.
+Open `http://<esp32-ip>` (or `http://ambilight.local`) on a phone → *Layout* tab.
 
 <p>
-  <img src="media/web-ui-layout@2x.png" srcset="media/web-ui-layout.png 1x, media/web-ui-layout@2x.png 2x, media/web-ui-layout@3x.png 3x" width="300" alt="Strip layout editor">
-  <img src="media/web-ui-color@2x.png" srcset="media/web-ui-color.png 1x, media/web-ui-color@2x.png 2x, media/web-ui-color@3x.png 3x" width="300" alt="Brightness and color correction">
+  <img src="media/web-ui-layout@2x.png" srcset="media/web-ui-layout.png 1x, media/web-ui-layout@2x.png 2x, media/web-ui-layout@3x.png 3x" width="300" alt="Layout tab: strip diagram with the sides in their preview colors, LEDs per side">
+  <img src="media/web-ui-home@2x.png" srcset="media/web-ui-home.png 1x, media/web-ui-home@2x.png 2x, media/web-ui-home@3x.png 3x" width="300" alt="Home tab: lighting switch, brightness, mode and static colors, live status">
 </p>
 
-The tab has two modes, switched at the top: **Dynamic** (follows the TV) and **Plain** (a fixed color). The strip layout editor and color correction are shown only in **Dynamic** mode — switch to it first.
+1. **LEDs per side.** Under *LEDs per side* set how many LEDs are on the top, right, bottom and left edges (as seen from the front of the TV) with − / + or by typing the number.
+2. **Start corner.** In the diagram, tap the corner where the strip's data input is (LED 1, marked white).
+3. **Direction.** Tap any side to switch between clockwise and counter-clockwise.
 
-1. **LED count per side.** Click each count and enter how many LEDs are on the top, right, bottom and left edges (as seen from the front of the TV).
-2. **Start corner.** Click the corner where the strip's data input is.
-3. **Direction.** Click a side to toggle clockwise / counter-clockwise.
+Each change lights a 10-second preview on the strip: **top red, right green, bottom yellow, left blue** (the colors of the sides in the diagram) and LED 1 **white**. If a side shows the wrong color, the corner or direction is wrong. *Light up the strip* shows the preview again. Nothing is stored until you tap **Save layout** (the card says *Not saved* until then); saving also sets the number of LEDs driven to the sum of the sides.
 
-Each change lights a 10-second preview on the strip: **top red, right green, bottom yellow, left blue**, and the first LED **white**. If a side shows the wrong color, the corner or direction is wrong.
+4. **Color correction** (optional, *Picture* tab): gamma (default 2.2), saturation, per-channel white balance. They affect the colors coming from the TV and persist across reboots; *Reset color to defaults* brings them back.
+5. **Power limit** (optional, *Picture* tab): set *Limit* to what your PSU can deliver (with some headroom) and *One LED* from your strip's datasheet: watts per meter ÷ LEDs per meter, e.g. 14.4 W/m ÷ 20 = 0.72 W for a 12 V WS2811 strip with 60 LEDs/m. When a frame would exceed the limit, the brightness is lowered for that frame; *Using now* and the Home status show the estimated power. It is an estimate, not a measurement — keep a fuse anyway (see [HARDWARE.md](HARDWARE.md#power)).
 
-4. **Color correction** (optional): gamma (default 2.2), saturation boost, per-channel white balance. They affect the colors coming from the TV and persist across reboots.
-5. **Power limit** (optional, both modes): set *Max power* to what your PSU can deliver (with some headroom) and *Power per LED pixel* from your strip's datasheet — watts per meter ÷ pixels per meter, e.g. 14.4 W/m ÷ 20 = 0.72 W for a 12 V WS2811 strip with 60 LEDs/m. When a frame would exceed the limit, the brightness is lowered for that frame. The *Status* tab shows the estimated power. It is an estimate, not a measurement — keep a fuse anyway (see [HARDWARE.md](HARDWARE.md#power)).
-
-In **Plain** mode the tab shows the LED count, brightness and the color picker; the strip shows that color. In **Dynamic** mode the strip stays dark until frames arrive and fades to black 5 s after the last one.
+The *Home* tab has the everyday controls: the **Lighting** switch (off keeps the strip dark; the settings stay), **Brightness**, and the **Mode**: *Follow the picture* (the strip stays dark until frames arrive from the TV and fades to black 5 s after the last one) or *Static color* (the six colors the TV offers, or any color). Its status shows whether frames arrive from the TV, the estimated strip power and the Wi-Fi signal, and a banner on top says when something is wrong. The *Device* tab has **Blink to identify** (the strip blinks white a few times — handy with several controllers), **Restart**, and the Wi-Fi and OTA settings.
 
 You can test the whole chain without a TV using [`tools/led_tester.py`](../tools/README.md) — `--mode sides` uses the same colors as the preview (without the white first LED):
 
@@ -123,7 +121,7 @@ The TV side is one **hybrid package** (package ID `fCAYP0k0uD`) with two apps:
 
 | App | Path | Type | Purpose |
 |-----|------|------|---------|
-| Ambilight | `tv/ui/` | Web app | Launcher with *Start* / *Stop* buttons and a status panel (is this TV supported?) |
+| Ambilight | `tv/ui/` (source: `tv/app/`) | Web app | Launcher: lighting on/off, brightness, mode, live preview and status (is this TV supported?) |
 | Service | `tv/service/` | .NET service | Captures edge colors and streams them to the ESP32. Declared with `on-boot="true"` |
 
 `tv/ui/tizen_web_project.yaml` lists `../service` as a dependency, so building the launcher also builds the service and packs both into one package.
@@ -139,7 +137,7 @@ Every release has the package attached as `ambilight-tv-vX.Y.Z.wgt`. It is signe
 3. If the app is already installed from VS Code, delete it on the TV first: a package signed with another certificate can't be installed over it.
 4. Continue with [4.4 Start](#44-start).
 
-**TV-Store already on the TV?** Apps2Samsung's TV-Store app installs a file without a PC connection, so *Host PC IP* can stay as it is (e.g. `127.0.0.1` on a rooted TV): open `http://<tv-ip>:8077/upload` on a phone or PC in the same network, send `ambilight-tv-vX.Y.Z.wgt`, then press **Install on this TV** in TV-Store. Tested on a QN92D (2024, Tizen 8): capture, the status panel and streaming to the ESP32 work.
+**TV-Store already on the TV?** Apps2Samsung's TV-Store app installs a file without a PC connection, so *Host PC IP* can stay as it is (e.g. `127.0.0.1` on a rooted TV): open `http://<tv-ip>:8077/upload` on a phone or PC in the same network, send `ambilight-tv-vX.Y.Z.wgt`, then press **Install on this TV** in TV-Store. Tested on a QN92D (2024): capture, the launcher and streaming to the ESP32 work.
 
 Apps2Samsung may pick a Partner certificate because the service starts on boot (`on-boot="true"`). The package is not in the Apps2Samsung catalog yet; the entry is prepared in [packaging/apps2samsung](../packaging/apps2samsung/).
 
@@ -165,18 +163,23 @@ A regular Samsung account and a **Public** distributor certificate are enough. T
 
 The projects use the VS Code Tizen extension format (`tizen_web_project.yaml`, `tizen_dotnet_project.yaml`).
 
-1. Open the `tv/` folder in VS Code with the Tizen extension and select your Samsung certificate profile as the active signing profile.
-2. Build the **`tv/ui`** project — this produces the hybrid package with both apps — and run it on the connected TV.
+1. Build the launcher: `cd tv/app && npm ci && npm run build` — again after every change in `tv/app` or after updating the repository. It writes `index.html` and `assets/` into `tv/ui`, next to `config.xml`; without this step `tv/ui` has no `index.html` and the app won't start.
+2. Open the `tv/` folder in VS Code with the Tizen extension and select your Samsung certificate profile as the active signing profile.
+3. Build the **`tv/ui`** project — this produces the hybrid package with both apps — and run it on the connected TV.
 
 Don't install a launcher-only `.wgt` (e.g. built with `tizen build-web` + `tizen package -t wgt`): it has the same package ID, so it replaces the hybrid package and removes the service.
 
-If you change the package ID, update it in both manifests and `SERVICE_APP_ID` in `tv/ui/main.js`.
+If you change the package ID, update it in both manifests and in `tvApp` in `protocol/constants.json` (then `npm run protocol:gen` at the repo root), which the launcher reads.
+
+To work on the launcher without a TV, run `npm run dev` in `tv/app` and open the printed URL: outside the TV it runs against a built-in mock (`?state=ok|lost|none|off|unsupported`).
 
 ### 4.4 Start
 
-Open **Ambilight** on the TV and press **Start**. The service waits 2 s, broadcasts a discovery probe and starts streaming to every ESP32 that answers. The strip should follow the picture within a few seconds.
+The service starts on its own when the TV boots, about a minute after power-on (Tizen starts background services late in the boot). After the first install, open **Ambilight** on the TV and press **Start** in the banner. The service waits 2 s, broadcasts a discovery probe and starts streaming to every ESP32 that answers. The strip should follow the picture within a few seconds.
 
-The service also starts on its own when the TV boots. It keeps looking for controllers in the background (new ones and IP changes are picked up within ~30 s); pressing **Start** while it is running probes immediately, reconnects HyperHDR and restarts capture.
+Home in **Ambilight** shows whether everything works, turns the lighting on and off, sets the brightness and switches between following the picture and a static color — on every controller at once. If something is wrong, a banner on top says what and offers the fix when there is one (*Start*, *Search now*). *Test pattern* shows patterns to check the strip and its calibration (a color wheel the strip should follow, solid colors, the sides, a chase around the edge, a grey ramp and more); ◀ ▶ switch them, OK or Back close it. Back exits the app.
+
+The service keeps looking for controllers in the background (new ones and IP changes are picked up within ~30 s); *Search now* probes immediately.
 
 ---
 
@@ -194,7 +197,7 @@ Hold the **BOOT** button (GPIO 0) on the ESP32 for 3 seconds. All settings, incl
 ## Troubleshooting
 
 **The strip stays dark.**
-- Check the mode: in *Dynamic* the strip is dark until frames arrive and fades out 5 s after they stop. Switch to *Plain* to test the wiring.
+- Check the mode on the web app's *Home* tab: in *Follow the picture* the strip is dark until frames arrive and fades out 5 s after they stop. Pick a *Static color* to test the wiring.
 - Check that the ESP32 GND and the strip GND are connected, and that DATA goes to GPIO 23 through the 330 Ω resistor.
 
 **Colors are wrong (e.g. red shows as blue).** WS2811 strips differ in channel order. The firmware assumes **BRG** — see `FastLED.addLeds<WS2811, LED_PIN, BRG>` in `esp32/src/LEDController.cpp`. Light the strip red with `led_tester.py --mode solid --color 255 0 0`, find the order that gives red (`RGB`, `GRB`, `BRG`…), change it and reflash.
@@ -203,7 +206,7 @@ Hold the **BOOT** button (GPIO 0) on the ESP32 for 3 seconds. All settings, incl
 
 **The TV doesn't find the ESP32.**
 - TV and ESP32 must be in the same subnet, with broadcast allowed (no guest network, no client isolation).
-- The service keeps probing: every 2 s for the first minute, then every 10 s (every 30 s once something answered). Once the ESP32 is reachable it is picked up automatically; press *Start* to retry immediately.
+- The service keeps probing: every 2 s for the first minute, then every 10 s (every 30 s once something answered). Once the ESP32 is reachable it is picked up automatically; press *Search now* in the launcher to retry immediately.
 - In the ESP32 Telnet log, look for `[Discovery] Replied to …`.
 
 **The strip doesn't react to the picture on some models.** The hardware color-measurement block is missing on some processors (e.g. Q6F, [#2](https://github.com/exzos28/tizen-os-ambilight/issues/2)). The TV service log shows `CaptureError invalid HW condition`. Please report your model — see [CONTRIBUTING.md](CONTRIBUTING.md).

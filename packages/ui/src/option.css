@@ -1,0 +1,19 @@
+.ui-option {
+  display: flex;
+  align-items: center;
+  gap: 0.7em;
+  min-height: var(--ui-control-h);
+  padding: 0 0.95em;
+  border-radius: var(--ui-radius-control);
+  border: 1px solid var(--ui-border);
+  color: var(--ui-text-2);
+  font-size: var(--ui-fs-control);
+  font-weight: 500;
+  cursor: pointer;
+}
+.ui-option.checked { border: 2px solid var(--ui-text); background: var(--ui-raised); color: #fff; font-weight: 600; }
+.ui-option.focused,
+:focus-visible + .ui-option { outline: var(--ui-focus-width) solid var(--ui-focus-color); outline-offset: 2px; }
+:disabled + .ui-option { opacity: 0.5; cursor: default; }
+
+[data-density='tv'] .ui-option { gap: 16px; padding: 0 22px; }

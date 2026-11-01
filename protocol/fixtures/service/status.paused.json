@@ -1,0 +1,51 @@
+{
+  "version": "1.1.0",
+  "capture": {
+    "state": "paused",
+    "failure": null,
+    "error": null,
+    "failedAttempts": 0,
+    "hw": {
+      "ret": 0,
+      "blocks": 2,
+      "blockW": 16,
+      "blockH": 16,
+      "fullW": 3840,
+      "fullH": 2160,
+      "hwDelayMs": 20,
+      "delayMs": 20
+    },
+    "frames": 1200,
+    "frameMs": 140,
+    "lastFrameAgoMs": 15230,
+    "reads": 14,
+    "badReads": 1,
+    "lastBadRet": -5,
+    "h": 4,
+    "v": 3,
+    "rgb": "0D1526101828151D2F18203020253823293D282D422D31482B2F4327293D21253719203214182D0C1128"
+  },
+  "esp32": {
+    "enabled": true,
+    "hosts": ["192.168.1.245", "192.168.1.31"],
+    "framesSent": 1200,
+    "sendErrors": 2,
+    "lastError": "Network is unreachable"
+  },
+  "hyperhdr": {
+    "enabled": false
+  },
+  "outputs": {
+    "source": "package",
+    "esp32": {
+      "enabled": true
+    },
+    "hyperhdr": {
+      "enabled": false,
+      "host": "192.168.1.20",
+      "port": 19400,
+      "priority": 150
+    }
+  },
+  "configWarnings": ["hyperhdr.port must be an integer 1..65535", "HyperHDR output disabled because of the errors above"]
+}

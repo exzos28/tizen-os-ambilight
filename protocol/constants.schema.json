@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/exzos28/tizen-os-ambilight/main/protocol/constants.schema.json",
+  "description": "Format of constants.json: groups of named constants. Every group becomes a key of `constants` in @ambilight/protocol; groups with `cppPrefix` are also emitted to esp32/src/generated/ProtocolLimits.h as `<cppPrefix>_<KEY_IN_UPPER_SNAKE>`.",
+  "type": "object",
+  "required": ["$schema"],
+  "properties": {
+    "$schema": { "type": "string" }
+  },
+  "additionalProperties": { "$ref": "#/$defs/group" },
+  "propertyNames": { "pattern": "^(?:\\$schema|[a-z][A-Za-z0-9]*)$" },
+  "$defs": {
+    "group": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["description", "values"],
+      "properties": {
+        "description": { "type": "string" },
+        "cppPrefix": { "type": "string", "pattern": "^[A-Z][A-Z0-9_]*$" },
+        "cppType": {
+          "enum": ["uint8_t", "uint16_t", "uint32_t", "int32_t"],
+          "description": "C++ type of the group's integer constants; by default the smallest unsigned type that fits each value."
+        },
+        "values": {
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": { "pattern": "^[a-z][A-Za-z0-9]*$" },
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["value", "description"],
+            "properties": {
+              "value": { "type": ["string", "integer"] },
+              "description": { "type": "string" },
+              "cppType": { "enum": ["uint8_t", "uint16_t", "uint32_t", "int32_t"], "description": "Overrides the group's cppType for this value." }
+            }
+          }
+        }
+      }
+    }
+  }
+}

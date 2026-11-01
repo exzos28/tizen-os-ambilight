@@ -1,0 +1,9 @@
+{
+  "version": "1.1.0",
+  "ip": "192.168.1.245",
+  "mode": "STA",
+  "ssid": "HomeWiFi",
+  "rssi": -58,
+  "connected": true,
+  "gateway": "192.168.1.1"
+}
