@@ -4,7 +4,7 @@ name: TV package
 #  - build.yml calls it on every PR and push to main: the package is a workflow artifact.
 #  - release.yml calls it with a tag: the package is also attached to that release, where
 #    Apps2Samsung finds it (packaging/apps2samsung/).
-# The package is signed with a throwaway certificate and must be re-signed for each TV.
+# The package is signed with the Tizen SDK's default certificate and must be re-signed for each TV.
 on:
   workflow_call:
     inputs:
@@ -59,13 +59,6 @@ jobs:
           mkdir -p "$TIZEN_SDK-data"
           chmod +x "$TIZEN_SDK"/tools/tizen-core/{tz,tgn,ninja,web-privilege-checker}
           "$TIZEN_SDK/tools/tizen-core/tz" --version
-
-      - name: Install expect
-        timeout-minutes: 8
-        run: |
-          export DEBIAN_FRONTEND=noninteractive
-          sudo apt-get -o DPkg::Lock::Timeout=120 install -y -qq --no-install-recommends expect \
-            || { sudo apt-get -o DPkg::Lock::Timeout=120 update -qq && sudo apt-get install -y -qq --no-install-recommends expect; }
 
       - name: Build the package
         run: tv/scripts/make_package.sh tv/release

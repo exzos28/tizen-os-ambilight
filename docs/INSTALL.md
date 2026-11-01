@@ -132,7 +132,7 @@ Two ways to install: with **Apps2Samsung** from a release, without build tools (
 
 ### 4.0 Install with Apps2Samsung
 
-Every release has the package attached as `ambilight-tv-vX.Y.Z.wgt`. It is signed with a throwaway certificate — a TV only accepts a certificate bound to its own DUID — so it has to be re-signed for your TV. [Apps2Samsung](https://github.com/Apps2Samsung/Apps2Samsung) does that.
+Every release has the package attached as `ambilight-tv-vX.Y.Z.wgt`. It is signed with the Tizen SDK's default certificate — a TV only accepts a certificate bound to its own DUID — so it has to be re-signed for your TV. [Apps2Samsung](https://github.com/Apps2Samsung/Apps2Samsung) does that.
 
 1. Turn on Developer Mode with your PC's IP as *Host PC IP* ([4.1](#41-enable-developer-mode-on-the-tv), steps 1–3).
 2. Download `ambilight-tv-vX.Y.Z.wgt` from the [latest release](https://github.com/exzos28/tizen-os-ambilight/releases/latest) and install it in Apps2Samsung as a custom `.wgt`. On the first install it creates a certificate for your TV (Samsung account sign-in in the browser).
