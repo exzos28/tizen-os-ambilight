@@ -23,7 +23,9 @@ src/
   WebPortal.*             HTTP server: web UI and JSON API
   OTAManager.*            Arduino OTA
   RemoteLogger.*          Log to Serial + Telnet (port 2323)
-web/                      React + Vite web UI (built into a single HTML file)
+web/                      React + Vite web UI (built into a single HTML file): Status (lighting
+                          on/off, metrics, identify, restart), WiFi, LEDs; API client, types
+                          and limits from packages/protocol (@ambilight/protocol)
 test/                     Host unit tests (pio test -e native)
 ```
 

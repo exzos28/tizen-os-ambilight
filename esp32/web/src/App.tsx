@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
-import { getConfig, saveMode, saveCalibration } from './api'
-import type { ConfigResponse } from './api'
+import { LedMode, limits } from '@ambilight/protocol'
+import type { StartCorner } from '@ambilight/protocol'
+import { esp } from './esp'
 import { useDeviceData } from './hooks/useDeviceData'
 import { Header } from './components/Header'
 import { TabNav } from './components/TabNav'
@@ -13,79 +14,84 @@ export default function App() {
   const [tab, setTab] = useState<Tab>('status')
   const { status, metrics } = useDeviceData()
 
-  const [ledMode,    setLedMode]    = useState(0)
+  const [ledMode,    setLedMode]    = useState<LedMode>(limits.led_mode.default)
   const [savingMode, setSavingMode] = useState(false)
 
+  // Lighting on/off; null until /config is loaded
+  const [power,       setPower]       = useState<boolean | null>(null)
+  const [savingPower, setSavingPower] = useState(false)
+
   // Network settings
-  const [wifiSSID,  setWifiSSID]  = useState('')
+  const [wifiSSID,  setWifiSSID]  = useState<string>(limits.wifi_ssid.default)
   const [wifiPass,  setWifiPass]  = useState('')
-  const [otaHost,   setOtaHost]   = useState('ambilight')
+  const [otaHost,   setOtaHost]   = useState<string>(limits.ota_host.default)
   const [otaPass,   setOtaPass]   = useState('')
-  const [ipOctet,   setIpOctet]   = useState('245')
+  const [ipOctet,   setIpOctet]   = useState(String(limits.ip_octet.default))
 
   // LED settings
-  const [numLeds,    setNumLeds]    = useState(300)
+  const [numLeds,    setNumLeds]    = useState<number>(limits.num_leds.default)
   const [maxLeds,    setMaxLeds]    = useState<number | undefined>(undefined)
-  const [brightness, setBrightness] = useState(100)
-  const [color,      setColor]      = useState('#ffffff')
+  const [brightness, setBrightness] = useState<number>(limits.brightness.default)
+  const [color,      setColor]      = useState<string>(limits.color.default)
 
   // Calibration
-  const [ledTop,      setLedTop]      = useState(10)
-  const [ledRight,    setLedRight]    = useState(6)
-  const [ledBottom,   setLedBottom]   = useState(10)
-  const [ledLeft,     setLedLeft]     = useState(6)
-  const [startCorner, setStartCorner] = useState(0)
-  const [clockwise,   setClockwise]   = useState(true)
+  const [ledTop,      setLedTop]      = useState<number>(limits.led_top.default)
+  const [ledRight,    setLedRight]    = useState<number>(limits.led_right.default)
+  const [ledBottom,   setLedBottom]   = useState<number>(limits.led_bottom.default)
+  const [ledLeft,     setLedLeft]     = useState<number>(limits.led_left.default)
+  const [startCorner, setStartCorner] = useState<StartCorner>(limits.start_corner.default)
+  const [clockwise,   setClockwise]   = useState<boolean>(limits.clockwise.default)
 
   // Color correction
-  const [gamma,      setGamma]      = useState(2.2)
-  const [saturation, setSaturation] = useState(1.0)
-  const [wbR,        setWbR]        = useState(255)
-  const [wbG,        setWbG]        = useState(255)
-  const [wbB,        setWbB]        = useState(255)
+  const [gamma,      setGamma]      = useState<number>(limits.gamma.default)
+  const [saturation, setSaturation] = useState<number>(limits.saturation.default)
+  const [wbR,        setWbR]        = useState<number>(limits.wb_r.default)
+  const [wbG,        setWbG]        = useState<number>(limits.wb_g.default)
+  const [wbB,        setWbB]        = useState<number>(limits.wb_b.default)
 
   // Power limit (kept as strings while editing)
-  const [powerLimit, setPowerLimit] = useState('0')
-  const [pixelWatts, setPixelWatts] = useState('0.72')
+  const [powerLimit, setPowerLimit] = useState(String(limits.power_limit_w.default))
+  const [pixelWatts, setPixelWatts] = useState(String(limits.pixel_watts.default))
 
   useEffect(() => {
-    getConfig()
-      .then((cfg: ConfigResponse) => {
+    esp.getConfig()
+      .then((cfg) => {
+        setPower(cfg.power)
         setWifiSSID(cfg.wifi_ssid)
         setOtaHost(cfg.ota_host)
-        setIpOctet(String(cfg.ip_octet ?? 245))
-        setPowerLimit(String(cfg.power_limit_w ?? 0))
+        setIpOctet(String(cfg.ip_octet))
+        setPowerLimit(String(cfg.power_limit_w))
         // toPrecision strips float32 noise (0.7200000286 → 0.72) without rounding real digits away
-        setPixelWatts(String(cfg.pixel_watts !== undefined ? Number(cfg.pixel_watts.toPrecision(6)) : 0.72))
+        setPixelWatts(String(Number(cfg.pixel_watts.toPrecision(6))))
         setNumLeds(cfg.num_leds)
         setMaxLeds(cfg.max_leds)
         setBrightness(cfg.brightness)
         setColor(cfg.color)
-        setLedMode(cfg.led_mode ?? 0)
-        setLedTop(cfg.led_top ?? 10)
-        setLedRight(cfg.led_right ?? 6)
-        setLedBottom(cfg.led_bottom ?? 10)
-        setLedLeft(cfg.led_left ?? 6)
-        setStartCorner(cfg.start_corner ?? 0)
-        setClockwise(cfg.clockwise ?? true)
-        setGamma(cfg.gamma ?? 2.2)
-        setSaturation(cfg.saturation ?? 1.0)
-        setWbR(cfg.wb_r ?? 255)
-        setWbG(cfg.wb_g ?? 255)
-        setWbB(cfg.wb_b ?? 255)
+        setLedMode(cfg.led_mode)
+        setLedTop(cfg.led_top)
+        setLedRight(cfg.led_right)
+        setLedBottom(cfg.led_bottom)
+        setLedLeft(cfg.led_left)
+        setStartCorner(cfg.start_corner)
+        setClockwise(cfg.clockwise)
+        setGamma(cfg.gamma)
+        setSaturation(cfg.saturation)
+        setWbR(cfg.wb_r)
+        setWbG(cfg.wb_g)
+        setWbB(cfg.wb_b)
       })
       .catch(console.error)
   }, [])
 
   async function handleModeToggle() {
-    const next = ledMode === 0 ? 1 : 0
+    const next = ledMode === LedMode.plain ? LedMode.dynamic : LedMode.plain
     setSavingMode(true)
     try {
-      await saveMode(next)
+      await esp.saveMode({ led_mode: next })
       setLedMode(next)
-      if (next === 1) {
+      if (next === LedMode.dynamic) {
         // Show calibration preview so the strip lights up while waiting for UDP
-        await saveCalibration({
+        await esp.saveCalibration({
           led_top: ledTop, led_right: ledRight,
           led_bottom: ledBottom, led_left: ledLeft,
           start_corner: startCorner, clockwise: clockwise ? 1 : 0,
@@ -98,13 +104,29 @@ export default function App() {
     }
   }
 
+  async function handlePowerToggle() {
+    const next = !power
+    setSavingPower(true)
+    try {
+      await esp.savePower({ power: next ? 1 : 0 })
+      setPower(next)
+    } catch (err) {
+      console.error(err)
+    } finally {
+      setSavingPower(false)
+    }
+  }
+
   return (
     <div className="wrap">
       <Header status={status} />
       <TabNav active={tab} onChange={setTab} />
 
       {tab === 'status' && (
-        <StatusTab status={status} metrics={metrics} />
+        <StatusTab
+          status={status} metrics={metrics}
+          power={power}   savingPower={savingPower} onPowerToggle={handlePowerToggle}
+        />
       )}
 
       {tab === 'wifi' && (

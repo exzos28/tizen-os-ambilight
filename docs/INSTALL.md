@@ -111,6 +111,8 @@ Each change lights a 10-second preview on the strip: **top red, right green, bot
 
 In **Plain** mode the tab shows the LED count, brightness and the color picker; the strip shows that color. In **Dynamic** mode the strip stays dark until frames arrive and fades to black 5 s after the last one.
 
+The *Status* tab has the **Lighting** on/off switch (off keeps the strip dark in both modes; the settings stay), shows how many frames arrived from the TV and how long ago the last one came, and has **Blink to identify** (the strip blinks white a few times — handy with several controllers) and **Restart**.
+
 You can test the whole chain without a TV using [`tools/led_tester.py`](../tools/README.md) — `--mode sides` uses the same colors as the preview (without the white first LED):
 
 ```sh

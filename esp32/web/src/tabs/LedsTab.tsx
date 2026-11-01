@@ -1,6 +1,7 @@
 import { useRef, useCallback } from 'react'
-import { saveLeds, saveCalibration } from '../api'
-import type { CalibrationRequest, LedSaveRequest } from '../api'
+import { LedMode, limits } from '@ambilight/protocol'
+import type { CalibrationRequest, SaveLedsRequest, StartCorner } from '@ambilight/protocol'
+import { esp } from '../esp'
 import { CalibrationDiagram } from '../components/CalibrationDiagram'
 import { Stat } from '../components/ui/Stat'
 import { PowerCard } from '../components/PowerCard'
@@ -9,7 +10,7 @@ const CORNER_NAMES = ['Top-Left', 'Top-Right', 'Bot-Right', 'Bot-Left']
 
 interface LedsTabProps {
   // Mode
-  ledMode:    number
+  ledMode:    LedMode
   savingMode: boolean
   onModeToggle: () => void
   // LED settings
@@ -22,7 +23,7 @@ interface LedsTabProps {
   ledRight:    number;   setLedRight:    (v: number) => void
   ledBottom:   number;   setLedBottom:   (v: number) => void
   ledLeft:     number;   setLedLeft:     (v: number) => void
-  startCorner: number;   setStartCorner: (v: number) => void
+  startCorner: StartCorner; setStartCorner: (v: StartCorner) => void
   clockwise:   boolean;  setClockwise:   (fn: (prev: boolean) => boolean) => void
   // Color correction
   gamma:      number;  setGamma:      (v: number) => void
@@ -57,17 +58,17 @@ export function LedsTab({
   const ledsTimer  = useRef<ReturnType<typeof setTimeout> | null>(null)
   const calibTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const debouncedSaveLeds = useCallback((params: LedSaveRequest, delay = 350) => {
+  const debouncedSaveLeds = useCallback((params: SaveLedsRequest, delay = 350) => {
     if (ledsTimer.current) clearTimeout(ledsTimer.current)
     ledsTimer.current = setTimeout(() => {
-      saveLeds(params).catch(console.error)
+      esp.saveLeds(params).catch(console.error)
     }, delay)
   }, [])
 
   const debouncedSaveCalib = useCallback((params: CalibrationRequest, delay = 350) => {
     if (calibTimer.current) clearTimeout(calibTimer.current)
     calibTimer.current = setTimeout(() => {
-      saveCalibration(params).catch(console.error)
+      esp.saveCalibration(params).catch(console.error)
     }, delay)
   }, [])
 
@@ -82,14 +83,14 @@ export function LedsTab({
   function ledsParams(
     b = brightness, c = color, n = numLeds,
     g = gamma, s = saturation, r = wbR, gr = wbG, bl = wbB
-  ): LedSaveRequest {
+  ): SaveLedsRequest {
     return {
       num_leds: n, brightness: b, color: c,
       gamma: g, saturation: s, wb_r: r, wb_g: gr, wb_b: bl
     }
   }
 
-  const isDynamic = ledMode === 1
+  const isDynamic = ledMode === LedMode.dynamic
 
   return (
     <div>
@@ -121,7 +122,7 @@ export function LedsTab({
               <label>Level — <strong>{brightness}</strong></label>
               <input
                 type="range"
-                min={0} max={255}
+                min={limits.brightness.min} max={limits.brightness.max}
                 value={brightness}
                 onChange={(e) => {
                   const v = Number(e.target.value)
@@ -138,7 +139,7 @@ export function LedsTab({
               <label>Gamma — <strong>{gamma.toFixed(1)}</strong></label>
               <input
                 type="range"
-                min={0.5} max={3.0} step={0.1}
+                min={limits.gamma.min} max={limits.gamma.max} step={0.1}
                 value={gamma}
                 onChange={(e) => {
                   const v = Number(e.target.value)
@@ -151,7 +152,7 @@ export function LedsTab({
               <label>Saturation Boost — <strong>{saturation.toFixed(1)}x</strong></label>
               <input
                 type="range"
-                min={0.0} max={2.0} step={0.1}
+                min={limits.saturation.min} max={limits.saturation.max} step={0.1}
                 value={saturation}
                 onChange={(e) => {
                   const v = Number(e.target.value)
@@ -165,7 +166,7 @@ export function LedsTab({
               <div className="wb-controls">
                 <input
                   type="range" className="accent-red"
-                  min={0} max={255} value={wbR}
+                  min={limits.wb_r.min} max={limits.wb_r.max} value={wbR}
                   onChange={(e) => {
                     const v = Number(e.target.value)
                     setWbR(v)
@@ -174,7 +175,7 @@ export function LedsTab({
                 />
                 <input
                   type="range" className="accent-green"
-                  min={0} max={255} value={wbG}
+                  min={limits.wb_g.min} max={limits.wb_g.max} value={wbG}
                   onChange={(e) => {
                     const v = Number(e.target.value)
                     setWbG(v)
@@ -183,7 +184,7 @@ export function LedsTab({
                 />
                 <input
                   type="range" className="accent-blue"
-                  min={0} max={255} value={wbB}
+                  min={limits.wb_b.min} max={limits.wb_b.max} value={wbB}
                   onChange={(e) => {
                     const v = Number(e.target.value)
                     setWbB(v)
@@ -248,13 +249,13 @@ export function LedsTab({
             <label>LED Count{maxLeds !== undefined && <> — <strong>max {maxLeds}</strong></>}</label>
             <input
               type="number"
-              min={1}
+              min={limits.num_leds.min}
               max={maxLeds}
               value={numLeds}
-              onChange={(e) => setNumLeds(Math.max(1, Number(e.target.value)))}
+              onChange={(e) => setNumLeds(Math.max(limits.num_leds.min, Number(e.target.value)))}
               onBlur={(e) => {
-                const v = Math.max(1, Number(e.target.value))
-                saveLeds(ledsParams(brightness, color, v)).catch(console.error)
+                const v = Math.max(limits.num_leds.min, Number(e.target.value))
+                esp.saveLeds(ledsParams(brightness, color, v)).catch(console.error)
               }}
             />
           </div>
@@ -263,7 +264,7 @@ export function LedsTab({
             <label>Brightness — <strong>{brightness}</strong></label>
             <input
               type="range"
-              min={0} max={255}
+              min={limits.brightness.min} max={limits.brightness.max}
               value={brightness}
               onChange={(e) => {
                 const v = Number(e.target.value)

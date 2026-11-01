@@ -1,7 +1,7 @@
-import type { StatusResponse } from '../api'
+import type { Esp32Status } from '@ambilight/protocol'
 
 interface HeaderProps {
-  status: StatusResponse | null
+  status: Esp32Status | null
 }
 
 export function Header({ status }: HeaderProps) {

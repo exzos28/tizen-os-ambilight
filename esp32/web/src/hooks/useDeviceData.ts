@@ -1,17 +1,17 @@
 import { useState, useEffect } from 'react'
-import { getStatus, getMetrics } from '../api'
-import type { StatusResponse, MetricsResponse } from '../api'
+import type { Esp32Status, Esp32Metrics } from '@ambilight/protocol'
+import { esp } from '../esp'
 
 export function useDeviceData() {
-  const [status,  setStatus]  = useState<StatusResponse  | null>(null)
-  const [metrics, setMetrics] = useState<MetricsResponse | null>(null)
+  const [status,  setStatus]  = useState<Esp32Status  | null>(null)
+  const [metrics, setMetrics] = useState<Esp32Metrics | null>(null)
 
   useEffect(() => {
-    getStatus().then(setStatus).catch(console.error)
-    getMetrics().then(setMetrics).catch(console.error)
+    esp.getStatus().then(setStatus).catch(console.error)
+    esp.getMetrics().then(setMetrics).catch(console.error)
 
     const id = setInterval(() => {
-      getMetrics().then(setMetrics).catch(console.error)
+      esp.getMetrics().then(setMetrics).catch(console.error)
     }, 5000)
     return () => clearInterval(id)
   }, [])
