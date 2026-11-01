@@ -20,9 +20,10 @@ Please include:
 
 Install the TV apps and open *Ambilight*: Home says whether screen capture works on this TV
 (a problem banner with the reason if it doesn't) and whether the colors reach the LED
-controllers or HyperHDR. *Test pattern* fills the screen with a rotating color wheel: the strip
-should follow it, and the *Live preview* on Home shows the colors the TV captured. Put what Home
-shows (the banner text and the *Screen capture* line) in your report.
+controllers or HyperHDR. *Test pattern* fills the screen with patterns (◀ ▶ to switch),
+starting with a rotating color wheel: the strip should follow it, and the *Live preview* on
+Home shows the colors the TV captured. Put what Home shows (the banner text and the *Screen
+capture* line) in your report.
 
 ### Getting the service log
 

@@ -181,7 +181,7 @@ the ESP32 HTTP client and the service message helpers, all generated from or wri
 `protocol/`; and the UI kit [`@ambilight/ui`](../packages/ui/README.md) (`packages/ui`).
 
 The TV is short on memory, so the app stays small: only the current screen is mounted, system
-fonts only, no blur, shadows or transitions; the only animation is the *Test pattern*. The
+fonts only, no blur, shadows or transitions; the only animations are in the *Test pattern*. The
 widget is not preloaded (no `prelaunch.support`), and Back on Home exits it.
 
 | Path | What |
@@ -189,7 +189,7 @@ widget is not preloaded (no `prelaunch.support`), and Back on Home exits it.
 | `src/App.tsx` | Shell: section rail + the one mounted screen, remote keys, status poll |
 | `src/focus.ts` | Focus manager: focusable elements as rows with column positions, explicit neighbours where needed |
 | `src/screens/Home.tsx` | Lighting on/off, brightness, mode + static colors, live preview, status, problem banner |
-| `src/screens/TestPattern.tsx` | Full-screen rotating color wheel (96×54 canvas, scaled) to check the strip follows the picture |
+| `src/screens/TestPattern.tsx` | Full-screen test patterns for the strip and its calibration, ◀ ▶ to switch ([Test pattern](#test-pattern)) |
 | `src/screens/Placeholder.tsx` | *Picture*, *Strip layout*, *Controllers*, *Diagnostics*: not built yet |
 | `src/status.ts` | Status lines, problems (most important first) and the header pill from the service status |
 | `src/controllers.ts` | The discovered controllers over HTTP: `/status` + `/config` once, `/metrics` every second while Home is shown; writes |
@@ -202,7 +202,7 @@ the kit's TV density (`<html data-density="tv">`). The launcher passes the focus
 `focused` props; `src/style.css` keeps only the shell (rail, header, footer) and the screens'
 grids.
 
-Remote: ◀ ▶ ▲ ▼ move, OK activates, Back exits on Home (closes the test pattern, returns
+Remote: ◀ ▶ ▲ ▼ move, OK activates, Back exits on Home (closes the test pattern, as does OK; returns
 to Home from other sections). ◀ from the leftmost element moves to the rail.
 
 ### Controls
@@ -217,6 +217,33 @@ form-urlencoded with a 3 s timeout. A change goes to every controller that answe
 | Brightness (◀ ▶ in 5% steps, after OK) | `POST /save/leds brightness=0..255`, sent 300 ms after the last key |
 | Follow the picture / Static color | `POST /save/mode led_mode=1\|0` |
 | Static color swatch | `POST /save/leds color=#rrggbb` (+ `led_mode=0`) |
+
+### Test pattern
+
+`src/screens/TestPattern.tsx`, opened from Home: full-screen patterns to check the strip and
+its calibration. ◀ ▶ switch (wrapping around), OK or Back close it; the last pattern is kept
+until the app exits. A label in the middle of the screen (name, what the strip should do,
+the keys) hides after 3 s and comes back on any key; it stays away from the edges where the
+service samples. Only the current pattern is mounted: static ones are plain DOM, animated ones
+CSS animations, except the color wheel, the only `requestAnimationFrame` loop, which runs only
+while it is shown. The status poll pauses while the test pattern is open. Desktop preview:
+`?screen=test&pattern=<id>`.
+
+The regions are laid out around the sample points ([Capture pipeline](#capture-pipeline-capturecs)):
+on the 1920×1080 stage, 8×8 px blocks 125 px in from each edge, at the middle of each quarter
+(top, bottom) and third (left, right) of the edge. Edge bands are 160 px deep, so every point
+sits inside its own side's band.
+
+| `id` | Pattern | What to look for |
+|---|---|---|
+| `wheel` | Color wheel (animated): a rotating hue wheel on a 96×54 canvas, scaled up | The strip follows the colors at the edges |
+| `red`, `green`, `blue`, `white`, `grey`, `black` | Solid colors (each its own pattern; grey is `#808080`) | The whole strip in that color; white and grey even and neutral; black: the strip goes dark |
+| `sides` | Top red, right green, bottom yellow, left blue: the colors of the controller's calibration preview | Compare with the calibration preview: mapping and direction of each side |
+| `quadrants` | Red top-left, green top-right, blue bottom-right, white bottom-left | Each corner its own color. The middle points of the left and right edges sit on the split and show a mix of the two |
+| `chase` | A white 320 px block running clockwise along the edge from the top-left corner, one lap in 6 s (animated) | Order and direction of the strip |
+| `ramp` | Grey steps from black to white along each edge, clockwise, one step per sample point (4 on top and bottom, 3 on the sides) | Gamma (even steps) and white balance (no tint) |
+| `hue` | The whole screen cycling through the hue circle in 20 s (animated) | Color accuracy without spatial detail |
+| `flicker` | 96 px patches of 1 px checkerboard around each sample point, with moving 1-on-2-off stripes or a scrolling line of text-like blocks (animated) | Aliasing of the 8 px sampling as flicker: compare smoothing settings |
 
 ### Picture
 
@@ -265,9 +292,6 @@ last frame's fields; `retryInMs` is left out, since nothing is retried while pau
 message port means the service isn't running (*Start* launches it with AppControl
 `command=start`); no reply for 3 s means it doesn't respond. No controller in `hosts`, or
 one that stops answering HTTP, shows *Search now* (`rediscover`).
-
-The test pattern's hint stays in the middle of the screen, away from the edges where the
-service samples.
 
 ### Commands
 

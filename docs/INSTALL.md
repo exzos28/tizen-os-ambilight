@@ -177,7 +177,7 @@ To work on the launcher without a TV, run `npm run dev` in `tv/app` and open the
 
 The service starts on its own when the TV boots. After the first install, open **Ambilight** on the TV and press **Start** in the banner. The service waits 2 s, broadcasts a discovery probe and starts streaming to every ESP32 that answers. The strip should follow the picture within a few seconds.
 
-Home in **Ambilight** shows whether everything works, turns the lighting on and off, sets the brightness and switches between following the picture and a static color — on every controller at once. If something is wrong, a banner on top says what and offers the fix when there is one (*Start*, *Search now*). *Test pattern* shows a rotating color wheel the strip should follow. Back exits the app.
+Home in **Ambilight** shows whether everything works, turns the lighting on and off, sets the brightness and switches between following the picture and a static color — on every controller at once. If something is wrong, a banner on top says what and offers the fix when there is one (*Start*, *Search now*). *Test pattern* shows patterns to check the strip and its calibration (a color wheel the strip should follow, solid colors, the sides, a chase around the edge, a grey ramp and more); ◀ ▶ switch them, OK or Back close it. Back exits the app.
 
 The service keeps looking for controllers in the background (new ones and IP changes are picked up within ~30 s); *Search now* probes immediately.
 
