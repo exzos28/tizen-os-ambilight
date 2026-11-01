@@ -141,7 +141,7 @@ Every release has the package attached as `ambilight-tv-vX.Y.Z.wgt`. It is signe
 3. If the app is already installed from VS Code, delete it on the TV first: a package signed with another certificate can't be installed over it.
 4. Continue with [4.4 Start](#44-start).
 
-**TV-Store already on the TV?** Apps2Samsung's TV-Store app installs a file without a PC connection, so *Host PC IP* can stay as it is (e.g. `127.0.0.1` on a rooted TV): open `http://<tv-ip>:8077/upload` on a phone or PC in the same network, send `ambilight-tv-vX.Y.Z.wgt`, then press **Install on this TV** in TV-Store. Tested on a QN92D (2024, Tizen 8): capture, the status panel and streaming to the ESP32 work.
+**TV-Store already on the TV?** Apps2Samsung's TV-Store app installs a file without a PC connection, so *Host PC IP* can stay as it is (e.g. `127.0.0.1` on a rooted TV): open `http://<tv-ip>:8077/upload` on a phone or PC in the same network, send `ambilight-tv-vX.Y.Z.wgt`, then press **Install on this TV** in TV-Store. Tested on a QN92D (2024): capture, the launcher and streaming to the ESP32 work.
 
 Apps2Samsung may pick a Partner certificate because the service starts on boot (`on-boot="true"`). The package is not in the Apps2Samsung catalog yet; the entry is prepared in [packaging/apps2samsung](../packaging/apps2samsung/).
 
