@@ -7,7 +7,7 @@
   "license": "MIT",
   "scripts": {
     "changeset": "changeset",
-    "version-packages": "changeset version",
+    "version-packages": "changeset version && node scripts/sync-versions.mjs",
     "release": "changeset publish"
   },
   "devDependencies": {

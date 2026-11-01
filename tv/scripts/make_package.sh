@@ -13,7 +13,7 @@
 # source, build tv/ui in VS Code instead (docs/INSTALL.md).
 #
 # Needs: .NET SDK 8, Tizen Studio CLI (web-cli is enough; $TIZEN_STUDIO, default ~/tizen-studio),
-# expect, rsync, unzip, python3.
+# expect, rsync, unzip, python3, node.
 #
 # Usage: tv/scripts/make_package.sh [output-dir]   (default: tv/release)
 set -euo pipefail
@@ -33,23 +33,12 @@ VERSION="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["vers
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
-# Sets version="..." on the first element matching $2 in file $1.
-stamp_version() {
-    python3 - "$1" "$2" "$VERSION" <<'EOF'
-import re, sys
-path, element, version = sys.argv[1:]
-xml = open(path, encoding="utf-8").read()
-new, n = re.subn(r'(<%s\b[^>]*?\sversion=")[^"]*(")' % element, r"\g<1>%s\g<2>" % version, xml, count=1)
-if n != 1:
-    sys.exit(f"{path}: no version attribute on <{element}>")
-open(path, "w", encoding="utf-8").write(new)
-EOF
-}
+# The manifests carry the project version (scripts/sync-versions.mjs, run by changesets).
+node "$ROOT/scripts/sync-versions.mjs" --check
 
 echo "== Service (.tpk), version $VERSION"
 rsync -a --exclude bin --exclude obj "$ROOT/tv/service/" "$WORK/service/"
 cp "$ROOT/tv/scripts/Service.tizen-sdk.csproj" "$WORK/service/Service.csproj"
-stamp_version "$WORK/service/tizen-manifest.xml" manifest
 dotnet msbuild "$WORK/service/Service.csproj" -restore -t:Rebuild -p:Configuration=Release -v:m -nologo
 TPK="$(find "$WORK/service/bin/Release" -name '*.tpk' | head -n 1)"
 [ -n "$TPK" ] || { echo "no .tpk built" >&2; exit 1; }
@@ -61,7 +50,6 @@ done
 echo "== Launcher"
 mkdir -p "$WORK/ui"
 ( cd "$ROOT/tv/ui" && cp -R config.xml index.html main.js icon.png css "$WORK/ui/" )
-stamp_version "$WORK/ui/config.xml" widget
 
 echo "== Throwaway signing profile"
 export CERT_PASSWORD="${CERT_PASSWORD:-ambilight-ci}"
