@@ -110,7 +110,9 @@
 .pic-tile-label { font-size: 17px; color: var(--ui-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .pic-tile-value { display: flex; align-items: center; gap: 12px; font-size: 30px; font-weight: 600; white-space: nowrap; }
 .pic-tile-value .pic-arrow { font-size: 18px; }
-.pic-tile:not(.focused) .pic-tile-value .pic-arrow { display: none; }
+.pic-tile:not(.editing) .pic-tile-value .pic-arrow { display: none; }
+/* Editing a value: a filled accent instead of the focus ring, so OK → ◀ ▶ is visible. */
+.pic-row.editing, .pic-tile.editing { background: var(--ui-accent-soft); outline-width: 6px; }
 
 .pic-meter { display: flex; align-items: center; gap: 16px; --ui-bar-h: 12px; }
 .pic-meter .ui-bar { flex: 1; }

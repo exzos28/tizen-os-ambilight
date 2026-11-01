@@ -160,7 +160,7 @@ function Empty(p: ScreenProps & { reading: boolean }) {
       <Footer>
         <KeyHint k="OK">Open Outputs</KeyHint>
         <KeyHint k="◀">Menu</KeyHint>
-        <KeyHint k="↩">Home</KeyHint>
+        <KeyHint k="↩">Menu</KeyHint>
       </Footer>
     </main>
   );
@@ -252,6 +252,10 @@ function Settings(p: SettingsProps) {
   const ids = grid.flat().map((it) => it.id);
   const cur = ids.includes(focus) ? focus : 'brightness';
   useEffect(() => { if (cur !== 'reset') setConfirmReset(false); }, [cur]);
+  /** OK on a value starts editing it (◀ ▶ change it); OK or Back again ends, ◀ ▶ move once more. */
+  const [editing, setEditing] = useState(false);
+  useEffect(() => { setEditing(false); }, [cur, p.active]);
+  const isField = (id: string) => (FIELDS as string[]).includes(id);
 
   const repeat = useRef({ key: '', at: 0, n: 0 });
   const adjust = (f: Field, dir: 1 | -1) => {
@@ -286,12 +290,14 @@ function Settings(p: SettingsProps) {
   };
 
   p.bindKeys((key) => {
-    if (key === 'back') return false;
-    if (key === 'ok') { ok(cur); return true; }
-    if ((key === 'left' || key === 'right') && (FIELDS as string[]).includes(cur)) {
-      adjust(cur as Field, key === 'left' ? -1 : 1);
-      return true;
+    if (editing) {
+      if (key === 'left' || key === 'right') { adjust(cur as Field, key === 'left' ? -1 : 1); return true; }
+      setEditing(false);
+      if (key === 'ok' || key === 'back') return true;
+      // ▲ ▼ end editing and move on
     }
+    if (key === 'back') return false;
+    if (key === 'ok') { if (isField(cur)) setEditing(true); else ok(cur); return true; }
     const next = step(grid, cur, key);
     if (next === EDGE_LEFT) return 'rail';
     if (next) { setFocus(next); setSaveNote(null); }
@@ -299,6 +305,7 @@ function Settings(p: SettingsProps) {
   });
 
   const isF = (id: string) => p.active && cur === id;
+  const isE = (id: string) => isF(id) && editing;
 
   // ---------------------------------------------------------------- view
   const lc = usable[0];
@@ -317,9 +324,9 @@ function Settings(p: SettingsProps) {
   const corrected = raw?.map((c) => correct(c, current)) ?? null;
 
   const row = (f: Field, name: string, desc: string, value: string) => (
-    <div class={`pic-row${isF(f) ? ' focused' : ''}`}>
+    <div class={`pic-row${isF(f) ? ' focused' : ''}${isE(f) ? ' editing' : ''}`}>
       <div class="pic-label"><span class="pic-name">{name}</span><Desc mixed={mixed(f)}>{desc}</Desc></div>
-      <Track f={f} value={v[f]} focused={isF(f)} />
+      <Track f={f} value={v[f]} focused={isF(f)} editing={isE(f)} />
       <span class="pic-val num">{value}</span>
     </div>
   );
@@ -338,13 +345,13 @@ function Settings(p: SettingsProps) {
             {row('brightness', 'Brightness', 'Overall strip level', `${pctOf(v.brightness)}%`)}
             {row('gamma', 'Gamma', 'Darker shadows, richer color', dec(v.gamma, 1))}
             {row('saturation', 'Saturation', '1.0× = as on screen', `${dec(v.saturation, 1)}×`)}
-            <div class={`pic-row pic-wb${wbFocused ? ' focused' : ''}`}>
+            <div class={`pic-row pic-wb${wbFocused ? ' focused' : ''}${wbFocused && editing ? ' editing' : ''}`}>
               <div class="pic-label"><span class="pic-name">White balance</span><Desc mixed={wbMixed}>Match the wall's white to the screen</Desc></div>
               <div class="pic-wb-lines">
                 {(['wb_r', 'wb_g', 'wb_b'] as const).map((f) => (
                   <div key={f} class={`pic-wb-line pic-${f}`}>
                     <span class="pic-ch">{f.slice(3).toUpperCase()}</span>
-                    <Track f={f} value={v[f]} focused={isF(f)} />
+                    <Track f={f} value={v[f]} focused={isF(f)} editing={isE(f)} />
                     <span class={`pic-wb-val num${isF(f) ? ' on' : ''}`}>{v[f]}</span>
                   </div>
                 ))}
@@ -354,9 +361,9 @@ function Settings(p: SettingsProps) {
 
           <Card class="pic-power" title="Power" aside={<span class="pic-aside">Keeps the strip within your power supply</span>}>
             <div class="pic-tiles">
-              <Tile label="Limit" focused={isF('power_limit_w')} mixed={mixed('power_limit_w')}
+              <Tile label="Limit" focused={isF('power_limit_w')} editing={isE('power_limit_w')} mixed={mixed('power_limit_w')}
                 value={v.power_limit_w > 0 ? `${v.power_limit_w} W` : 'Off'} />
-              <Tile label="One LED at full white" focused={isF('pixel_watts')} mixed={mixed('pixel_watts')}
+              <Tile label="One LED at full white" focused={isF('pixel_watts')} editing={isE('pixel_watts')} mixed={mixed('pixel_watts')}
                 value={`${v.pixel_watts.toFixed(2)} W`} />
               <Tile label={usable.length > 1 ? 'Using now (first)' : 'Using now'} value={used == null ? '—' : `${used.toFixed(1)} W`} />
             </div>
@@ -411,16 +418,25 @@ function Settings(p: SettingsProps) {
       <Footer>
         {focusedField ? (
           <>
-            <KeyHint k="▲▼">Move</KeyHint>
-            <KeyHint k="◀▶">Adjust {NAMES[focusedField]}</KeyHint>
-            <KeyHint k="↩">Home</KeyHint>
+            {editing ? (
+              <>
+                <KeyHint k="◀▶">Adjust {NAMES[focusedField]}</KeyHint>
+                <KeyHint k="OK">Done</KeyHint>
+              </>
+            ) : (
+              <>
+                <KeyHint k="OK">Adjust {NAMES[focusedField]}</KeyHint>
+                <KeyHint k="◀▶▲▼">Move</KeyHint>
+                <KeyHint k="↩">Menu</KeyHint>
+              </>
+            )}
             <span class="footer-note">{rangeNote(focusedField)}</span>
           </>
         ) : (
           <>
             <KeyHint k="OK">{cur === 'reset' ? 'Reset' : cur === 'static' ? 'Open Home' : cur === 'preset-save' ? 'Save' : 'Apply'}</KeyHint>
             <KeyHint k="◀▶▲▼">Move</KeyHint>
-            <KeyHint k="↩">Home</KeyHint>
+            <KeyHint k="↩">Menu</KeyHint>
             <span class="footer-note">
               {cur === 'reset' ? 'Brightness, gamma, saturation and white balance; the power settings stay'
                 : cur === 'static' ? 'Static colors are on Home'
@@ -448,30 +464,30 @@ function Desc({ mixed, children }: { mixed: boolean; children: string }) {
     : <span class="pic-desc">{children}</span>;
 }
 
-function Track({ f, value, focused }: { f: Field; value: number; focused: boolean }) {
+function Track({ f, value, focused, editing }: { f: Field; value: number; focused: boolean; editing: boolean }) {
   const fill = f === 'wb_r' ? 'var(--ui-side-top)' : f === 'wb_g' ? '#30a46c' : f === 'wb_b' ? '#3e7fd9' : focused ? 'var(--ui-accent)' : undefined;
   const wb = f.startsWith('wb_');
   return (
     <div class="pic-track">
-      <span class={`pic-arrow${focused ? ' on' : ''}`} aria-hidden="true">◀</span>
+      <span class={`pic-arrow${editing ? ' on' : ''}`} aria-hidden="true">◀</span>
       <div class="pic-bar">
-        <SliderBar value={pos(f, value)} knob={!wb || focused} muted={!focused && !wb} color={fill} />
-        {focused && !wb && <span class="pic-default" style={`left:${(pos(f, limits[f].default) * 100).toFixed(2)}%`}>default</span>}
+        <SliderBar value={pos(f, value)} knob={!wb || focused} muted={!editing && !wb} color={fill} />
+        {editing && !wb && <span class="pic-default" style={`left:${(pos(f, limits[f].default) * 100).toFixed(2)}%`}>default</span>}
       </div>
-      <span class={`pic-arrow${focused ? ' on' : ''}`} aria-hidden="true">▶</span>
+      <span class={`pic-arrow${editing ? ' on' : ''}`} aria-hidden="true">▶</span>
     </div>
   );
 }
 
-function Tile({ label, value, focused, mixed }: { label: string; value: string; focused?: boolean; mixed?: boolean }) {
+function Tile({ label, value, focused, editing, mixed }: { label: string; value: string; focused?: boolean; editing?: boolean; mixed?: boolean }) {
   const adjustable = focused !== undefined;
   return (
-    <div class={`pic-tile${focused ? ' focused' : ''}`}>
+    <div class={`pic-tile${focused ? ' focused' : ''}${editing ? ' editing' : ''}`}>
       <span class="pic-tile-label">{mixed ? <span class="warn">{label} · Mixed</span> : label}</span>
       <span class="pic-tile-value num">
-        {adjustable && <span class={`pic-arrow${focused ? ' on' : ''}`} aria-hidden="true">◀</span>}
+        {adjustable && <span class={`pic-arrow${editing ? ' on' : ''}`} aria-hidden="true">◀</span>}
         {value}
-        {adjustable && <span class={`pic-arrow${focused ? ' on' : ''}`} aria-hidden="true">▶</span>}
+        {adjustable && <span class={`pic-arrow${editing ? ' on' : ''}`} aria-hidden="true">▶</span>}
       </span>
     </div>
   );

@@ -86,7 +86,7 @@ function Empty(p: ScreenProps) {
       <Footer>
         <KeyHint k="OK">Open Outputs</KeyHint>
         <KeyHint k="◀">Menu</KeyHint>
-        <KeyHint k="↩">Home</KeyHint>
+        <KeyHint k="↩">Menu</KeyHint>
       </Footer>
     </main>
   );
