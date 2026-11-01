@@ -31,10 +31,17 @@ declare namespace TizenApi {
   interface SystemInfo {
     getCapability(key: string): unknown;
   }
+  /** Remote keys beyond the arrows, OK and Back are delivered only once registered
+   *  (privilege http://tizen.org/privilege/tv.inputdevice). */
+  interface TvInputDevice {
+    registerKeyBatch(keys: string[], onSuccess?: () => void, onError?: (err: { message: string }) => void): void;
+    unregisterKeyBatch(keys: string[]): void;
+  }
   interface Tizen {
     messageport: MessagePortManager;
     application: ApplicationManager;
     systeminfo: SystemInfo;
+    tvinputdevice?: TvInputDevice;
     ApplicationControl: new (
       operation: string,
       uri?: string | null,

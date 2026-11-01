@@ -6,6 +6,7 @@
 // ?state=none         no controller found at all
 // ?state=off          the service is not running ("Start" starts it)
 // ?state=unsupported  the TV has no capture API (libvideoenhance.so missing)
+// ?state=two          two controllers listed (both answer with the same settings)
 //
 // Outputs (set-outputs), on top of any state:
 // ?outputs=package    never configured: ESP32 on, HyperHDR off, from res/ambilight.json (default)
@@ -20,10 +21,11 @@ import {
 } from '@ambilight/protocol';
 import type { Backend, ServiceLink } from './api';
 
-export type MockState = 'ok' | 'lost' | 'none' | 'off' | 'unsupported';
+export type MockState = 'ok' | 'lost' | 'none' | 'off' | 'unsupported' | 'two';
 
 const HOST = '192.168.50.245';
 const HYPERHDR_HOST = '192.168.50.20';
+const HOST_2 = '192.168.50.246';
 const FRAME_MS = 140;
 
 // A sunset scene, EdgeFrame order: top L→R (4), right T→B (3), bottom R→L (4), left B→T (3).
@@ -49,7 +51,7 @@ const fail = (ms = 400) => new Promise<never>((_, j) => setTimeout(() => j(new E
 
 export function readMockState(search: string): MockState {
   const s = new URLSearchParams(search).get('state');
-  return s === 'lost' || s === 'none' || s === 'off' || s === 'unsupported' ? s : 'ok';
+  return s === 'lost' || s === 'none' || s === 'off' || s === 'unsupported' || s === 'two' ? s : 'ok';
 }
 
 export type MockOutputs = 'package' | 'both' | 'hyperhdr';
@@ -149,7 +151,7 @@ export function createMock(state: MockState, preset: MockOutputs = readMockOutpu
 
   function status(): ServiceStatus {
     const now = Date.now();
-    const hosts = controllerPresent() ? [HOST] : [];
+    const hosts = !controllerPresent() ? [] : state === 'two' ? [HOST, HOST_2] : [HOST];
     if (hosts.length && captureRuns() && outputs.esp32.enabled) framesSent += 7;
     return {
       version: '1.2.0',
@@ -219,6 +221,17 @@ export function createMock(state: MockState, preset: MockOutputs = readMockOutpu
       saveLeds: (form) => esp(() => { Object.assign(config, form); configRev++; return { message: 'saved' }; }),
       saveMode: ({ led_mode }) => esp(() => { config.led_mode = led_mode; configRev++; return { message: 'saved' }; }),
       identify: () => esp(() => { console.info('[mock] identify: the strip blinks'); return { message: 'blinking' }; }),
+      saveCalibration: (b) => esp(() => {
+        Object.assign(config, {
+          led_top: b.led_top ?? config.led_top, led_right: b.led_right ?? config.led_right,
+          led_bottom: b.led_bottom ?? config.led_bottom, led_left: b.led_left ?? config.led_left,
+          start_corner: b.start_corner ?? config.start_corner, clockwise: b.clockwise == null ? config.clockwise : b.clockwise === 1,
+        });
+        config.num_leds = config.led_top + config.led_right + config.led_bottom + config.led_left;
+        configRev++;
+        return { message: 'saved' };
+      }),
+      previewCalibration: () => esp(() => ({ message: 'preview' })),
     }),
     platform: {
       appVersion: () => '1.2.0',
