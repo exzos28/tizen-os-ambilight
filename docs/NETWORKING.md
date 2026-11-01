@@ -107,7 +107,7 @@ The service sends events to every discovered host. Only `tools/server.py` listen
 
 ## ESP32 HTTP API
 
-Schemas: [`protocol/schemas/esp32/`](../protocol/schemas/esp32/). All `POST` endpoints take `application/x-www-form-urlencoded` bodies and return `{"message": "..."}`. Omitted or non-numeric fields keep their current value; out-of-range values are clamped. Changes persist in NVS unless noted otherwise.
+Schemas: [`protocol/schemas/esp32/`](../protocol/schemas/esp32/). All `POST` endpoints take `application/x-www-form-urlencoded` bodies and return `{"message": "..."}`. Omitted or non-numeric fields keep their current value; out-of-range values are clamped. The exceptions are `led_mode`, `power` and `ip_octet`: an invalid value is rejected with HTTP 400 and `{"message": "<reason>"}`, and nothing from that request is saved. Changes persist in NVS unless noted otherwise.
 
 | Method | Path | Fields | Effect |
 |--------|------|--------|--------|
@@ -118,9 +118,9 @@ Schemas: [`protocol/schemas/esp32/`](../protocol/schemas/esp32/). All `POST` end
 | POST | `/save/leds` | `num_leds` (1–1500), `brightness` (0–255), `color` (`#rrggbb`), `gamma` (0.5–3), `saturation` (0–2), `wb_r`, `wb_g`, `wb_b` (0–255), `power_limit_w` (0–2000, 0 = off), `pixel_watts` (0.05–5) | Saved. `brightness`, `power_limit_w` and `pixel_watts` apply immediately (the strip is redrawn in both modes); `num_leds` and `color` are shown right away only in plain mode; gamma, saturation and white balance apply to the next TV frame |
 | POST | `/save/calibration` | `led_top`, `led_right`, `led_bottom`, `led_left` (0–255), `start_corner` (0–3), `clockwise` (0/1) | Saves the layout, sets `num_leds` to the sum of the sides, shows the 10 s preview (then the strip returns to the current mode) |
 | POST | `/preview/calibration` | Same as above | Shows the preview without saving |
-| POST | `/save/mode` | `led_mode` (0 = plain, 1 = dynamic) | Switches mode |
-| POST | `/save/power` | `power` (0 = off, 1 = on; anything else keeps the current value) | Lighting on/off. Off: the strip is dark in both modes and UDP frames are ignored; brightness, color and mode are kept. The calibration preview and `/identify` still light the strip, then it returns to dark |
-| POST | `/identify` | — | Blinks the whole strip white 3 times over about 2 s, then restores the previous output. Not saved |
+| POST | `/save/mode` | `led_mode` (required: exactly `0` = plain or `1` = dynamic; missing or anything else → HTTP 400 `{"message": "led_mode must be 0 or 1"}` and nothing is saved) | Switches mode |
+| POST | `/save/power` | `power` (required: exactly `0` = off or `1` = on; missing or anything else → HTTP 400 `{"message": "power must be 0 or 1"}` and nothing is saved) | Lighting on/off. Off: the strip is dark in both modes and UDP frames are ignored; brightness, color and mode are kept. The calibration preview and `/identify` still light the strip, then it returns to dark |
+| POST | `/identify` | — | Blinks the whole strip white 3 times over 2 s (including LEDs a longer calibration preview left lit), then restores the previous output. Settings changed meanwhile are applied but shown only when the blink ends. Not saved |
 | POST | `/restart` | — | Replies, then restarts the ESP32 about 0.5 s later |
 | POST | `/save/network` | `wifi_ssid`, `wifi_pass`, `ota_host`, `ota_pass` (empty passwords keep the current ones), `ip_octet` (0 = DHCP, 1–254; anything else → HTTP 400 and nothing is saved) | Saves and **restarts** the ESP32 |
 

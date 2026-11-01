@@ -1,6 +1,7 @@
 #pragma once
 #include <Arduino.h>
 #include <WebServer.h>
+#include "generated/ProtocolLimits.h"
 
 class WebPortal {
 public:
@@ -10,7 +11,7 @@ public:
     void handle();
 
 private:
-    WebPortal() : _server(80) {}
+    WebPortal() : _server(protocol::PORT_ESP32_HTTP) {}
 
     WebServer _server;
     uint32_t  _restartRequestedMs = 0;
