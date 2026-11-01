@@ -47,5 +47,5 @@ For more detail — or if the launcher shows nothing useful:
 `npm run dev` in `esp32/web` starts Vite with hot reload, but the dev server has no proxy to the ESP32, so API calls fail unless you add one in `vite.config.ts`:
 
 ```ts
-server: { proxy: { '/status': 'http://<esp32-ip>', '/config': 'http://<esp32-ip>', '/metrics': 'http://<esp32-ip>', '/save': 'http://<esp32-ip>', '/preview': 'http://<esp32-ip>' } }
+server: { proxy: { '/status': 'http://<esp32-ip>', '/config': 'http://<esp32-ip>', '/metrics': 'http://<esp32-ip>', '/save': 'http://<esp32-ip>', '/preview': 'http://<esp32-ip>', '/identify': 'http://<esp32-ip>', '/restart': 'http://<esp32-ip>' } }
 ```

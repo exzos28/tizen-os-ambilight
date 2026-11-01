@@ -323,10 +323,15 @@ Limits: `MAX_LEDS = 1500`, up to 255 LEDs per side, data on GPIO 23, color order
 
 The React app in `esp32/web/` is built by `scripts/embed_web.py` (a PlatformIO pre-build
 step running `npm run build`) into a single HTML file, gzipped, embedded as `src/web_ui.h`
-and served from flash with `Content-Encoding: gzip` — no SPIFFS/LittleFS. Three tabs:
-Status, WiFi, LEDs. The LEDs tab has a Dynamic / Plain switch: Dynamic shows brightness,
-color correction and the strip layout editor; Plain shows LED count, brightness and the
-static color. Settings are saved to NVS on change; `Config::sanitize()` clamps them to
+and served from flash with `Content-Encoding: gzip` — no SPIFFS/LittleFS. It talks to the
+API through `@ambilight/protocol` (`createEsp32Client`, generated types, slider ranges and
+defaults from `limits`; see [protocol/README.md](../protocol/README.md#using-ambilightprotocol)).
+Three tabs: Status, WiFi, LEDs. The Status tab has the lighting on/off switch
+(`POST /save/power`), network and system metrics (including frames received and the age
+of the last frame), and *Blink to identify* (`POST /identify`) and *Restart*
+(`POST /restart`, after a confirmation) buttons. The LEDs tab has a Dynamic / Plain
+switch: Dynamic shows brightness, color correction and the strip layout editor; Plain
+shows LED count, brightness and the static color. Settings are saved to NVS on change; `Config::sanitize()` clamps them to
 valid ranges on every load and save. Only network changes and `POST /restart` restart
 the device. Every response carries `Access-Control-Allow-Origin: *` and `OPTIONS` on any
 path answers the CORS preflight (see [NETWORKING.md](NETWORKING.md#esp32-http-api)).
