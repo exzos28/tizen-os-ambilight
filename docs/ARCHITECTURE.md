@@ -165,11 +165,11 @@ avoids memory it doesn't need:
 Preact + TypeScript web app. The source is `tv/app/`; Vite (`npm run build` there) builds it into `tv/ui`, next to
 the tracked `config.xml`: one classic deferred script and one stylesheet (`assets/app.js`,
 `assets/app.css`) for Chromium M94, the web engine of Tizen 7.0 (2023 TVs), the oldest
-supported. `preact` is the only runtime dependency besides
-[`@ambilight/protocol`](../protocol/README.md#using-ambilightprotocol) (`packages/protocol`,
-linked with `file:`, no dependencies of its own): the wire types, ESP32 setting limits,
-constants (port names, app IDs), the ESP32 HTTP client and the service message helpers, all
-generated from or written against `protocol/`.
+supported. `preact` is the only runtime dependency besides two packages linked with `file:`
+(no dependencies of their own): [`@ambilight/protocol`](../protocol/README.md#using-ambilightprotocol)
+(`packages/protocol`): the wire types, ESP32 setting limits, constants (port names, app IDs),
+the ESP32 HTTP client and the service message helpers, all generated from or written against
+`protocol/`; and the UI kit [`@ambilight/ui`](../packages/ui/README.md) (`packages/ui`).
 
 The TV is short on memory, so the app stays small: only the current screen is mounted, system
 fonts only, no blur, shadows or transitions; the only animation is the *Test pattern*. The
@@ -186,10 +186,12 @@ widget is not preloaded (no `prelaunch.support`), and Back on Home exits it.
 | `src/controllers.ts` | The discovered controllers over HTTP: `/status` + `/config` once, `/metrics` every second while Home is shown; writes |
 | `src/data/` | Adapters: `service.ts` (Tizen message port and AppControl glue around the `@ambilight/protocol` message helpers), `index.ts` (picks the backend; one `createEsp32Client` per controller, 3 s timeout), `mock.ts` (desktop browser, `?state=ok\|lost\|none\|off\|unsupported`), `api.ts` (what the screens use) |
 
-Its look (tokens, icons, cards, switch, status pill and lines, problem banner, swatches, live
-preview) is shared with the controller's web app through the UI kit `@ambilight/ui`
-([`packages/ui`](../packages/ui/README.md)); the launcher still has its own copy in
-`src/style.css` and moves to the kit's TV density later.
+The launcher is drawn with the UI kit `@ambilight/ui` ([`packages/ui`](../packages/ui/README.md)),
+the same as the controller's web app: tokens, icons, cards, switch, slider, mode options,
+swatches, status pill and lines, problem banner, buttons, key hints and the live preview, at
+the kit's TV density (`<html data-density="tv">`). The launcher passes the focus to them as
+`focused` props; `src/style.css` keeps only the shell (rail, header, footer) and the screens'
+grids.
 
 Remote: ◀ ▶ ▲ ▼ move, OK activates, Back exits on Home (closes the test pattern, returns
 to Home from other sections). ◀ from the leftmost element moves to the rail.
