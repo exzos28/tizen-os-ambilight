@@ -2,9 +2,10 @@
 #include <Arduino.h>
 #include <FastLED.h>
 #include "LightOutput.h"
+#include "generated/ProtocolLimits.h"
 
 constexpr uint8_t  LED_PIN  = 23;
-constexpr uint16_t MAX_LEDS = 1500;
+constexpr uint16_t MAX_LEDS = protocol::ESP32_MAX_LEDS;
 
 class LEDController {
 public:
