@@ -62,7 +62,7 @@ wiring in [HARDWARE.md](HARDWARE.md).
 5. AppControl `command=start` (the launcher's *Start*, shown while the service is not
    running) probes for hosts, reconnects HyperHDR and re-initialises capture (re-reading the
    hardware condition) immediately, also ending a pause; `command=stop` exits the service.
-   The launcher also pauses and resumes capture over the message port ([commands](#commands)).
+   Capture can also be paused and resumed over the message port ([commands](#commands)).
 6. Events logged before any log host is known (config, capture init) are queued — up to
    100 — and sent once discovery finds one.
 7. Opens the local message port `ambilight.status` (`StatusPort.cs`) for the launcher's
@@ -197,7 +197,7 @@ form-urlencoded with a 3 s timeout. A change goes to every controller that answe
 
 | Control | Request |
 |---|---|
-| Lighting off / on | `POST /save/power power=0\|1` to every controller + service command `pause` / `resume` |
+| Lighting off / on | `POST /save/power power=0\|1` to every controller. Capture keeps running for other outputs (HyperHDR) and for a strip switched back on from its web app |
 | Brightness (◀ ▶ in 5% steps, after OK) | `POST /save/leds brightness=0..255`, sent 300 ms after the last key |
 | Follow the picture / Static color | `POST /save/mode led_mode=1\|0` |
 | Static color swatch | `POST /save/leds color=#rrggbb` (+ `led_mode=0`) |

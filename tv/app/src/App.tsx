@@ -71,7 +71,15 @@ export function App({ backend }: { backend: Backend }) {
     setZone(id === 'home' ? 'content' : 'rail');
   };
 
+  // The listener is registered once and calls the handler of the latest render, so the
+  // 1 s status poll doesn't re-subscribe it on every render.
+  const onKeyRef = useRef<(e: KeyboardEvent) => void>(() => {});
   useEffect(() => {
+    const listener = (e: KeyboardEvent) => onKeyRef.current(e);
+    document.addEventListener('keydown', listener);
+    return () => document.removeEventListener('keydown', listener);
+  }, []);
+  {
     const onKey = (e: KeyboardEvent) => {
       const key = keyOf(e);
       if (!key) return;
@@ -99,9 +107,8 @@ export function App({ backend }: { backend: Backend }) {
         if (screen === 'home') exit(); else open('home');
       }
     };
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
-  });
+    onKeyRef.current = onKey;
+  }
 
   // ---------------------------------------------------------------- view
   if (testPattern) return <TestPattern />;

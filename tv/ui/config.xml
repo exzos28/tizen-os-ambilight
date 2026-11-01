@@ -10,6 +10,7 @@
    <tizen:privilege name="http://developer.samsung.com/privilege/contentanalysis"></tizen:privilege>
    <tizen:privilege name="http://tizen.org/privilege/internet"></tizen:privilege>
    <access origin="*" subdomains="true"></access>
+   <!-- No prelaunch.support metadata on purpose: a prelaunched launcher stays resident in RAM (about 70 MB on a QN92D) even when nobody opens it. -->
    <tizen:metadata key="http://tizen.org/metadata/app_ui_type/base_screen_resolution" value="extensive"></tizen:metadata>
    <tizen:profile name="tv-samsung"></tizen:profile>
 </widget>

@@ -98,9 +98,10 @@ export function Home(p: Props) {
   // ---------------------------------------------------------------- actions
   const toggleLighting = () => {
     if (!canControl) return;
-    const target = !on;
-    actions.setPower(target);
-    p.backend.service.command(target ? 'resume' : 'pause');
+    // Only the strips go dark (their `power` flag). Capture keeps running: other outputs
+    // (HyperHDR) still need it, and a strip switched back on elsewhere (its web app) must
+    // get frames right away.
+    actions.setPower(!on);
   };
   const setMode = (mode: LedMode) => { if (canControl) actions.setMode(mode); };
   const nudgeBrightness = (d: number) => {
