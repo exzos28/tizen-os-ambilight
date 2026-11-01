@@ -6,6 +6,29 @@ on:
   pull_request:
 
 jobs:
+  protocol:
+    name: Protocol definition + @ambilight/protocol
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24   # runs the package's TypeScript tests directly (type stripping)
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - run: npm ci
+
+      - name: Generated files up to date, fixtures valid, C++ header compiles
+        run: npm run protocol:check
+
+      - name: Type-check the package
+        run: npm run protocol:type-check
+
+      - name: Package tests
+        run: npm run protocol:test
+
   firmware:
     name: ESP32 firmware + web UI
     runs-on: ubuntu-latest
