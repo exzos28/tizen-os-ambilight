@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/exzos28/tizen-os-ambilight/main/protocol/schemas/service/command-request.schema.json",
+  "title": "ServiceCommandRequest",
+  "description": "Command the UI sends to the service's local message port `ambilight.status`, with `ambilight.ui` as the reply port. A bundle of string key/values. The service replies with ServiceCommandReply.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["request", "command"],
+  "properties": {
+    "request": { "const": "command" },
+    "command": { "$ref": "#/$defs/ServiceCommand" }
+  },
+  "$defs": {
+    "ServiceCommand": {
+      "title": "ServiceCommand",
+      "enum": ["pause", "resume", "rediscover"],
+      "description": "`pause`: stop capture (state `paused`) until `resume`. `resume`: restart capture after `pause`. `rediscover`: probe for controllers now."
+    }
+  }
+}

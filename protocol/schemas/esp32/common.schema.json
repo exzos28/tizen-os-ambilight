@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/exzos28/tizen-os-ambilight/main/protocol/schemas/esp32/common.schema.json",
+  "description": "Value types shared by the ESP32 API schemas. Definitions only.",
+  "$defs": {
+    "led_count": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 255,
+      "description": "LEDs on one side of the screen."
+    },
+    "channel_scale": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 255,
+      "description": "Per-channel scale (255 = unchanged)."
+    },
+    "flag": {
+      "enum": [0, 1],
+      "description": "Boolean form field: 0 = false, 1 = true."
+    }
+  }
+}

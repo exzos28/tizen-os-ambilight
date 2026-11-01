@@ -1,0 +1,131 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/exzos28/tizen-os-ambilight/main/protocol/schemas/service/status.schema.json",
+  "title": "ServiceStatus",
+  "description": "TV service status: the JSON carried as a string in the `status` value of the reply to {request: \"status\"} (see status-reply.schema.json).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "capture", "esp32", "hyperhdr", "configWarnings"],
+  "properties": {
+    "version": { "type": "string", "description": "TV package version (the project version, e.g. `1.1.0`)." },
+    "capture": { "$ref": "#/$defs/CaptureStatus" },
+    "esp32": { "$ref": "#/$defs/Esp32OutputStatus" },
+    "hyperhdr": { "$ref": "#/$defs/HyperHdrOutputStatus" },
+    "configWarnings": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Problems found in ambilight.json (the affected outputs are disabled)."
+    }
+  },
+  "$defs": {
+    "CaptureState": {
+      "title": "CaptureState",
+      "enum": ["waiting", "starting", "running", "paused", "failed"],
+      "description": "`waiting`: capture not started yet. `starting`: initialising. `running`: frames are captured. `paused`: stopped by the `pause` command until `resume`. `failed`: could not start; retried (see `retryInMs`)."
+    },
+    "CaptureFailure": {
+      "title": "CaptureFailure",
+      "enum": ["library", "symbols", "hardware"],
+      "description": "Why capture failed. `library` / `symbols`: the TV does not expose the capture API. `hardware`: the API is there but reported an unusable state."
+    },
+    "HwCondition": {
+      "title": "HwCondition",
+      "description": "What the hardware reported (`ppi_ve_get_rgb_measure_condition`) and the delay in use.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ret", "blocks", "blockW", "blockH", "fullW", "fullH", "hwDelayMs", "delayMs"],
+      "properties": {
+        "ret": { "type": "integer", "description": "Return code of the condition query (0 = OK)." },
+        "blocks": { "type": "integer", "description": "Measurement slots per cycle." },
+        "blockW": { "type": "integer", "x-unit": "px", "description": "Measurement block width." },
+        "blockH": { "type": "integer", "x-unit": "px", "description": "Measurement block height." },
+        "fullW": { "type": "integer", "x-unit": "px", "description": "Screen width in hardware pixels." },
+        "fullH": { "type": "integer", "x-unit": "px", "description": "Screen height in hardware pixels." },
+        "hwDelayMs": { "type": "integer", "x-unit": "ms", "description": "Delay the hardware asks for between setting a position and reading it." },
+        "delayMs": { "type": "integer", "x-unit": "ms", "description": "Delay actually used." }
+      }
+    },
+    "CaptureStatus": {
+      "title": "CaptureStatus",
+      "description": "Screen capture state. The frame fields (`frameMs` … `rgb`) are present once a frame was captured since the last (re)start.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state", "failure", "error", "failedAttempts", "frames"],
+      "dependentRequired": { "rgb": ["h", "v"] },
+      "properties": {
+        "state": { "$ref": "#/$defs/CaptureState" },
+        "failure": {
+          "anyOf": [{ "$ref": "#/$defs/CaptureFailure" }, { "type": "null" }],
+          "description": "Why the last start failed; null if it didn't."
+        },
+        "error": { "type": ["string", "null"], "description": "Error message of the last failure." },
+        "failedAttempts": { "type": "integer", "minimum": 0, "description": "Failed starts since the service started." },
+        "retryInMs": { "type": "integer", "minimum": 0, "x-unit": "ms", "description": "Time until the next start attempt; only while `failed`." },
+        "hw": { "$ref": "#/$defs/HwCondition" },
+        "frames": { "type": "integer", "minimum": 0, "description": "Frames captured since capture (re)started." },
+        "frameMs": { "type": "integer", "minimum": 0, "x-unit": "ms", "description": "Duration of the last frame." },
+        "lastFrameAgoMs": { "type": "integer", "minimum": 0, "x-unit": "ms", "description": "Time since the last frame." },
+        "reads": { "type": "integer", "minimum": 0, "description": "Samples read in the last frame." },
+        "badReads": { "type": "integer", "minimum": 0, "description": "How many of them returned an error (they keep the previous color)." },
+        "lastBadRet": { "type": "integer", "description": "Error code of the last failed read." },
+        "h": { "type": "integer", "minimum": 0, "description": "Samples per horizontal edge (top, bottom) in the last frame." },
+        "v": { "type": "integer", "minimum": 0, "description": "Samples per vertical edge (left, right) in the last frame." },
+        "rgb": {
+          "type": "string",
+          "pattern": "^(?:[0-9A-F]{6})*$",
+          "description": "Last frame's samples as uppercase hex, 2 × (h + v) × 3 bytes in frame order: top L→R, right T→B, bottom R→L, left B→T."
+        }
+      }
+    },
+    "OutputDisabled": {
+      "title": "OutputDisabled",
+      "description": "The output is turned off in ambilight.json.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled"],
+      "properties": {
+        "enabled": { "const": false }
+      }
+    },
+    "Esp32OutputEnabled": {
+      "title": "Esp32OutputEnabled",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled", "hosts", "framesSent", "sendErrors", "lastError"],
+      "properties": {
+        "enabled": { "const": true },
+        "hosts": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Discovered hosts frames are sent to (ESP32s and tools/server.py)."
+        },
+        "framesSent": { "type": "integer", "minimum": 0, "description": "Frames handed to the network. UDP has no replies: sent, not necessarily received." },
+        "sendErrors": { "type": "integer", "minimum": 0, "description": "Failed sends." },
+        "lastError": { "type": ["string", "null"], "description": "Message of the last failed send." }
+      }
+    },
+    "Esp32OutputStatus": {
+      "title": "Esp32OutputStatus",
+      "description": "UDP output to the discovered controllers.",
+      "oneOf": [{ "$ref": "#/$defs/OutputDisabled" }, { "$ref": "#/$defs/Esp32OutputEnabled" }]
+    },
+    "HyperHdrOutputEnabled": {
+      "title": "HyperHdrOutputEnabled",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled", "endpoint", "connected", "replies", "lastError"],
+      "properties": {
+        "enabled": { "const": true },
+        "endpoint": { "type": "string", "description": "`host:port` of the HyperHDR FlatBuffers server." },
+        "connected": { "type": "boolean", "description": "The TCP connection is open." },
+        "replies": { "type": "integer", "minimum": 0, "description": "Replies received from HyperHDR on this connection." },
+        "lastError": { "type": ["string", "null"], "description": "Message of the last connection error." }
+      }
+    },
+    "HyperHdrOutputStatus": {
+      "title": "HyperHdrOutputStatus",
+      "description": "TCP output to HyperHDR.",
+      "oneOf": [{ "$ref": "#/$defs/OutputDisabled" }, { "$ref": "#/$defs/HyperHdrOutputEnabled" }]
+    }
+  }
+}

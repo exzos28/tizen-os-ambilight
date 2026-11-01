@@ -1,0 +1,39 @@
+{
+  "version": "1.1.0",
+  "capture": {
+    "state": "running",
+    "failure": null,
+    "error": null,
+    "failedAttempts": 0,
+    "hw": {
+      "ret": 0,
+      "blocks": 2,
+      "blockW": 16,
+      "blockH": 16,
+      "fullW": 3840,
+      "fullH": 2160,
+      "hwDelayMs": 20,
+      "delayMs": 20
+    },
+    "frames": 4217,
+    "frameMs": 141,
+    "lastFrameAgoMs": 38,
+    "reads": 14,
+    "badReads": 0,
+    "lastBadRet": 0,
+    "h": 4,
+    "v": 3,
+    "rgb": "1A2B4C2030502A3A5E3040603C4A7046527A505A845A62904E5686424A7A36406E2C3664222C5A182250"
+  },
+  "esp32": {
+    "enabled": true,
+    "hosts": ["192.168.1.245"],
+    "framesSent": 4217,
+    "sendErrors": 0,
+    "lastError": null
+  },
+  "hyperhdr": {
+    "enabled": false
+  },
+  "configWarnings": []
+}

@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/exzos28/tizen-os-ambilight/main/protocol/schemas/service/status-reply.schema.json",
+  "title": "ServiceStatusReply",
+  "description": "The service's reply to ServiceStatusRequest, sent to the UI's reply port. A bundle of string key/values.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["status"],
+  "properties": {
+    "status": {
+      "type": "string",
+      "contentMediaType": "application/json",
+      "contentSchema": { "$ref": "status.schema.json" },
+      "description": "ServiceStatus as a JSON string."
+    }
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/exzos28/tizen-os-ambilight/main/protocol/schemas/service/command-result.schema.json",
+  "title": "ServiceCommandResult",
+  "description": "Outcome of a ServiceCommandRequest: the JSON carried as a string in the `result` value of ServiceCommandReply.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["ok", "error"],
+  "properties": {
+    "ok": { "type": "boolean", "description": "The command was carried out." },
+    "error": { "type": ["string", "null"], "description": "Why it wasn't; null when `ok`." }
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/exzos28/tizen-os-ambilight/main/protocol/schemas/esp32/save-power-request.schema.json",
+  "title": "SavePowerRequest",
+  "description": "POST /save/power body (application/x-www-form-urlencoded). Saved in NVS. Replies with Esp32Message.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["power"],
+  "properties": {
+    "power": {
+      "$ref": "common.schema.json#/$defs/flag",
+      "description": "1 = lighting on, 0 = off: the strip stays dark and UDP frames are ignored, in both modes (GET /config `power`)."
+    }
+  }
+}

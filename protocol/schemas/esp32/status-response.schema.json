@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/exzos28/tizen-os-ambilight/main/protocol/schemas/esp32/status-response.schema.json",
+  "title": "Esp32Status",
+  "description": "GET /status — firmware version and network state.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "ip", "mode", "ssid", "rssi", "connected", "gateway"],
+  "properties": {
+    "version": { "type": "string", "description": "Firmware version (the project version, e.g. `1.1.0`)." },
+    "ip": { "type": "string", "description": "Current IPv4 address." },
+    "mode": {
+      "enum": ["STA", "AP"],
+      "description": "`STA`: joined a Wi-Fi network. `AP`: the setup access point `ambilight-setup` is open."
+    },
+    "ssid": { "type": "string", "description": "Network the station is connected to; empty when not connected." },
+    "rssi": { "type": "integer", "x-unit": "dBm", "description": "Signal strength of the station connection (0 when not connected)." },
+    "connected": { "type": "boolean", "description": "The station is connected to the Wi-Fi network." },
+    "gateway": { "type": "string", "description": "Gateway IPv4 address (`0.0.0.0` when not connected)." }
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "led_top": 10,
+  "led_right": 6,
+  "led_bottom": 10,
+  "led_left": 6,
+  "start_corner": 2,
+  "clockwise": 1
+}

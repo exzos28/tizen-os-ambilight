@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/exzos28/tizen-os-ambilight/main/protocol/schemas/esp32/calibration-request.schema.json",
+  "title": "CalibrationRequest",
+  "description": "POST /save/calibration and POST /preview/calibration body (application/x-www-form-urlencoded; shown here as the values before encoding). Omitted fields keep their value, out-of-range values are clamped. /save/calibration saves the layout, sets `num_leds` to the sum of the sides and shows the calibration preview; /preview/calibration only shows the preview. Replies with Esp32Message.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "led_top": { "$ref": "settings.schema.json#/$defs/led_top" },
+    "led_right": { "$ref": "settings.schema.json#/$defs/led_right" },
+    "led_bottom": { "$ref": "settings.schema.json#/$defs/led_bottom" },
+    "led_left": { "$ref": "settings.schema.json#/$defs/led_left" },
+    "start_corner": { "$ref": "settings.schema.json#/$defs/start_corner" },
+    "clockwise": {
+      "$ref": "common.schema.json#/$defs/flag",
+      "description": "Strip direction from the start corner: 1 = clockwise, 0 = counter-clockwise (GET /config `clockwise`)."
+    }
+  }
+}

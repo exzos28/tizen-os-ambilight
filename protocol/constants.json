@@ -1,0 +1,96 @@
+{
+  "$schema": "./constants.schema.json",
+  "ports": {
+    "description": "Network ports.",
+    "cppPrefix": "PORT",
+    "cppType": "uint16_t",
+    "values": {
+      "esp32Http": { "value": 80, "description": "ESP32 web UI and HTTP API." },
+      "esp32Telnet": { "value": 2323, "description": "ESP32 remote log (Telnet)." },
+      "esp32Ota": { "value": 3232, "description": "ESP32 Arduino OTA invitation (UDP)." },
+      "captiveDns": { "value": 53, "description": "Captive-portal DNS of the setup access point (UDP)." },
+      "eventLog": { "value": 9000, "description": "TV service event log, HTTP POST JSON; only tools/server.py listens." },
+      "frame": { "value": 9001, "description": "UDP color frames from the TV service." },
+      "discovery": { "value": 9003, "description": "UDP discovery broadcast." },
+      "hyperhdr": { "value": 19400, "description": "Default HyperHDR FlatBuffers server port (TCP)." }
+    }
+  },
+  "discovery": {
+    "description": "Discovery: the TV service broadcasts `magic` to UDP `ports.discovery`; every listener replies by unicast with `magic + replySeparator + <own IPv4>`.",
+    "cppPrefix": "DISCOVERY",
+    "values": {
+      "magic": { "value": "AMBILIGHT_DISCOVER", "description": "Probe payload (ASCII, no terminator) and reply prefix." },
+      "replySeparator": { "value": ":", "description": "Separates the magic from the IP in the reply." },
+      "broadcastAddress": { "value": "255.255.255.255", "description": "Where the probe is sent." }
+    }
+  },
+  "frame": {
+    "description": "UDP color frame: [hCount u8][vCount u8], then 2 × (hCount + vCount) RGB triplets clockwise from the top-left corner (top L→R, right T→B, bottom R→L, left B→T). No header or checksum.",
+    "cppPrefix": "FRAME",
+    "values": {
+      "headerBytes": { "value": 2, "description": "hCount and vCount bytes before the samples." },
+      "bytesPerSample": { "value": 3, "description": "R, G, B, 8 bits each." },
+      "maxSideCount": { "value": 32, "description": "Largest hCount / vCount the ESP32 accepts." },
+      "maxBytes": { "value": 512, "description": "Largest datagram the ESP32 accepts." }
+    }
+  },
+  "esp32": {
+    "description": "ESP32 controller limits and fixed values.",
+    "cppPrefix": "ESP32",
+    "values": {
+      "maxLeds": { "value": 1500, "description": "Largest num_leds (GET /config max_leds)." },
+      "maxLedsPerSide": { "value": 255, "description": "Largest LED count of one screen side." },
+      "apSsid": { "value": "ambilight-setup", "description": "Open setup access point opened without a usable Wi-Fi network." },
+      "apIp": { "value": "192.168.4.1", "description": "Device address in setup access point mode." },
+      "calibrationPreviewMs": { "value": 10000, "cppType": "uint32_t", "description": "How long the calibration preview stays on the strip, ms." },
+      "identifyBlinks": { "value": 3, "description": "White blinks shown by POST /identify." },
+      "identifyDurationMs": { "value": 2000, "cppType": "uint32_t", "description": "Approximate duration of the POST /identify blinking, ms." }
+    }
+  },
+  "httpPaths": {
+    "description": "ESP32 HTTP API paths. Every POST body is application/x-www-form-urlencoded and every POST replies with {\"message\": string}.",
+    "cppPrefix": "PATH",
+    "values": {
+      "status": { "value": "/status", "description": "GET: Esp32Status." },
+      "config": { "value": "/config", "description": "GET: Esp32Config." },
+      "metrics": { "value": "/metrics", "description": "GET: Esp32Metrics." },
+      "saveLeds": { "value": "/save/leds", "description": "POST SaveLedsRequest." },
+      "saveCalibration": { "value": "/save/calibration", "description": "POST CalibrationRequest: save and preview." },
+      "previewCalibration": { "value": "/preview/calibration", "description": "POST CalibrationRequest: preview only." },
+      "saveMode": { "value": "/save/mode", "description": "POST SaveModeRequest." },
+      "saveNetwork": { "value": "/save/network", "description": "POST SaveNetworkRequest; restarts the device." },
+      "savePower": { "value": "/save/power", "description": "POST SavePowerRequest." },
+      "identify": { "value": "/identify", "description": "POST, no body: blink the strip white, then restore; not saved." },
+      "restart": { "value": "/restart", "description": "POST, no body: reply, then restart." }
+    }
+  },
+  "cors": {
+    "description": "CORS headers of the ESP32 HTTP API: every response has Access-Control-Allow-Origin; OPTIONS on any path answers `preflightStatus` with the allow headers.",
+    "cppPrefix": "CORS",
+    "values": {
+      "allowOrigin": { "value": "*", "description": "Access-Control-Allow-Origin, on every response." },
+      "allowMethods": { "value": "GET, POST, OPTIONS", "description": "Access-Control-Allow-Methods, on OPTIONS." },
+      "allowHeaders": { "value": "Content-Type", "description": "Access-Control-Allow-Headers, on OPTIONS." },
+      "preflightStatus": { "value": 204, "cppType": "uint16_t", "description": "HTTP status of the OPTIONS reply." }
+    }
+  },
+  "messagePort": {
+    "description": "Tizen MessagePort IPC between the TV UI and the TV service (local to the TV). Messages are bundles of string key/values.",
+    "values": {
+      "servicePort": { "value": "ambilight.status", "description": "Local port the service listens on." },
+      "uiPort": { "value": "ambilight.ui", "description": "Local port the UI listens on and passes as the reply port." },
+      "requestKey": { "value": "request", "description": "Request kind: `status` or `command`." },
+      "commandKey": { "value": "command", "description": "Command of a `command` request." },
+      "statusKey": { "value": "status", "description": "Reply value with the ServiceStatus JSON." },
+      "resultKey": { "value": "result", "description": "Reply value with the ServiceCommandResult JSON." }
+    }
+  },
+  "tvApp": {
+    "description": "Tizen application IDs of the TV package.",
+    "values": {
+      "packageId": { "value": "fCAYP0k0uD", "description": "Tizen package ID." },
+      "serviceAppId": { "value": "fCAYP0k0uD.Service", "description": "Service application (AppControl `command=start|stop`, message port owner)." },
+      "uiAppId": { "value": "fCAYP0k0uD.ui", "description": "UI (launcher) application." }
+    }
+  }
+}

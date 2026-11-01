@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/exzos28/tizen-os-ambilight/main/protocol/schemas/event-log/event.schema.json",
+  "title": "EventLogEntry",
+  "description": "Event the TV service posts as JSON (HTTP POST to port 9000, path `/`) to every discovered host, fire-and-forget. Only tools/server.py listens there.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["event", "app", "timestamp"],
+  "properties": {
+    "event": { "type": "string", "description": "Event name, e.g. `CaptureStart`, `HwCondition`, `Frame`, `CaptureError`." },
+    "app": { "type": "string", "description": "Sender, `Service` for the TV service." },
+    "timestamp": { "type": "string", "description": "UTC time in ISO 8601 round-trip format, e.g. `2026-10-31T12:00:00.0000000Z`." },
+    "data": { "type": "string", "description": "Event details, free text." }
+  }
+}
