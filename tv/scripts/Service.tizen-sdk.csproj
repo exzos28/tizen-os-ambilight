@@ -1,0 +1,38 @@
+<!--
+  Release build of tv/service with the Tizen.NET.Sdk MSBuild SDK, which builds a .tpk with a
+  plain .NET SDK on Linux/macOS (no Tizen workload, no VS Code extension). make_package.sh
+  copies tv/service to a scratch directory and puts this file in place of Service.csproj;
+  the sources, manifest and resources are the same. Keep PackageReferences in sync with
+  tv/service/Service.csproj.
+-->
+<Project Sdk="Tizen.NET.Sdk/1.1.9">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>tizen90</TargetFramework>
+    <AssemblyName>Service</AssemblyName>
+    <RootNamespace>Service</RootNamespace>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <DebugType>None</DebugType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Apache-2.0; used to encode HyperHDR FlatBuffers messages (HyperHdrProtocol.cs) -->
+    <PackageReference Include="Google.FlatBuffers" Version="25.2.10" />
+  </ItemGroup>
+
+  <!-- Tizen.NET.Sdk collects res/ and shared/res/ with the Windows-only glob "res\**\*", which
+       matches nothing on Linux/macOS, so list the resources explicitly. make_package.sh checks
+       that they end up in the .tpk. -->
+  <ItemGroup>
+    <TizenTpkFiles Include="res/ambilight.json">
+      <TizenTpkSubDir>res/</TizenTpkSubDir>
+      <TizenTpkFileName>ambilight.json</TizenTpkFileName>
+    </TizenTpkFiles>
+    <TizenTpkFiles Include="shared/res/Service.png">
+      <TizenTpkSubDir>shared/res/</TizenTpkSubDir>
+      <TizenTpkFileName>Service.png</TizenTpkFileName>
+    </TizenTpkFiles>
+  </ItemGroup>
+
+</Project>

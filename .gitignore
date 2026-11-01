@@ -57,3 +57,6 @@ Thumbs.db
 
 # === Node (changesets tooling at the repo root) ===
 node_modules/
+
+# === TV package (tv/scripts/make_package.sh) ===
+tv/release/
