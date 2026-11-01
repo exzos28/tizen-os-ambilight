@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Text;
 using System.Text.Json;
@@ -16,6 +17,7 @@ namespace Service
         private readonly object _lock = new object();
 
         private string _state = "waiting";   // waiting | starting | running | failed
+        private bool _paused;                // reported as state "paused", whatever _state is
         private CaptureFailure _failure;
         private string _error;
         private int _failedAttempts;
@@ -66,6 +68,13 @@ namespace Service
             }
         }
 
+        // Paused by the launcher (CaptureLoop.Pause): the status says "paused" until resumed,
+        // even while the stopped run's last state (running, failed) is still in place.
+        public void SetPaused(bool paused)
+        {
+            lock (_lock) _paused = paused;
+        }
+
         public void RetryIn(int delayMs)
         {
             lock (_lock) _retryAtTicks = Environment.TickCount64 + delayMs;
@@ -93,12 +102,13 @@ namespace Service
             lock (_lock)
             {
                 long now = Environment.TickCount64;
+                string state = _paused ? "paused" : _state;
                 w.WriteStartObject();
-                w.WriteString("state", _state);
+                w.WriteString("state", state);
                 w.WriteString("failure", _failure == CaptureFailure.None ? null : _failure.ToString().ToLowerInvariant());
                 w.WriteString("error", _error);
                 w.WriteNumber("failedAttempts", _failedAttempts);
-                if (_state == "failed" && _retryAtTicks > 0) w.WriteNumber("retryInMs", Math.Max(0, _retryAtTicks - now));
+                if (state == "failed" && _retryAtTicks > 0) w.WriteNumber("retryInMs", Math.Max(0, _retryAtTicks - now));
 
                 if (_hasHw)
                 {
@@ -137,7 +147,35 @@ namespace Service
         {
             using var ms = new MemoryStream();
             using (var w = new Utf8JsonWriter(ms)) write(w);
-            return Encoding.UTF8.GetString(ms.ToArray());
+            return Encoding.UTF8.GetString(ms.GetBuffer(), 0, (int)ms.Length);
+        }
+
+        // The whole reply for the launcher's status panel (StatusPort). version is the package
+        // version (null if it could not be read); a null output writer means that output is
+        // disabled in ambilight.json.
+        public static void WriteService(Utf8JsonWriter w, string version, CaptureStatus capture,
+            Action<Utf8JsonWriter> esp32, Action<Utf8JsonWriter> hyperHdr, IReadOnlyList<string> configWarnings)
+        {
+            w.WriteStartObject();
+            w.WriteString("version", version);
+            w.WritePropertyName("capture");
+            capture.WriteJson(w);
+            w.WritePropertyName("esp32");
+            WriteOutput(w, esp32);
+            w.WritePropertyName("hyperhdr");
+            WriteOutput(w, hyperHdr);
+            w.WriteStartArray("configWarnings");
+            foreach (var warning in configWarnings) w.WriteStringValue(warning);
+            w.WriteEndArray();
+            w.WriteEndObject();
+        }
+
+        private static void WriteOutput(Utf8JsonWriter w, Action<Utf8JsonWriter> write)
+        {
+            if (write != null) { write(w); return; }
+            w.WriteStartObject();
+            w.WriteBoolean("enabled", false);
+            w.WriteEndObject();
         }
     }
 }

@@ -19,7 +19,7 @@ wiring in [HARDWARE.md](HARDWARE.md).
 │                                                                    │
 │  Service_App.cs — lifecycle, outputs, event log                    │
 │  Discovery.cs — finds ESP32s in the background                     │
-│  StatusPort.cs — answers the launcher's status requests            │
+│  StatusPort.cs — answers the launcher's status requests, commands  │
 │  tv/ui — launcher web app (Start / Stop, status panel)             │
 └──────────────────┬───────────────────────────────────┬─────────────┘
                    │ UDP 9001 (same LAN)               │ TCP 19400 (optional)
@@ -54,13 +54,15 @@ wiring in [HARDWARE.md](HARDWARE.md).
    quick attempts, then every 10 s; once hosts are known it re-probes every 30 s, so new
    controllers and IP changes are picked up while streaming. A host is dropped after
    2 minutes without a reply.
-3. Starts the enabled outputs and, after 2 s, the capture loop (`Capture.Run()`). Capture
-   does **not** wait for discovery — frames go to whichever outputs have somewhere to send.
+3. Starts the enabled outputs and, after 2 s, the capture loop (`Capture.Run()`, run and
+   restarted by `CaptureLoop.cs` on its own thread). Capture does **not** wait for
+   discovery — frames go to whichever outputs have somewhere to send.
 4. If capture fails (library or symbols missing, invalid HW condition), retries after
    5 s, 10 s, then every 30 s.
 5. AppControl `command=start` (the launcher's *Start*) probes for hosts, reconnects
-   HyperHDR and re-initialises capture (re-reading the hardware condition) immediately;
-   `command=stop` exits the service.
+   HyperHDR and re-initialises capture (re-reading the hardware condition) immediately,
+   also ending a pause; `command=stop` exits the service. The launcher can also pause and
+   resume capture over the message port ([commands](#commands)).
 6. Events logged before any log host is known (config, capture init) are queued — up to
    100 — and sent once discovery finds one.
 7. Opens the local message port `ambilight.status` (`StatusPort.cs`) for the launcher's
@@ -130,7 +132,31 @@ Defaults: `hCount = 4`, `vCount = 3` → 14 points → 7 batches × 20 ms ≈ 14
 
 `SendLog()` posts JSON events (`CaptureStart`, `HwCondition`, `Frame`, `CaptureError`, …)
 over HTTP to port 9000 of every discovered host. Only `tools/server.py` listens there;
-failures are ignored.
+failures are ignored. The `Runtime` event at startup reports the package version, the .NET
+version, the GC mode (see [Memory](#memory)) and the culture. Numbers in events and in the
+status are formatted culture-independently (`InvariantCulture`): Tizen sets the process
+culture from the TV's region settings.
+
+### Memory
+
+The service starts with the TV and runs all the time, on TVs with little free RAM, so it
+avoids memory it doesn't need:
+
+- **GC**: `GCSettings.LatencyMode = Batch`, set at the start of `Main` — full collections
+  block instead of running in the background, so there is no background GC thread and no
+  extra memory while one runs; with a heap this small the pauses don't matter. Runtime
+  options in `Service.csproj` (`InvariantGlobalization`, `ConcurrentGarbageCollection`,
+  `TieredCompilation`, …) would have **no effect**: they only go into
+  `Service.runtimeconfig.json`, and Tizen's `dotnet-launcher` starts CoreCLR itself with a
+  fixed set of properties (often in a pre-started candidate process) without reading it.
+  That's also why there is no invariant-globalization mode — ICU is the platform's.
+- **Lazy loading**: the event log's `HttpClient` (and `System.Net.Http`) is created only
+  once a host is known; `Google.FlatBuffers` is loaded only by `HyperHdrProtocol`, which only
+  the HyperHDR output's threads call — so only when HyperHDR is enabled (a CI test checks
+  that config parsing and the status JSON don't load it).
+- **Per frame**: a still picture reuses the previous `EdgeFrame` instead of allocating a new
+  one (a frame is never changed once handed out, since outputs may keep it); the HyperHDR
+  sender reuses its image buffer and wait-handle array.
 
 ---
 
@@ -149,7 +175,8 @@ own port `ambilight.ui` as the reply port. The service answers `{status: "<JSON>
 
 | Section | Fields | Shown as |
 |---|---|---|
-| `capture` | `state` (`waiting` / `starting` / `running` / `failed`), `failure` (`library` / `symbols` / `hardware`), `error`, `retryInMs`, `hw` (HwCondition), `frameMs`, `lastFrameAgoMs`, `reads`, `badReads`, `lastBadRet`, `h`, `v`, `rgb` (hex, `EdgeFrame` order) | Verdict, *Screen capture* row, preview of the captured colors |
+| `version` | Package version (`tizen-manifest.xml` / `config.xml`, synced from `package.json`), read at run time with `app_get_version`; `null` if it can't be read | — |
+| `capture` | `state` (`waiting` / `starting` / `running` / `paused` / `failed`), `failure` (`library` / `symbols` / `hardware`; `null` with `failed` = unexpected exception), `error`, `failedAttempts`, `retryInMs`, `hw` (HwCondition), `frames`, `frameMs`, `lastFrameAgoMs`, `reads`, `badReads`, `lastBadRet`, `h`, `v`, `rgb` (hex, `EdgeFrame` order) | Verdict, *Screen capture* row, preview of the captured colors |
 | `esp32` | `enabled`, `hosts` (discovered; also `tools/server.py`), `framesSent`, `sendErrors`, `lastError` | *ESP32* row. UDP has no replies, so *Sending* means handed to the network, not received |
 | `hyperhdr` | `enabled`, `endpoint`, `connected`, `replies`, `lastError` | *HyperHDR* row |
 | `configWarnings` | `ambilight.json` problems | Detail line |
@@ -157,10 +184,27 @@ own port `ambilight.ui` as the reply port. The service answers `{status: "<JSON>
 `library` / `symbols` failures mean the TV doesn't expose the capture API; `hardware`
 means `get_rgb_measure_condition` reported an unusable state (retried). A `running` capture
 whose reads all fail, or with no frame for 2 s, is shown as not working. No reply from the
-port means the service isn't running (or doesn't answer for 3 s).
+port means the service isn't running (or doesn't answer for 3 s). `paused` (see below) keeps
+the last frame's fields; `retryInMs` is left out, since nothing is retried while paused.
 
 The panel and the log stay at least ~125 px away from the screen edges, where the service
 samples, so they don't cover the Debug color wheel there.
+
+### Commands
+
+The same port takes commands (`ServiceCommands.cs`): `{request: "command", command: "<name>"}`,
+answered to the reply port with `{result: "<JSON>"}`, where the JSON is
+`{"ok": true|false, "error": null|"<why>"}`.
+
+| `command` | Effect |
+|---|---|
+| `pause` | Stops capture and keeps it stopped — no retries — until `resume` (or AppControl `command=start`, or a restart of the service). Outputs stay connected; `capture.state` becomes `paused` |
+| `resume` | Re-initialises capture right away, like AppControl `command=start` does for capture (also skips a pending retry delay) |
+| `rediscover` | Probes for ESP32s / `tools/server.py` now instead of at the next scheduled attempt |
+
+A missing, unknown (names are case-sensitive) or failing command answers `ok: false` with the
+reason in `error`. A pause is not saved: the service starts capturing again when it restarts
+(e.g. with the TV).
 
 ---
 

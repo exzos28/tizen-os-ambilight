@@ -1,6 +1,7 @@
 using System;
 using System.Runtime.InteropServices;
 using System.Threading;
+using static System.FormattableString;
 
 namespace Service
 {
@@ -86,17 +87,16 @@ namespace Service
 
         #endregion
 
-        static volatile bool _running;
         static readonly object _runLock = new object();
 
-        // Returns true on clean stop (Stop() called or token cancelled), false on failure.
-        // Hands every captured frame to onFrame (on this thread); onFrame must not block.
-        // Progress and failures also go to status, for the launcher's status panel.
+        // Returns true on clean stop (token cancelled — CaptureLoop does that to pause,
+        // re-initialise or exit), false on failure. Hands every captured frame to onFrame (on
+        // this thread); onFrame must not block. Progress and failures also go to status, for
+        // the launcher's status panel.
         public static bool Run(Action<EdgeFrame> onFrame, Action<string, string> log, CaptureStatus status, CancellationToken token)
         {
             lock (_runLock)
             {
-                _running = true;
                 status.Starting();
                 log("CaptureStart", $"loading {LibraryName}");
 
@@ -124,9 +124,7 @@ namespace Service
                 }
 
                 int ret = getCondition(out VEPPIRgbMeasureInfo hw);
-                log("HwCondition", $"ret={ret} blocks={hw.measureBlockCnt} " +
-                    $"blockSize={hw.measureBlockWidth}x{hw.measureBlockHeight} " +
-                    $"full={hw.measureFullWidth}x{hw.measureFullHeight} delay={hw.measureDelay}ms");
+                log("HwCondition", Invariant($"ret={ret} blocks={hw.measureBlockCnt} blockSize={hw.measureBlockWidth}x{hw.measureBlockHeight} full={hw.measureFullWidth}x{hw.measureFullHeight} delay={hw.measureDelay}ms"));
                 int delay = Config.CaptureDelayMs >= 0 ? Config.CaptureDelayMs : hw.measureDelay;
                 status.Hardware(ret, hw.measureBlockCnt, hw.measureBlockWidth, hw.measureBlockHeight,
                     hw.measureFullWidth, hw.measureFullHeight, hw.measureDelay, delay);
@@ -134,7 +132,7 @@ namespace Service
                 if (ret != 0 || hw.measureBlockCnt < 1 || hw.measureFullWidth < 1)
                 {
                     log("CaptureError", "invalid HW condition");
-                    status.Failed(CaptureFailure.Hardware, $"invalid HW condition: ret={ret} blocks={hw.measureBlockCnt} full={hw.measureFullWidth}x{hw.measureFullHeight}");
+                    status.Failed(CaptureFailure.Hardware, Invariant($"invalid HW condition: ret={ret} blocks={hw.measureBlockCnt} full={hw.measureFullWidth}x{hw.measureFullHeight}"));
                     return false;
                 }
 
@@ -180,10 +178,10 @@ namespace Service
 
                 int numBatches = (totalPoints + blocksPerCycle - 1) / blocksPerCycle;
 
-                log("CaptureReady", $"points={totalPoints} h={hCount} v={vCount} " +
-                    $"batches={numBatches} blocksPerCycle={blocksPerCycle} delay={delay}ms");
+                log("CaptureReady", Invariant($"points={totalPoints} h={hCount} v={vCount} batches={numBatches} blocksPerCycle={blocksPerCycle} delay={delay}ms"));
 
                 byte[] colors = new byte[totalPoints * 3];
+                EdgeFrame frame = null;   // the last frame handed out
                 int frameCount = 0;
                 var sw = System.Diagnostics.Stopwatch.StartNew();
 
@@ -195,14 +193,14 @@ namespace Service
                 }
                 if (delay > 0) Thread.Sleep(delay);
 
-                while (_running && !token.IsCancellationRequested)
+                while (!token.IsCancellationRequested)
                 {
                     long frameStart = sw.ElapsedMilliseconds;
                     int badReads = 0, lastBadRet = 0;
 
                     for (int batchIdx = 0; batchIdx < numBatches; batchIdx++)
                     {
-                        if (!_running || token.IsCancellationRequested) break;
+                        if (token.IsCancellationRequested) break;
 
                         int curStart = batchIdx * blocksPerCycle;
                         int curSize = Math.Min(blocksPerCycle, totalPoints - curStart);
@@ -237,8 +235,12 @@ namespace Service
                     }
 
                     frameCount++;
-                    if (!_running || token.IsCancellationRequested) break;
-                    var frame = new EdgeFrame(hCount, vCount, (byte[])colors.Clone());   // outputs may keep it
+                    if (token.IsCancellationRequested) break;
+                    // Outputs and the status may keep the frame they are given, so a frame is never
+                    // changed once handed out. A new one is made only when the colors changed;
+                    // a still picture keeps handing out the same, unchanged frame.
+                    if (frame == null || !colors.AsSpan().SequenceEqual(frame.Rgb))
+                        frame = new EdgeFrame(hCount, vCount, (byte[])colors.Clone());
                     long actualMs = sw.ElapsedMilliseconds - frameStart;
                     status.Frame(frame, (int)actualMs, totalPoints, badReads, lastBadRet);
                     onFrame(frame);
@@ -247,19 +249,14 @@ namespace Service
                     {
                         var c = frame.Rgb;
                         int t = frame.TopOffset, r = frame.RightOffset, l = frame.LeftOffset;
-                        log("Frame", $"#{frameCount} {(actualMs > 0 ? 1000 / actualMs : 999)}fps " +
-                            $"p0=({c[t]},{c[t + 1]},{c[t + 2]})");
-                        log("SideColors",
-                            $"right[0]=({c[r]},{c[r + 1]},{c[r + 2]}) " +
-                            $"left[0]=({c[l]},{c[l + 1]},{c[l + 2]})");
+                        log("Frame", Invariant($"#{frameCount} {(actualMs > 0 ? 1000 / actualMs : 999)}fps p0=({c[t]},{c[t + 1]},{c[t + 2]})"));
+                        log("SideColors", Invariant($"right[0]=({c[r]},{c[r + 1]},{c[r + 2]}) left[0]=({c[l]},{c[l + 1]},{c[l + 2]})"));
                     }
                 }
 
-                return true; // clean stop via Stop()
+                return true; // clean stop: token cancelled
             }
         }
-
-        public static void Stop() => _running = false;
 
         static int Clamp(int val, int min, int max)
         {

@@ -1,27 +1,28 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Net.Http;
+using System.Runtime;
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
-using System.Threading;
-using System.Threading.Tasks;
 using Tizen.Applications;
+using static System.FormattableString;
 
 namespace Service
 {
-    class App : ServiceApplication
+    class App : ServiceApplication, ICommandTarget
     {
-        private static readonly HttpClient _http = new HttpClient { Timeout = TimeSpan.FromSeconds(3) };
-        private volatile bool _stopping;
-        private CancellationTokenSource _cts;
         private Discovery _discovery;
         private Esp32Output _esp32;
         private HyperHdrOutput _hyperHdr;
-        private volatile bool _restartCapture;
         private OutputConfig _config;
+        private CaptureLoop _capture;
         private readonly CaptureStatus _captureStatus = new CaptureStatus();
         private StatusPort _statusPort;
+        private string _version;   // package version, null if it could not be read
+        private static GCLatencyMode _initialGcLatency;
 
         // Events logged before any log host is known (startup: config, capture init) are
         // kept here and sent once discovery finds one, instead of being dropped.
@@ -34,7 +35,7 @@ namespace Service
         // listens there; requests to ESP32s fail silently.
         private void SendLog(string eventName, string extra = null)
         {
-            var json = $"{{\"event\":\"{eventName}\",\"app\":\"Service\",\"timestamp\":\"{DateTime.UtcNow:o}\"" +
+            var json = $"{{\"event\":\"{eventName}\",\"app\":\"Service\",\"timestamp\":\"{DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture)}\"" +
                        (extra != null ? $",\"data\":{Escape(extra)}" : "") + "}";
             var hosts = _discovery?.Hosts;
             if (hosts == null || hosts.Length == 0)
@@ -61,6 +62,10 @@ namespace Service
             foreach (var json in pending) Post(hosts, json);
         }
 
+        // Only called once a host is known, so a TV with no ESP32 or tools/server.py on the
+        // network never creates the HttpClient (nor loads System.Net.Http). NoInlining keeps
+        // the HTTP types out of the callers.
+        [MethodImpl(MethodImplOptions.NoInlining)]
         private static async void Post(string[] hosts, string json)
         {
             foreach (var host in hosts)
@@ -68,10 +73,16 @@ namespace Service
                 try
                 {
                     using var content = new StringContent(json, Encoding.UTF8, "application/json");
-                    await _http.PostAsync($"http://{host}:{Config.HttpPort}", content);
+                    await EventLogHttp.Client.PostAsync(Invariant($"http://{host}:{Config.HttpPort}"), content);
                 }
                 catch (Exception ex) { Console.Error.WriteLine($"[SendLog] {host}: {ex.Message}"); }
             }
+        }
+
+        // Created on first use, by the (thread-safe) type initializer.
+        private static class EventLogHttp
+        {
+            public static readonly HttpClient Client = new HttpClient { Timeout = TimeSpan.FromSeconds(3) };
         }
 
         private static string Escape(string s)
@@ -92,8 +103,7 @@ namespace Service
         protected override void OnCreate()
         {
             base.OnCreate();
-            _cts = new CancellationTokenSource();
-            var token = _cts.Token;
+            _version = ReadVersion();
 
             var config = _config = OutputConfig.Load(Path.Combine(DirectoryInfo.Resource, Config.OutputConfigFile));
 
@@ -108,66 +118,49 @@ namespace Service
             _discovery.Start();
 
             if (config.Esp32Enabled) _esp32 = new Esp32Output(_discovery, (e, d) => SendLog(e, d));
+            // Google.FlatBuffers is loaded only when HyperHdrProtocol is first used, on the
+            // HyperHDR sender thread — so only when HyperHDR is enabled.
             if (config.HyperHdr.Enabled)
             {
                 _hyperHdr = new HyperHdrOutput(config.HyperHdr, (e, d) => SendLog(e, d));
                 _hyperHdr.Start();
             }
 
-            // The launcher's status panel asks here whether capture and the outputs work.
-            _statusPort = StatusPort.TryStart(BuildStatusJson, (e, d) => SendLog(e, d));
+            // The launcher's status panel asks here whether capture and the outputs work, and
+            // sends its commands (pause / resume / rediscover).
+            _statusPort = StatusPort.TryStart(BuildStatusJson, command => ServiceCommands.Execute(command, this), (e, d) => SendLog(e, d));
 
-            Task.Run(async () =>
+            // Queued until a log host is known (see SendLog), so these aren't lost.
+            SendLog("Runtime", Invariant($"version={_version ?? "unknown"} dotnet={Environment.Version} serverGc={GCSettings.IsServerGC} gcLatency={_initialGcLatency}->{GCSettings.LatencyMode} culture={CultureInfo.CurrentCulture.Name} heap={GC.GetTotalMemory(false)}"));
+            SendLog("Config", $"esp32={config.Esp32Enabled} hyperhdr={(config.HyperHdr.Enabled ? _hyperHdr.Endpoint : "off")}");
+            foreach (var warning in config.Warnings) SendLog("ConfigWarning", warning);
+
+            // First run after 2 s; failures retried after 5 s, 10 s, then every 30 s.
+            _capture = new CaptureLoop(
+                token => Capture.Run(OnFrame, (evt, data) => SendLog(evt, data), _captureStatus, token),
+                _captureStatus, (e, d) => SendLog(e, d), 2000, new[] { 5_000, 10_000, 30_000 });
+            _capture.Start();
+        }
+
+        // The package version from tizen-manifest.xml / config.xml (synced from package.json
+        // by scripts/sync-versions.mjs), via app_get_version — needs no privilege.
+        private string ReadVersion()
+        {
+            try
             {
-                try { await Task.Delay(2000, token); } catch (OperationCanceledException) { return; }
-
-                // Queued until a log host is known (see SendLog), so these aren't lost.
-                SendLog("Config", $"esp32={config.Esp32Enabled} hyperhdr={(config.HyperHdr.Enabled ? _hyperHdr.Endpoint : "off")}");
-                foreach (var warning in config.Warnings) SendLog("ConfigWarning", warning);
-
-                int[] backoffMs = { 5_000, 10_000, 30_000 };
-                int attempt = 0;
-                while (!token.IsCancellationRequested && !_stopping)
-                {
-                    bool cleanStop = Capture.Run(OnFrame, (evt, data) => SendLog(evt, data), _captureStatus, token);
-                    if (token.IsCancellationRequested || _stopping) break;
-                    if (cleanStop)
-                    {
-                        if (!_restartCapture) break;
-                        _restartCapture = false;   // Start pressed: re-init capture right away
-                        attempt = 0;
-                        continue;
-                    }
-
-                    int delay = backoffMs[Math.Min(attempt, backoffMs.Length - 1)];
-                    attempt++;
-                    _captureStatus.RetryIn(delay);
-                    SendLog("CaptureRetry", $"attempt={attempt} retryIn={delay}ms");
-                    try { await Task.Delay(delay, token); } catch (OperationCanceledException) { break; }
-                }
-            });
+                string version = this.Version;
+                if (!string.IsNullOrEmpty(version)) return version;
+                SendLog("VersionUnknown", "app_get_version returned no version");
+            }
+            catch (Exception ex) { SendLog("VersionUnknown", ex.Message); }
+            return null;
         }
 
         // Reply for the launcher's status panel (StatusPort). Runs on the main thread.
-        private string BuildStatusJson() => StatusJson.Build(w =>
-        {
-            w.WriteStartObject();
-            w.WritePropertyName("capture");
-            _captureStatus.WriteJson(w);
-
-            w.WritePropertyName("esp32");
-            if (_esp32 != null) _esp32.WriteStatus(w);
-            else { w.WriteStartObject(); w.WriteBoolean("enabled", false); w.WriteEndObject(); }
-
-            w.WritePropertyName("hyperhdr");
-            if (_hyperHdr != null) _hyperHdr.WriteStatus(w);
-            else { w.WriteStartObject(); w.WriteBoolean("enabled", false); w.WriteEndObject(); }
-
-            w.WriteStartArray("configWarnings");
-            foreach (var warning in _config.Warnings) w.WriteStringValue(warning);
-            w.WriteEndArray();
-            w.WriteEndObject();
-        });
+        private string BuildStatusJson() => StatusJson.Build(w => StatusJson.WriteService(w, _version, _captureStatus,
+            _esp32 != null ? (Action<Utf8JsonWriter>)_esp32.WriteStatus : null,
+            _hyperHdr != null ? (Action<Utf8JsonWriter>)_hyperHdr.WriteStatus : null,
+            _config.Warnings));
 
         // Called on the capture thread for every frame; must not block.
         private void OnFrame(EdgeFrame frame)
@@ -176,31 +169,33 @@ namespace Service
             _hyperHdr?.Offer(frame);    // mailbox; sent on the HyperHDR thread
         }
 
+        // Launcher commands (StatusPort → ServiceCommands), on the main thread.
+        void ICommandTarget.Pause() => (_capture ?? throw new InvalidOperationException("capture is not set up")).Pause();
+        void ICommandTarget.Resume() => (_capture ?? throw new InvalidOperationException("capture is not set up")).Restart();
+        void ICommandTarget.Rediscover() => (_discovery ?? throw new InvalidOperationException("discovery is not running")).TriggerNow();
+
         protected override void OnAppControlReceived(AppControlReceivedEventArgs e)
         {
             base.OnAppControlReceived(e);
             string command = "unknown";
             try { if (e.ReceivedAppControl.ExtraData.TryGet("command", out string c)) command = c; } catch { }
 
-            if (command == "stop") { _stopping = true; Exit(); }
+            if (command == "stop") { _capture?.Dispose(); Exit(); }
             else if (command == "start")
             {
                 // The service is already running (it starts with the TV, or this launch just
                 // created it). Refresh everything instead of waiting for scheduled retries:
                 // probe for hosts (e.g. a new controller or server.py), reconnect HyperHDR, and
-                // re-initialise capture so it re-reads the hardware condition.
+                // re-initialise capture so it re-reads the hardware condition. Also ends a pause.
                 _discovery?.TriggerNow();
                 _hyperHdr?.ReconnectNow();
-                _restartCapture = true;
-                Capture.Stop();
+                _capture?.Restart();
             }
         }
 
         protected override void OnTerminate()
         {
-            _stopping = true;
-            _cts?.Cancel();
-            Capture.Stop();
+            _capture?.Dispose();
             _statusPort?.Dispose();
             _hyperHdr?.Dispose();
             _esp32?.Dispose();
@@ -208,7 +203,16 @@ namespace Service
             base.OnTerminate();
         }
 
-        static void Main(string[] args) { new App().Run(args); }
+        static void Main(string[] args)
+        {
+            // Blocking instead of background (concurrent) full GCs: no background GC thread and
+            // no extra memory while one runs; the heap is tiny, so the pauses don't matter.
+            // Set here rather than in Service.csproj: Tizen's dotnet-launcher starts the runtime
+            // itself and does not read Service.runtimeconfig.json (docs/ARCHITECTURE.md, Memory).
+            _initialGcLatency = GCSettings.LatencyMode;
+            GCSettings.LatencyMode = GCLatencyMode.Batch;
+            new App().Run(args);
+        }
 
         #endregion
     }

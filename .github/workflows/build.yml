@@ -62,7 +62,7 @@ jobs:
       - name: Compile against Tizen 9 reference assemblies
         run: dotnet build .github/tv-service-check/ServiceCheck.csproj -warnaserror:CS0168,CS0219,CS0162
 
-      - name: Unit tests (edge image, HyperHDR protocol, config)
+      - name: Unit tests (edge image, HyperHDR protocol, config, status, commands, capture loop)
         working-directory: .github/tv-service-check/Tests
         run: dotnet run
 

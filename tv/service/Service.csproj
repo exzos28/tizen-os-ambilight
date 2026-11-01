@@ -5,6 +5,12 @@
     <OutputType>Exe</OutputType>
     <TargetFramework>net6.0-tizen9.0</TargetFramework>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <!--
+      No runtime options here (InvariantGlobalization, ConcurrentGarbageCollection,
+      TieredCompilation, …): they only end up in Service.runtimeconfig.json, which Tizen's
+      dotnet-launcher does not read — it starts CoreCLR itself with fixed properties. The GC
+      mode is set at run time instead (App.Main); see docs/ARCHITECTURE.md, Memory.
+    -->
   </PropertyGroup>
 
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">

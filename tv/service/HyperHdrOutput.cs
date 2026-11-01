@@ -2,6 +2,7 @@ using System;
 using System.Net.Sockets;
 using System.Text.Json;
 using System.Threading;
+using static System.FormattableString;
 
 namespace Service
 {
@@ -53,7 +54,7 @@ namespace Service
             _log = log;
         }
 
-        public string Endpoint => $"{_settings.Host}:{_settings.Port}";
+        public string Endpoint => Invariant($"{_settings.Host}:{_settings.Port}");
 
         // Number of replies received so far (for tests and diagnostics).
         public long RepliesReceived { get { lock (_stateLock) return _replied; } }
@@ -101,6 +102,8 @@ namespace Service
         private void SenderLoop()
         {
             var token = _cts.Token;
+            var wakeOrStop = new[] { _wake, token.WaitHandle };
+            byte[] image = null;   // rendered frame, reused (EncodeRawImage copies it)
             while (!token.IsCancellationRequested)
             {
                 try
@@ -108,12 +111,12 @@ namespace Service
                     if (_socket == null)
                     {
                         long wait = Interlocked.Read(ref _nextConnectTicks) - Environment.TickCount64;
-                        if (wait > 0) { WaitHandle.WaitAny(new[] { _wake, token.WaitHandle }, (int)Math.Min(wait, 1000)); continue; }
+                        if (wait > 0) { WaitHandle.WaitAny(wakeOrStop, (int)Math.Min(wait, 1000)); continue; }
                         Connect();
                         continue;
                     }
 
-                    WaitHandle.WaitAny(new[] { _wake, token.WaitHandle }, 500);
+                    WaitHandle.WaitAny(wakeOrStop, 500);
                     if (token.IsCancellationRequested) break;
 
                     string reason;
@@ -124,13 +127,14 @@ namespace Service
                         stale = _sent > _replied && Environment.TickCount64 - _waitingSinceTicks > LivenessMs;
                     }
                     if (reason != null) { Drop(reason); continue; }
-                    if (stale) { Drop($"no reply for {LivenessMs} ms"); continue; }
+                    if (stale) { Drop(Invariant($"no reply for {LivenessMs} ms")); continue; }
 
                     var frame = Interlocked.Exchange(ref _pending, null);
                     if (frame == null) continue;
 
-                    var rgb = EdgeImage.Render(frame, _settings.ImageWidth, _settings.ImageHeight);
-                    Send(HyperHdrProtocol.EncodeRawImage(rgb, _settings.ImageWidth, _settings.ImageHeight));
+                    image ??= new byte[_settings.ImageWidth * _settings.ImageHeight * 3];
+                    EdgeImage.Render(frame, _settings.ImageWidth, _settings.ImageHeight, image);
+                    Send(HyperHdrProtocol.EncodeRawImage(image, _settings.ImageWidth, _settings.ImageHeight));
                 }
                 catch (Exception ex)
                 {
@@ -152,7 +156,7 @@ namespace Service
             {
                 var connect = socket.ConnectAsync(_settings.Host, _settings.Port);
                 if (!connect.Wait(ConnectTimeoutMs))
-                    throw new TimeoutException($"connect timed out after {ConnectTimeoutMs} ms");
+                    throw new TimeoutException(Invariant($"connect timed out after {ConnectTimeoutMs} ms"));
             }
             catch (Exception ex)
             {
@@ -174,7 +178,7 @@ namespace Service
             new Thread(() => ReaderLoop(socket, generation)) { IsBackground = true, Name = "HyperHDR reader" }.Start();
 
             Send(HyperHdrProtocol.EncodeRegister(_settings.Origin, _settings.Priority));
-            _log("HyperHdrConnected", $"{Endpoint} priority={_settings.Priority} image={_settings.ImageWidth}x{_settings.ImageHeight}");
+            _log("HyperHdrConnected", Invariant($"{Endpoint} priority={_settings.Priority} image={_settings.ImageWidth}x{_settings.ImageHeight}"));
         }
 
         private void Send(byte[] message)
@@ -197,7 +201,7 @@ namespace Service
                 {
                     ReadExactly(socket, prefix);
                     int length = HyperHdrProtocol.ReadLength(prefix);
-                    if (length <= 0 || length > MaxReplyBytes) throw new InvalidOperationException($"bad reply length {length}");
+                    if (length <= 0 || length > MaxReplyBytes) throw new InvalidOperationException(Invariant($"bad reply length {length}"));
                     var body = new byte[length];
                     ReadExactly(socket, body);
 
@@ -217,7 +221,7 @@ namespace Service
                     if (!string.IsNullOrEmpty(reply.Error))
                     {
                         long n = Interlocked.Increment(ref _replyErrors);
-                        if (n == 1 || n % 100 == 0) _log("HyperHdrReplyError", $"{reply.Error} (#{n})");
+                        if (n == 1 || n % 100 == 0) _log("HyperHdrReplyError", Invariant($"{reply.Error} (#{n})"));
                     }
                 }
             }
@@ -263,7 +267,7 @@ namespace Service
             // and then about once a minute.
             int n = Interlocked.Increment(ref _consecutiveFailures);
             if (n == 1 || n % 12 == 0)
-                _log("HyperHdrDisconnected", $"{Endpoint}: {reason}; retry in {backoff} ms (failure #{n})");
+                _log("HyperHdrDisconnected", Invariant($"{Endpoint}: {reason}; retry in {backoff} ms (failure #{n})"));
         }
 
         private void CloseSocket()
