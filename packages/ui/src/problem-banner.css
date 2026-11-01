@@ -60,6 +60,12 @@
   column-gap: 32px;
   padding: 34px 40px;
 }
+[data-density='tv'] .ui-banner-icon .ui-icon { width: 46px; height: 46px; }
+[data-density='tv'] .ui-banner-warn .ui-banner-icon { background: rgba(242, 181, 68, 0.16); }
+[data-density='tv'] .ui-banner-bad .ui-banner-icon { background: rgba(255, 107, 107, 0.16); }
 [data-density='tv'] .ui-banner-body { gap: 10px; }
-[data-density='tv'] .ui-banner-hints { flex-direction: row; gap: 40px; padding-left: 24px; font-size: 19px; }
+[data-density='tv'] .ui-banner-title { line-height: normal; }
+[data-density='tv'] .ui-banner-text,
+[data-density='tv'] .ui-banner-detail { line-height: 1.5; }
+[data-density='tv'] .ui-banner-hints { flex-direction: row; gap: 40px; margin-top: 4px; padding-left: 24px; font-size: 19px; }
 [data-density='tv'] .ui-banner-actions { grid-column: auto; gap: 14px; width: 320px; }

@@ -2,7 +2,7 @@
    chosen on the root element:
      <html data-density="tv">     the TV launcher's 1920×1080 CSS px canvas, read from 3 m away
      <html data-density="phone">  the controller web app, 360–720 px wide, touch (also the default)
-   Values are the TV launcher's (tv/app/src/style.css); the phone preset scales them down. */
+   The TV preset is the launcher's design; the phone preset scales it down. */
 
 :root {
   color-scheme: dark;
@@ -126,7 +126,7 @@
   --ui-fs-status: 22px;
   --ui-fs-status-detail: 17px;
   --ui-fs-status-value: 19px;
-  --ui-lh: 1.5;
+  --ui-lh: normal;         /* the launcher's text; body copy sets its own (base.css) */
 
   --ui-gap: 28px;
   --ui-gap-s: 12px;
