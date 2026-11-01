@@ -12,7 +12,7 @@
 # profile, which would replace your own profile in a local Tizen Studio. To install from
 # source, build tv/ui in VS Code instead (docs/INSTALL.md).
 #
-# Needs: .NET SDK 8, Tizen Studio CLI (web-cli is enough; $TIZEN_STUDIO, default ~/tizen-studio),
+# Needs: .NET SDK 8 with the Tizen workload (Samsung/Tizen.NET workload-install.sh), Tizen Studio CLI (web-cli is enough; $TIZEN_STUDIO, default ~/tizen-studio),
 # expect, rsync, unzip, python3, node.
 #
 # Usage: tv/scripts/make_package.sh [output-dir]   (default: tv/release)
@@ -37,9 +37,10 @@ trap 'rm -rf "$WORK"' EXIT
 node "$ROOT/scripts/sync-versions.mjs" --check
 
 echo "== Service (.tpk), version $VERSION"
+# The same project VS Code builds (net6.0-tizen9.0 via the Tizen workload), in a scratch copy
+# so local bin/ and obj/ don't leak in.
 rsync -a --exclude bin --exclude obj "$ROOT/tv/service/" "$WORK/service/"
-cp "$ROOT/tv/scripts/Service.tizen-sdk.csproj" "$WORK/service/Service.csproj"
-dotnet msbuild "$WORK/service/Service.csproj" -restore -t:Rebuild -p:Configuration=Release -v:m -nologo
+dotnet build "$WORK/service/Service.csproj" -c Release -v:m -nologo
 TPK="$(find "$WORK/service/bin/Release" -name '*.tpk' | head -n 1)"
 [ -n "$TPK" ] || { echo "no .tpk built" >&2; exit 1; }
 unzip -l "$TPK"
