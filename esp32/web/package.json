@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@ambilight/protocol": "file:../../packages/protocol",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },

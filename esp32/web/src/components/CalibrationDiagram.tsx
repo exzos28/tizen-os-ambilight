@@ -1,4 +1,6 @@
 import { useState } from 'react'
+import { limits } from '@ambilight/protocol'
+import type { StartCorner } from '@ambilight/protocol'
 
 const CORNER_CX = [70, 230, 230, 70]
 const CORNER_CY = [50, 50, 170, 170]
@@ -28,13 +30,13 @@ interface CalibrationDiagramProps {
   ledRight: number
   ledBottom: number
   ledLeft: number
-  startCorner: number
+  startCorner: StartCorner
   clockwise: boolean
   onTopChange: (n: number) => void
   onRightChange: (n: number) => void
   onBottomChange: (n: number) => void
   onLeftChange: (n: number) => void
-  onCornerClick: (c: number) => void
+  onCornerClick: (c: StartCorner) => void
   onDirectionToggle: () => void
 }
 
@@ -59,7 +61,8 @@ export function CalibrationDiagram({
   }
 
   function commitEdit(side: Side) {
-    const v = Math.max(0, Math.min(255, parseInt(draft) || 0))
+    const { min, max } = limits[`led_${side}`]
+    const v = Math.max(min, Math.min(max, parseInt(draft) || 0))
     sideHandlers[side](v)
     setEditing(null)
   }
@@ -110,7 +113,7 @@ export function CalibrationDiagram({
         </text>
 
         {/* Corner dots */}
-        {[0, 1, 2, 3].map(c => (
+        {([0, 1, 2, 3] as const).map(c => (
           <circle key={c}
             cx={CORNER_CX[c]} cy={CORNER_CY[c]} r="9"
             fill={startCorner === c ? '#f97316' : '#1e293b'}
@@ -133,7 +136,7 @@ export function CalibrationDiagram({
               <span className="calib-edit-group">
                 <input
                   className="calib-input"
-                  type="number" min={0} max={255}
+                  type="number" min={limits[`led_${side}`].min} max={limits[`led_${side}`].max}
                   value={draft}
                   autoFocus
                   onChange={e => setDraft(e.target.value)}
