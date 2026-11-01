@@ -214,6 +214,7 @@ void WebPortal::handleConfig() {
     doc["wb_r"]         = cfg.whiteBalanceR;
     doc["wb_g"]         = cfg.whiteBalanceG;
     doc["wb_b"]         = cfg.whiteBalanceB;
+    doc["smoothing_ms"] = cfg.smoothingMs;
     doc["power_limit_w"] = cfg.powerLimitW;
     doc["pixel_watts"]  = cfg.pixelWatts;
     sendJson(_server, doc);
@@ -315,7 +316,12 @@ void WebPortal::handleSaveLeds() {
         cfg.powerLimitW = static_cast<uint16_t>(min<long>(limit, POWER_LIMIT_W_MAX));
     cfg.pixelWatts = floatArg(_server, "pixel_watts", cfg.pixelWatts);
 
-    cfg.save();   // also clamps gamma/saturation/power settings to their valid ranges
+    long smoothing;
+    if (parseLongArg(_server, "smoothing_ms", smoothing))
+        cfg.smoothingMs = static_cast<uint16_t>(constrain(smoothing, static_cast<long>(SMOOTHING_MS_MIN),
+                                                          static_cast<long>(SMOOTHING_MS_MAX)));
+
+    cfg.save();   // also clamps gamma/saturation/power/smoothing settings to their valid ranges
 
     // Redraw with the (clamped) power settings right away: plain mode has no frame
     // loop, and in dynamic mode a settled strip isn't redrawn until the picture changes.
