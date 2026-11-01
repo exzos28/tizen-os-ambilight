@@ -1,0 +1,13 @@
+.ui-kbd {
+  min-width: 44px;
+  height: 34px;
+  padding: 0 8px;
+  border-radius: 8px;
+  border: 1px solid var(--ui-border-strong);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ui-text);
+  font-size: 18px;
+}
+.ui-hint { display: inline-flex; align-items: center; gap: 10px; }

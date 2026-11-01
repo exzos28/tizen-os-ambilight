@@ -1,0 +1,87 @@
+/* 3×3 grid: corners (--ui-corner square) around the screen, sides between them. */
+.ui-strip {
+  display: grid;
+  grid-template-columns: var(--ui-corner) minmax(0, 1fr) var(--ui-corner);
+  grid-template-rows: var(--ui-corner) auto var(--ui-corner);
+  gap: 4px;
+  width: 100%;
+}
+
+.ui-strip-screen {
+  aspect-ratio: 16 / 9;
+  border-radius: 6px;
+  background: var(--ui-screen);
+  border: 1.5px solid var(--ui-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ui-muted);
+  font-size: var(--ui-fs-body);
+}
+
+.ui-strip-side {
+  --c: var(--ui-side-top);
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  border: 1.5px solid var(--c);
+  border-radius: 8px;
+  background: none;
+  color: var(--c);
+  font-size: var(--ui-fs-small);
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+span.ui-strip-side { cursor: default; }
+/* Tint without color-mix (Chromium 94 on the TV lacks it). */
+.ui-strip-side::before { content: ''; position: absolute; inset: 0; background: var(--c); opacity: 0.16; }
+.ui-strip-side.top { --c: var(--ui-side-top); }
+.ui-strip-side.right { --c: var(--ui-side-right); }
+.ui-strip-side.bottom { --c: var(--ui-side-bottom); }
+.ui-strip-side.left { --c: var(--ui-side-left); }
+.ui-strip-text { position: relative; }
+.ui-strip-side.right .ui-strip-text,
+.ui-strip-side.left .ui-strip-text { writing-mode: vertical-rl; text-orientation: sideways; }
+.ui-strip-side.left .ui-strip-text { transform: rotate(180deg); }
+
+.ui-strip-corner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+span.ui-strip-corner { cursor: default; }
+.ui-strip-led {
+  width: 64%;
+  height: 64%;
+  border-radius: 50%;
+  border: 2px solid var(--ui-border-strong);
+  background: var(--ui-panel);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ui-on-accent);
+  font-size: var(--ui-fs-small);
+  font-weight: 700;
+}
+.ui-strip-corner.start .ui-strip-led { background: #fff; border-color: #fff; }
+
+.ui-strip-side.focused,
+.ui-strip-side:focus-visible,
+.ui-strip-corner.focused,
+.ui-strip-corner:focus-visible { outline: var(--ui-focus-width) solid var(--ui-focus-color); outline-offset: 2px; }
+.ui-strip :disabled { opacity: 0.5; cursor: default; }

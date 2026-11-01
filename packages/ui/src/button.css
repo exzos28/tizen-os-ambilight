@@ -1,0 +1,41 @@
+.ui-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: var(--ui-btn-h);
+  padding: var(--ui-btn-pad);
+  border-radius: var(--ui-radius-control);
+  border: 1px solid transparent;
+  background: none;
+  color: var(--ui-text);
+  font-size: var(--ui-fs-control);
+  font-weight: 700;
+  line-height: 1.2;
+  text-align: center;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.ui-btn.block { display: flex; width: 100%; }
+.ui-btn:disabled { opacity: 0.5; cursor: default; }
+
+.ui-btn-primary { background: var(--ui-accent); color: var(--ui-on-accent); }
+.ui-btn-primary.focused,
+.ui-btn-primary:focus-visible { outline: var(--ui-focus-width) solid #fff; outline-offset: 0; }
+.ui-btn-primary:not(:disabled):active { background: #7bbcff; }
+
+.ui-btn-secondary { border-color: var(--ui-border-strong); font-weight: 600; }
+.ui-btn-danger { border-color: var(--ui-bad-line); color: var(--ui-bad-text); font-weight: 600; }
+.ui-btn-secondary.focused,
+.ui-btn-secondary:focus-visible,
+.ui-btn-danger.focused,
+.ui-btn-danger:focus-visible {
+  outline: var(--ui-focus-width) solid var(--ui-focus-color);
+  outline-offset: -1px;
+  background: var(--ui-panel-focus);
+}
+.ui-btn-secondary:not(:disabled):active,
+.ui-btn-danger:not(:disabled):active { background: var(--ui-raised); }
+
+[data-density='tv'] .ui-btn-primary { min-height: 68px; font-size: 22px; }
+[data-density='tv'] .ui-btn-secondary { font-size: 20px; }

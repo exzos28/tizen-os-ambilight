@@ -1,0 +1,7 @@
+.ui-preview { display: block; flex-shrink: 0; max-width: 100%; height: auto; }
+.ui-preview-screen { fill: var(--ui-screen); }
+.ui-preview-frame { fill: none; stroke: #2a3340; stroke-width: 2; }
+.ui-preview-band { opacity: 0.92; }
+.ui-preview-empty { fill: var(--ui-muted); font-size: 19px; font-family: var(--ui-font); }
+.ui-preview.stale .ui-preview-band,
+.ui-preview.stale .ui-preview-dot { opacity: 0.3; }

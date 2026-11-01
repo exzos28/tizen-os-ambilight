@@ -1,0 +1,33 @@
+/* A cell is at least 44 px tall on a phone (touch target); the dot inside is --ui-swatch. */
+.ui-swatches { display: flex; flex-wrap: wrap; gap: var(--ui-gap-s); }
+.ui-swatch {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.ui-swatch:disabled { opacity: 0.5; cursor: default; }
+.ui-swatch-dot {
+  width: var(--ui-swatch);
+  height: var(--ui-swatch);
+  border-radius: 50%;
+  border: 3px solid var(--ui-panel);
+  outline: 2px solid var(--ui-border);
+}
+.ui-swatch.selected .ui-swatch-dot { outline: 3px solid var(--ui-text); }
+.ui-swatch.focused .ui-swatch-dot,
+.ui-swatch:focus-visible .ui-swatch-dot { outline: var(--ui-focus-width) solid var(--ui-focus-color); }
+.ui-swatch:focus-visible { outline: none; }
+
+[data-density='tv'] .ui-swatches { gap: 12px; }
+[data-density='tv'] .ui-swatch { min-width: 0; min-height: 0; }
+[data-density='tv'] .ui-swatches.small { gap: 10px; }
+[data-density='tv'] .ui-swatches.small .ui-swatch-dot { width: 40px; height: 40px; }

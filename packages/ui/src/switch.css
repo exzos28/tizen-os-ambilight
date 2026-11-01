@@ -1,0 +1,25 @@
+/* Track and knob from --ui-switch-w/-h/-inset: 112×60 on the TV (the accent one), 56×32 on a phone. */
+.ui-switch {
+  position: relative;
+  display: inline-block;
+  flex-shrink: 0;
+  width: var(--ui-switch-w);
+  height: var(--ui-switch-h);
+  border-radius: calc(var(--ui-switch-h) / 2);
+  background: var(--ui-control);
+}
+.ui-knob {
+  position: absolute;
+  left: var(--ui-switch-inset);
+  top: var(--ui-switch-inset);
+  width: calc(var(--ui-switch-h) - 2 * var(--ui-switch-inset));
+  height: calc(var(--ui-switch-h) - 2 * var(--ui-switch-inset));
+  border-radius: 50%;
+  background: var(--ui-knob-off);
+}
+.ui-switch.on { background: var(--ui-border-strong); }
+.ui-switch.on .ui-knob { left: auto; right: var(--ui-switch-inset); background: var(--ui-text); }
+.ui-switch.accent.on { background: var(--ui-accent); }
+.ui-switch.accent.on .ui-knob { background: #fff; }
+/* The TV's plain switch (compact tiles) is smaller than its accent one. */
+[data-density='tv'] .ui-switch:not(.accent) { --ui-switch-w: 92px; --ui-switch-h: 50px; --ui-switch-inset: 5px; }

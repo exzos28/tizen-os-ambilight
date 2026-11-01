@@ -1,0 +1,150 @@
+/* @ambilight/ui design tokens. Colors are the same everywhere; sizes come from a density preset
+   chosen on the root element:
+     <html data-density="tv">     the TV launcher's 1920×1080 CSS px canvas, read from 3 m away
+     <html data-density="phone">  the controller web app, 360–720 px wide, touch (also the default)
+   Values are the TV launcher's (tv/app/src/style.css); the phone preset scales them down. */
+
+:root {
+  color-scheme: dark;
+
+  /* ---- surfaces */
+  --ui-bg: #0b0e13;
+  --ui-rail: #0f131a;
+  --ui-line: #1e2632;
+  --ui-panel: #141a23;
+  --ui-panel-line: #222b38;
+  --ui-panel-focus: #17202c;
+  --ui-raised: #1e2836;
+  --ui-screen: #05070a;
+  --ui-led-dark: #1a2130;
+
+  /* ---- text */
+  --ui-text: #e8edf4;
+  --ui-text-2: #c3ccd8;
+  --ui-muted: #a3aebd;
+
+  /* ---- controls */
+  --ui-border: #2e3a4a;
+  --ui-border-strong: #3a4757;
+  --ui-track: #263142;
+  --ui-control: #2a3442;
+  --ui-knob-off: #8c97a8;
+  --ui-accent: #4da3ff;
+  --ui-accent-soft: rgba(77, 163, 255, 0.14);
+  --ui-on-accent: #06101c;
+  --ui-focus-color: var(--ui-accent);
+
+  /* ---- status: dot / text / tinted background; always shown with a text label */
+  --ui-ok: #3dd68c;
+  --ui-ok-text: #6fe3a8;
+  --ui-ok-soft: rgba(61, 214, 140, 0.12);
+  --ui-warn: #f2b544;
+  --ui-warn-text: #f7cd7e;
+  --ui-warn-soft: rgba(242, 181, 68, 0.14);
+  --ui-warn-bg: #1e1a12;
+  --ui-warn-line: #4a3a18;
+  --ui-warn-body: #d9cdb3;
+  --ui-warn-btn-line: #5a4a26;
+  --ui-warn-btn-text: #f2e6cc;
+  --ui-bad: #ff6b6b;
+  --ui-bad-text: #ff9a9a;
+  --ui-bad-soft: rgba(255, 107, 107, 0.14);
+  --ui-bad-bg: #201417;
+  --ui-bad-line: #4f2429;
+  --ui-bad-body: #e2c4c4;
+  --ui-off: #4a5566;
+  --ui-off-soft: #18202b;
+  --ui-badge-text: #1a1305;
+
+  /* ---- strip sides, as the controller's calibration preview lights them */
+  --ui-side-top: #ff6b6b;
+  --ui-side-right: #3dd68c;
+  --ui-side-bottom: #f2b544;
+  --ui-side-left: #4da3ff;
+
+  /* ---- type: system fonts only (no webfonts: the captive portal is offline) */
+  --ui-font: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+
+/* ---------------------------------------------------------------- phone (default) */
+
+:root,
+[data-density='phone'] {
+  --ui-fs-display: 44px;   /* the big On / 78% */
+  --ui-fs-h1: 28px;
+  --ui-fs-banner: 18px;    /* problem banner title */
+  --ui-fs-title: 18px;     /* card title */
+  --ui-fs-value: 22px;
+  --ui-fs-value-s: 18px;
+  --ui-fs-unit: 24px;
+  --ui-fs-label: 15px;
+  --ui-fs-control: 16px;   /* options, buttons */
+  --ui-fs-body: 15px;
+  --ui-fs-small: 13px;
+  --ui-fs-status: 16px;    /* status line title */
+  --ui-fs-status-detail: 13px;
+  --ui-fs-status-value: 14px;
+  --ui-lh: 1.45;
+
+  --ui-gap: 12px;
+  --ui-gap-s: 8px;
+  --ui-pad-card: 18px;
+  --ui-radius-card: 18px;
+  --ui-radius-control: 12px;
+  --ui-focus-width: 3px;
+
+  --ui-control-h: 52px;    /* option rows */
+  --ui-btn-h: 48px;
+  --ui-btn-pad: 0 20px;
+  --ui-switch-w: 56px;
+  --ui-switch-h: 32px;
+  --ui-switch-inset: 3px;
+  --ui-bar-h: 8px;
+  --ui-knob: 28px;
+  --ui-swatch: 36px;
+  --ui-dot: 10px;
+  --ui-icon-tile: 40px;    /* banner icon square */
+  --ui-corner: 44px;       /* strip diagram corner / side thickness */
+}
+
+/* ---------------------------------------------------------------- TV, 1920×1080 canvas */
+
+[data-density='tv'] {
+  --ui-font: SamsungOne, 'Samsung One', SamsungOneUI, 'Tizen Sans', sans-serif;
+
+  --ui-fs-display: 64px;
+  --ui-fs-h1: 48px;
+  --ui-fs-banner: 34px;
+  --ui-fs-title: 26px;
+  --ui-fs-value: 30px;
+  --ui-fs-value-s: 26px;
+  --ui-fs-unit: 32px;
+  --ui-fs-label: 22px;
+  --ui-fs-control: 23px;
+  --ui-fs-body: 21px;
+  --ui-fs-small: 18px;
+  --ui-fs-status: 22px;
+  --ui-fs-status-detail: 17px;
+  --ui-fs-status-value: 19px;
+  --ui-lh: 1.5;
+
+  --ui-gap: 28px;
+  --ui-gap-s: 12px;
+  --ui-pad-card: 34px 36px;
+  --ui-radius-card: 24px;
+  --ui-radius-control: 16px;
+  --ui-focus-width: 5px;
+
+  --ui-control-h: 72px;
+  --ui-btn-h: 60px;
+  --ui-btn-pad: 0 28px;
+  --ui-switch-w: 112px;
+  --ui-switch-h: 60px;
+  --ui-switch-inset: 6px;
+  --ui-bar-h: 14px;
+  --ui-knob: 32px;
+  --ui-swatch: 52px;
+  --ui-dot: 14px;
+  --ui-icon-tile: 88px;
+  --ui-corner: 40px;
+}

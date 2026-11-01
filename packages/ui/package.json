@@ -1,0 +1,31 @@
+{
+  "name": "@ambilight/ui",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Shared look of the Tizen OS Ambilight apps (TV launcher, controller web app): design tokens, icons and presentational Preact components. Consumed as TypeScript source; preact is the only (peer) runtime dependency.",
+  "license": "MIT",
+  "type": "module",
+  "sideEffects": [
+    "**/*.css"
+  ],
+  "exports": {
+    ".": "./src/index.ts",
+    "./tokens.css": "./src/tokens.css",
+    "./base.css": "./src/base.css"
+  },
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "type-check": "tsc -p . && tsc -p test",
+    "test": "node --test \"test/*.test.ts\""
+  },
+  "peerDependencies": {
+    "preact": "^11.1.1"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.2",
+    "preact": "^11.1.1",
+    "typescript": "^5.9.3"
+  }
+}
