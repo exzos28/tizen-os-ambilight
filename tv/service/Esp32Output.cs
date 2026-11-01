@@ -1,6 +1,8 @@
 using System;
 using System.Net;
 using System.Net.Sockets;
+using System.Text.Json;
+using System.Threading;
 
 namespace Service
 {
@@ -14,6 +16,8 @@ namespace Service
         private readonly Action<string, string> _log;
         private readonly UdpClient _udp = new UdpClient();
         private int _failures;
+        private long _framesSent;                                  // frames that reached at least one socket send
+        private volatile string _lastError;
         private string[] _hosts = Array.Empty<string>();          // snapshot the endpoints were built from
         private IPEndPoint[] _endpoints = Array.Empty<IPEndPoint>();
         private byte[] _packet = Array.Empty<byte>();
@@ -39,15 +43,34 @@ namespace Service
             _packet[1] = (byte)frame.V;
             Buffer.BlockCopy(frame.Rgb, 0, _packet, 2, frame.Rgb.Length);
 
+            bool sent = false;
             foreach (var endpoint in _endpoints)
             {
-                try { _udp.Send(_packet, _packet.Length, endpoint); }
+                try { _udp.Send(_packet, _packet.Length, endpoint); sent = true; }
                 catch (Exception ex)
                 {
-                    if (_failures++ % 30 == 0)
-                        _log("UdpSendError", $"target={endpoint.Address} failures={_failures} err={ex.Message}");
+                    _lastError = $"{endpoint.Address}: {ex.Message}";
+                    int failures = Interlocked.Increment(ref _failures);
+                    if (failures % 30 == 1)
+                        _log("UdpSendError", $"target={endpoint.Address} failures={failures} err={ex.Message}");
                 }
             }
+            if (sent) Interlocked.Increment(ref _framesSent);
+        }
+
+        // Status panel section. UDP has no replies, so "sent" means handed to the network,
+        // not received by the controller. Hosts include tools/server.py instances.
+        public void WriteStatus(Utf8JsonWriter w)
+        {
+            w.WriteStartObject();
+            w.WriteBoolean("enabled", true);
+            w.WriteStartArray("hosts");
+            foreach (var host in _discovery.Hosts) w.WriteStringValue(host);
+            w.WriteEndArray();
+            w.WriteNumber("framesSent", Interlocked.Read(ref _framesSent));
+            w.WriteNumber("sendErrors", Volatile.Read(ref _failures));
+            w.WriteString("lastError", _lastError);
+            w.WriteEndObject();
         }
 
         public void Dispose() => _udp.Dispose();

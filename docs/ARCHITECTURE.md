@@ -19,7 +19,8 @@ wiring in [HARDWARE.md](HARDWARE.md).
 │                                                                    │
 │  Service_App.cs — lifecycle, outputs, event log                    │
 │  Discovery.cs — finds ESP32s in the background                     │
-│  tv/ui — launcher web app (Start / Stop)                           │
+│  StatusPort.cs — answers the launcher's status requests            │
+│  tv/ui — launcher web app (Start / Stop, status panel)             │
 └──────────────────┬───────────────────────────────────┬─────────────┘
                    │ UDP 9001 (same LAN)               │ TCP 19400 (optional)
                    ▼                                   ▼
@@ -62,6 +63,8 @@ wiring in [HARDWARE.md](HARDWARE.md).
    `command=stop` exits the service.
 6. Events logged before any log host is known (config, capture init) are queued — up to
    100 — and sent once discovery finds one.
+7. Opens the local message port `ambilight.status` (`StatusPort.cs`) for the launcher's
+   status panel — see [TV launcher](#2-tv-launcher-tvui).
 
 ### Outputs
 
@@ -136,6 +139,28 @@ failures are ignored.
 Plain JavaScript Tizen web app. *Start* / *Stop* send an AppControl with
 `command=start|stop` to `fCAYP0k0uD.Service`; *Debug* shows an animated color wheel
 for testing the strip response. Navigation: ◀ ▶ and OK on the remote; Back exits.
+
+### Status panel
+
+Tells the user whether their TV is supported without a PC on the network. Every 500 ms the
+launcher sends `{request: "status"}` to the service's local message port `ambilight.status`
+(Tizen MessagePort — IPC between the two apps on the TV, not a network connection), with its
+own port `ambilight.ui` as the reply port. The service answers `{status: "<JSON>"}`:
+
+| Section | Fields | Shown as |
+|---|---|---|
+| `capture` | `state` (`waiting` / `starting` / `running` / `failed`), `failure` (`library` / `symbols` / `hardware`), `error`, `retryInMs`, `hw` (HwCondition), `frameMs`, `lastFrameAgoMs`, `reads`, `badReads`, `lastBadRet`, `h`, `v`, `rgb` (hex, `EdgeFrame` order) | Verdict, *Screen capture* row, preview of the captured colors |
+| `esp32` | `enabled`, `hosts` (discovered; also `tools/server.py`), `framesSent`, `sendErrors`, `lastError` | *ESP32* row. UDP has no replies, so *Sending* means handed to the network, not received |
+| `hyperhdr` | `enabled`, `endpoint`, `connected`, `replies`, `lastError` | *HyperHDR* row |
+| `configWarnings` | `ambilight.json` problems | Detail line |
+
+`library` / `symbols` failures mean the TV doesn't expose the capture API; `hardware`
+means `get_rgb_measure_condition` reported an unusable state (retried). A `running` capture
+whose reads all fail, or with no frame for 2 s, is shown as not working. No reply from the
+port means the service isn't running (or doesn't answer for 3 s).
+
+The panel and the log stay at least ~125 px away from the screen edges, where the service
+samples, so they don't cover the Debug color wheel there.
 
 ---
 

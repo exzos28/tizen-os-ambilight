@@ -10,13 +10,26 @@
 <body>
     <canvas id="gradient"></canvas>
     <div id="app">
-        <h1>Service Controller</h1>
+        <h1>Ambilight</h1>
         <div id="controls">
             <button id="btnStart" class="btn">Start Service</button>
             <button id="btnStop" class="btn btn-stop">Stop Service</button>
             <button id="btnDebug" class="btn btn-debug">Debug: OFF</button>
         </div>
-        <div id="status">Status: <span id="statusText">Not running</span></div>
+        <div id="check">
+            <div id="checkMain">
+                <div id="verdict" class="muted">Checking…</div>
+                <div class="row"><span class="label">Service</span><span id="rowService" class="value muted">—</span></div>
+                <div class="row"><span class="label">Screen capture</span><span id="rowCapture" class="value muted">—</span></div>
+                <div class="row"><span class="label">ESP32</span><span id="rowEsp32" class="value muted">—</span></div>
+                <div class="row"><span class="label">HyperHDR</span><span id="rowHyperHdr" class="value muted">—</span></div>
+                <div id="detail"></div>
+            </div>
+            <div id="previewBox">
+                <div id="preview"></div>
+                <div id="previewCaption">Captured colors</div>
+            </div>
+        </div>
         <div id="log"></div>
     </div>
 </body>

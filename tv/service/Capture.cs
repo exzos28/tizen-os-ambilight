@@ -91,17 +91,20 @@ namespace Service
 
         // Returns true on clean stop (Stop() called or token cancelled), false on failure.
         // Hands every captured frame to onFrame (on this thread); onFrame must not block.
-        public static bool Run(Action<EdgeFrame> onFrame, Action<string, string> log, CancellationToken token)
+        // Progress and failures also go to status, for the launcher's status panel.
+        public static bool Run(Action<EdgeFrame> onFrame, Action<string, string> log, CaptureStatus status, CancellationToken token)
         {
             lock (_runLock)
             {
                 _running = true;
+                status.Starting();
                 log("CaptureStart", $"loading {LibraryName}");
 
                 IntPtr lib = LoadLibrary(out string loadError);
                 if (lib == IntPtr.Zero)
                 {
                     log("CaptureError", $"loading {LibraryName} failed: {loadError}");
+                    status.Failed(CaptureFailure.Library, $"loading {LibraryName} failed: {loadError}");
                     return false;
                 }
 
@@ -111,10 +114,12 @@ namespace Service
 
                 if (getCondition == null || setPosition == null || getPixel == null)
                 {
-                    log("CaptureError", "missing symbols:" +
+                    string missing = "missing symbols:" +
                         (getCondition == null ? " get_rgb_measure_condition" : "") +
                         (setPosition == null ? " set_rgb_measure_position" : "") +
-                        (getPixel == null ? " get_rgb_measure_pixel" : ""));
+                        (getPixel == null ? " get_rgb_measure_pixel" : "");
+                    log("CaptureError", missing);
+                    status.Failed(CaptureFailure.Symbols, missing);
                     return false;
                 }
 
@@ -122,10 +127,14 @@ namespace Service
                 log("HwCondition", $"ret={ret} blocks={hw.measureBlockCnt} " +
                     $"blockSize={hw.measureBlockWidth}x{hw.measureBlockHeight} " +
                     $"full={hw.measureFullWidth}x{hw.measureFullHeight} delay={hw.measureDelay}ms");
+                int delay = Config.CaptureDelayMs >= 0 ? Config.CaptureDelayMs : hw.measureDelay;
+                status.Hardware(ret, hw.measureBlockCnt, hw.measureBlockWidth, hw.measureBlockHeight,
+                    hw.measureFullWidth, hw.measureFullHeight, hw.measureDelay, delay);
 
                 if (ret != 0 || hw.measureBlockCnt < 1 || hw.measureFullWidth < 1)
                 {
                     log("CaptureError", "invalid HW condition");
+                    status.Failed(CaptureFailure.Hardware, $"invalid HW condition: ret={ret} blocks={hw.measureBlockCnt} full={hw.measureFullWidth}x{hw.measureFullHeight}");
                     return false;
                 }
 
@@ -134,7 +143,6 @@ namespace Service
                 int captW = hw.measureBlockWidth;
                 int captH = hw.measureBlockHeight;
                 int blocksPerCycle = hw.measureBlockCnt;
-                int delay = Config.CaptureDelayMs >= 0 ? Config.CaptureDelayMs : hw.measureDelay;
 
                 int hCount = Config.TargetCaptureW;
                 int vCount = Config.TargetCaptureH;
@@ -190,6 +198,7 @@ namespace Service
                 while (_running && !token.IsCancellationRequested)
                 {
                     long frameStart = sw.ElapsedMilliseconds;
+                    int badReads = 0, lastBadRet = 0;
 
                     for (int batchIdx = 0; batchIdx < numBatches; batchIdx++)
                     {
@@ -209,6 +218,11 @@ namespace Service
                                 colors[ci + 1] = (byte)(Clamp(rgb.mean_G, 0, 1023) >> 2);
                                 colors[ci + 2] = (byte)(Clamp(rgb.mean_B, 0, 1023) >> 2);
                             }
+                            else
+                            {
+                                badReads++;   // the sample keeps its previous color
+                                lastBadRet = ret;
+                            }
                         }
 
                         int nextBatchIdx = (batchIdx + 1) % numBatches;
@@ -225,11 +239,12 @@ namespace Service
                     frameCount++;
                     if (!_running || token.IsCancellationRequested) break;
                     var frame = new EdgeFrame(hCount, vCount, (byte[])colors.Clone());   // outputs may keep it
+                    long actualMs = sw.ElapsedMilliseconds - frameStart;
+                    status.Frame(frame, (int)actualMs, totalPoints, badReads, lastBadRet);
                     onFrame(frame);
 
                     if (frameCount % 200 == 1)
                     {
-                        long actualMs = sw.ElapsedMilliseconds - frameStart;
                         var c = frame.Rgb;
                         int t = frame.TopOffset, r = frame.RightOffset, l = frame.LeftOffset;
                         log("Frame", $"#{frameCount} {(actualMs > 0 ? 1000 / actualMs : 999)}fps " +

@@ -21,6 +21,7 @@
     <Compile Include="../../../tv/service/HyperHdrProtocol.cs" />
     <Compile Include="../../../tv/service/HyperHdrOutput.cs" />
     <Compile Include="../../../tv/service/OutputConfig.cs" />
+    <Compile Include="../../../tv/service/ServiceStatus.cs" />
   </ItemGroup>
 
   <ItemGroup>

@@ -16,7 +16,16 @@ Please include:
 | Result | Works / doesn't work, and what you tested (streaming app, HDMI input, broadcast) |
 | Service log | See below |
 
+### Checking your TV
+
+Install the TV apps and open *Ambilight*: the status panel says whether screen capture works
+on this TV (✓ / ✗ with the reason) and whether frames go out to the ESP32 or HyperHDR. With
+*Debug* on, the *Captured colors* preview should follow the color wheel. Put what the panel
+shows (verdict, *Screen capture* row and the grey detail line) in your report.
+
 ### Getting the service log
+
+For more detail — or if the launcher shows nothing useful:
 
 1. Run [`tools/server.py`](../tools/README.md) on a PC in the same network.
 2. Press *Start* in the Ambilight launcher on the TV (or wait up to 30 s): discovery picks up `server.py` and the event log starts flowing.

@@ -44,8 +44,13 @@ body:
       label: What did you test?
       description: Streaming app, HDMI input, broadcast TV, etc.
   - type: textarea
+    id: status
+    attributes:
+      label: Status panel
+      description: What the Ambilight app on the TV shows — the verdict, the *Screen capture* row and the grey detail line under it
+  - type: textarea
     id: log
     attributes:
       label: Service log
-      description: The HwCondition, CaptureReady and CaptureError lines from tools/server.py
+      description: Optional — the HwCondition, CaptureReady and CaptureError lines from tools/server.py
       render: text

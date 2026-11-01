@@ -8,6 +8,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Net.Http;
 using System.Text;
+using System.Text.Json;
 using System.Threading;
 using Google.FlatBuffers;
 
@@ -25,6 +26,7 @@ namespace Service
             EdgeImageTests();
             ProtocolTests();
             ConfigTests();
+            StatusTests();
             WriteSamples("out");
 
             Console.WriteLine(_failures == 0 ? "ALL TESTS PASSED" : $"{_failures} FAILURE(S)");
@@ -186,6 +188,53 @@ namespace Service
 
             var missing = OutputConfig.Load("/nonexistent/ambilight.json");
             Check(missing.Esp32Enabled && missing.Warnings.Count == 1, "missing file → defaults with a warning");
+        }
+
+        // ---------------------------------------------------------------- Status panel JSON
+
+        // The launcher (tv/ui/main.js) reads these field names; keep them in sync.
+        private static void StatusTests()
+        {
+            var status = new CaptureStatus();
+            JsonElement Json() => JsonDocument.Parse(StatusJson.Build(status.WriteJson)).RootElement;
+
+            var j = Json();
+            Check(j.GetProperty("state").GetString() == "waiting" && j.GetProperty("failure").ValueKind == JsonValueKind.Null,
+                "status before capture starts: waiting, no failure");
+
+            status.Starting();
+            status.Failed(CaptureFailure.Library, "libvideoenhance.so: \"not found\"");
+            status.RetryIn(5000);
+            j = Json();
+            Check(j.GetProperty("state").GetString() == "failed" && j.GetProperty("failure").GetString() == "library", "library failure → state failed, failure library");
+            Check(j.GetProperty("error").GetString() == "libvideoenhance.so: \"not found\"", "error text survives JSON escaping");
+            Check(j.GetProperty("retryInMs").GetInt64() is > 4000 and <= 5000, "retryInMs counts down from the scheduled retry");
+            Check(!j.TryGetProperty("hw", out _) && !j.TryGetProperty("rgb", out _), "no hw / colors before the hardware answered");
+
+            status.Starting();
+            status.Hardware(0, 2, 16, 16, 3840, 2160, 20, 20);
+            j = Json();
+            Check(j.GetProperty("state").GetString() == "starting" && j.GetProperty("failure").ValueKind == JsonValueKind.Null
+                  && !j.TryGetProperty("retryInMs", out _), "restart clears the previous failure");
+            Check(j.GetProperty("hw").GetProperty("fullW").GetInt32() == 3840 && j.GetProperty("hw").GetProperty("blocks").GetInt32() == 2, "hw condition is reported");
+
+            var frame = DistinctFrame();
+            status.Frame(frame, 140, 14, 3, -1);
+            j = Json();
+            Check(j.GetProperty("state").GetString() == "running" && j.GetProperty("frames").GetInt64() == 1, "first frame → running");
+            Check(j.GetProperty("frameMs").GetInt32() == 140 && j.GetProperty("badReads").GetInt32() == 3 && j.GetProperty("lastBadRet").GetInt32() == -1, "frame time and failed reads are reported");
+            string rgb = j.GetProperty("rgb").GetString();
+            Check(rgb.Length == frame.Rgb.Length * 2 && rgb.Substring(6, 6) == $"{frame.Rgb[3]:X2}{frame.Rgb[4]:X2}{frame.Rgb[5]:X2}", "colors are hex in EdgeFrame order");
+            Check(j.GetProperty("h").GetInt32() == 4 && j.GetProperty("v").GetInt32() == 3, "edge counts are reported");
+
+            status.Frame(frame, 140, 14, 0, 0);
+            Check(Json().GetProperty("lastBadRet").GetInt32() == -1, "lastBadRet keeps the last error code after a clean frame");
+
+            var hh = new HyperHdrOutput(OutputConfig.Parse(@"{ ""hyperhdr"": { ""enabled"": true, ""host"": ""10.0.0.5"" } }").HyperHdr, (e, d) => { });
+            var hj = JsonDocument.Parse(StatusJson.Build(hh.WriteStatus)).RootElement;
+            Check(hj.GetProperty("enabled").GetBoolean() && hj.GetProperty("endpoint").GetString() == "10.0.0.5:19400"
+                  && !hj.GetProperty("connected").GetBoolean() && hj.GetProperty("lastError").ValueKind == JsonValueKind.Null,
+                "HyperHDR status before connecting");
         }
 
         // ---------------------------------------------------------------- Samples for flatc
