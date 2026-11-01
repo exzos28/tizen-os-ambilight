@@ -64,6 +64,29 @@ void LEDController::setColors(const CRGB* colors, uint16_t count) {
     show();
 }
 
+LightOutput::Source LEDController::source() const {
+    auto& cfg = Config::instance();
+    return LightOutput::source(cfg.power, cfg.ledMode, _identifyActive, previewActive());
+}
+
+void LEDController::repaint() {
+    auto& cfg = Config::instance();
+    switch (source()) {
+    case LightOutput::Source::Identify: break;   // update() repaints when the blink ends
+    case LightOutput::Source::Preview:  drawPreview(); break;
+    case LightOutput::Source::Plain:    setColor(cfg.colorR, cfg.colorG, cfg.colorB); break;
+    case LightOutput::Source::Dark:
+    case LightOutput::Source::Dynamic:  fill(CRGB::Black); break;   // update() blends frames in
+    }
+}
+
+void LEDController::startIdentify() {
+    Log.println("[LED] Identify: blinking white");
+    _identifyActive = true;
+    _identifyStart  = millis();
+    _identifyPhase  = LightOutput::Identify::Phase::Done;   // forces a redraw on the next update()
+}
+
 // ---------------------------------------------------------------------------
 // Private helpers
 // ---------------------------------------------------------------------------
@@ -75,6 +98,11 @@ void LEDController::setColors(const CRGB* colors, uint16_t count) {
 // Not FastLED's setMaxPowerInMilliWatts: its power model stores milliwatts per channel in
 // a uint8 (≤ 255 mW) tuned for 5 V WS2812, while a 12 V WS2811 pixel draws ~240 mW per
 // channel or more. PowerLimit.h uses a per-pixel wattage the user takes from the datasheet.
+void LEDController::fill(CRGB color) {
+    fill_solid(_leds, _numLeds, color);
+    show();
+}
+
 void LEDController::show() {
     auto& cfg = Config::instance();
     uint32_t sum = 0;
@@ -207,6 +235,9 @@ void LEDController::showCalibrationPreview(uint8_t startCorner, bool clockwise,
                                             uint8_t ledBottom, uint8_t ledLeft) {
     _previewUntil = millis() + PREVIEW_HOLD_MS;
     _previewShown = true;
+    _pvCorner = startCorner;  _pvClockwise = clockwise;
+    _pvTop    = ledTop;       _pvRight     = ledRight;
+    _pvBottom = ledBottom;    _pvLeft      = ledLeft;
 
     const char* cornerNames[] = { "TL", "TR", "BR", "BL" };
     Log.printf("[Calib] corner=%s(%d) dir=%s top=%d right=%d bottom=%d left=%d\n",
@@ -214,38 +245,8 @@ void LEDController::showCalibrationPreview(uint8_t startCorner, bool clockwise,
                clockwise ? "CW" : "CCW",
                ledTop, ledRight, ledBottom, ledLeft);
 
-    // Each side gets a distinct color.
-    const CRGB sideColors[4] = {
-        CRGB(255,   0,   0),   // TOP    — red
-        CRGB(  0, 255,   0),   // RIGHT  — green
-        CRGB(255, 255,   0),   // BOTTOM — yellow
-        CRGB(  0,   0, 255),   // LEFT   — blue
-    };
-    const char* sideNames[]  = { "TOP(red)", "RIGHT(green)", "BOTTOM(yellow)", "LEFT(blue)" };
-
-    static CRGB topC   [MAX_LEDS / 4 + 1];
-    static CRGB rightC [MAX_LEDS / 4 + 1];
-    static CRGB bottomC[MAX_LEDS / 4 + 1];
-    static CRGB leftC  [MAX_LEDS / 4 + 1];
-
-    fill_solid(topC,    ledTop,    sideColors[0]);
-    fill_solid(rightC,  ledRight,  sideColors[1]);
-    fill_solid(bottomC, ledBottom, sideColors[2]);
-    fill_solid(leftC,   ledLeft,   sideColors[3]);
-
-    uint16_t total = ledTop + ledRight + ledBottom + ledLeft;
-    if (total == 0) return;
-
-    uint16_t prevNum = _numLeds;
-    _numLeds = min(static_cast<uint16_t>(total), static_cast<uint16_t>(MAX_LEDS));
-    _previewLit = max(_previewLit, _numLeds);   // cleared by setNumLeds() on expiry
-    FastLED[0].setLeds(_leds, _numLeds);
-
-    fillStrip(_leds, topC, rightC, bottomC, leftC,
-              startCorner, clockwise,
-              ledTop, ledRight, ledBottom, ledLeft);
-
     // Log the resulting strip layout: which LEDs got which side's color.
+    const char* sideNames[]  = { "TOP(red)", "RIGHT(green)", "BOTTOM(yellow)", "LEFT(blue)" };
     uint8_t  sideCounts[4] = { ledTop, ledRight, ledBottom, ledLeft };
     uint16_t pos = 0;
     for (uint8_t seg = 0; seg < 4; seg++) {
@@ -255,6 +256,41 @@ void LEDController::showCalibrationPreview(uint8_t startCorner, bool clockwise,
                        pos, pos + sideCounts[si] - 1, sideNames[si], clockwise ? "" : " (reversed)");
         pos += sideCounts[si];
     }
+
+    // An identify blink keeps the strip; update() draws the preview when it ends.
+    if (!_identifyActive) drawPreview();
+}
+
+void LEDController::drawPreview() {
+    // Each side gets a distinct color.
+    const CRGB sideColors[4] = {
+        CRGB(255,   0,   0),   // TOP    — red
+        CRGB(  0, 255,   0),   // RIGHT  — green
+        CRGB(255, 255,   0),   // BOTTOM — yellow
+        CRGB(  0,   0, 255),   // LEFT   — blue
+    };
+
+    static CRGB topC   [MAX_LEDS / 4 + 1];
+    static CRGB rightC [MAX_LEDS / 4 + 1];
+    static CRGB bottomC[MAX_LEDS / 4 + 1];
+    static CRGB leftC  [MAX_LEDS / 4 + 1];
+
+    fill_solid(topC,    _pvTop,    sideColors[0]);
+    fill_solid(rightC,  _pvRight,  sideColors[1]);
+    fill_solid(bottomC, _pvBottom, sideColors[2]);
+    fill_solid(leftC,   _pvLeft,   sideColors[3]);
+
+    uint16_t total = _pvTop + _pvRight + _pvBottom + _pvLeft;
+    if (total == 0) return;
+
+    uint16_t prevNum = _numLeds;
+    _numLeds = min(static_cast<uint16_t>(total), static_cast<uint16_t>(MAX_LEDS));
+    _previewLit = max(_previewLit, _numLeds);   // cleared by setNumLeds() on expiry
+    FastLED[0].setLeds(_leds, _numLeds);
+
+    fillStrip(_leds, topC, rightC, bottomC, leftC,
+              _pvCorner, _pvClockwise,
+              _pvTop, _pvRight, _pvBottom, _pvLeft);
 
     // LED #0 = white, helps locate the physical start of the strip.
     _leds[0] = CRGB::White;
@@ -276,17 +312,34 @@ void LEDController::update() {
     if (now - _lastUpdateMs < 16) return;
     _lastUpdateMs = now;
 
+    // Identify blink: owns the strip until it ends; redraw only on phase changes (a
+    // FastLED.show() of a long strip takes tens of ms).
+    if (_identifyActive) {
+        using LightOutput::Identify::Phase;
+        Phase p = LightOutput::Identify::phase(now - _identifyStart);
+        if (p != Phase::Done) {
+            if (p != _identifyPhase) {
+                _identifyPhase = p;
+                fill(p == Phase::On ? CRGB::White : CRGB::Black);
+            }
+            return;
+        }
+        _identifyActive = false;
+        // A preview that expired meanwhile is cleared (and repainted) just below.
+        if (!_previewShown || previewActive()) repaint();
+    }
+
     // When a calibration preview expires, clear it (it may have lit more LEDs
-    // than numLeds) and, in plain mode, bring back the static color — nothing
-    // else would repaint the strip there.
+    // than numLeds) and bring back the current output — in plain mode or with the
+    // lighting off nothing else would repaint the strip.
     if (_previewShown && !previewActive()) {
         _previewShown = false;
         setNumLeds(cfg.numLeds);
-        if (cfg.ledMode == 0) setColor(cfg.colorR, cfg.colorG, cfg.colorB);
+        repaint();
     }
 
     // In Ambilight mode, handle timeout (Auto-Off) and smooth blending.
-    if (cfg.ledMode == 1 && !previewActive()) {
+    if (source() == LightOutput::Source::Dynamic) {
         // If no frames received for a long time, fade the target to black.
         if (now - _lastFrameMs > AUTO_OFF_TIMEOUT_MS) {
             fill_solid(_target, _numLeds, CRGB::Black);

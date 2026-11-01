@@ -2,6 +2,7 @@
 #include <stdarg.h>
 #include "Config.h"
 #include "LEDController.h"
+#include "LightOutput.h"
 #include "RemoteLogger.h"
 
 UDPReceiver& UDPReceiver::instance() {
@@ -58,15 +59,19 @@ void UDPReceiver::handle() {
         memcpy(_buf, _scratch, len);
         n      = len;
         remote = from;
+        _framesRx++;
+        _lastRxMs = millis();
+        _anyFrame = true;
     }
     if (n == 0) return;
 
-    // Only apply frames in dynamic mode, and not while a calibration preview is active.
-    if (Config::instance().ledMode != 1 || LEDController::instance().previewActive()) {
-        logThrottled("[UDP] Frames from %s ignored (mode=%d preview=%d)\n",
-                     remote.toString().c_str(),
-                     Config::instance().ledMode,
-                     LEDController::instance().previewActive() ? 1 : 0);
+    // Only apply frames with the lighting on, in dynamic mode, and not while a calibration
+    // preview is active.
+    auto& cfg     = Config::instance();
+    bool  preview = LEDController::instance().previewActive();
+    if (!LightOutput::acceptsFrames(cfg.power, cfg.ledMode, preview)) {
+        logThrottled("[UDP] Frames from %s ignored (power=%d mode=%d preview=%d)\n",
+                     remote.toString().c_str(), cfg.power ? 1 : 0, cfg.ledMode, preview ? 1 : 0);
         return;
     }
 

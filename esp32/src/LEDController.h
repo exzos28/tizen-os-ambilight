@@ -1,6 +1,7 @@
 #pragma once
 #include <Arduino.h>
 #include <FastLED.h>
+#include "LightOutput.h"
 
 constexpr uint8_t  LED_PIN  = 23;
 constexpr uint16_t MAX_LEDS = 1500;
@@ -16,6 +17,15 @@ public:
     void setColors(const CRGB* colors, uint16_t count);
     // Re-sends the current pixels, e.g. after the power-limit settings changed.
     void refresh() { show(); }
+
+    // Redraws what the current state should show (LightOutput::source): the static color
+    // in plain mode, dark when the lighting is off or in dynamic mode (frames then blend
+    // back in), the calibration preview while it runs. Call after power or mode changes.
+    void repaint();
+
+    // Blinks the whole strip white (LightOutput::Identify), then repaint()s. Non-blocking:
+    // driven by update(). Works with the lighting off.
+    void startIdentify();
 
     // Apply one ambilight frame from UDP data.
     // data layout: [hCount top RGB] [vCount right RGB] [hCount bottom RGB] [vCount left RGB]
@@ -38,6 +48,8 @@ public:
     bool     powerLimited()   const { return _powerLimited; }
     uint8_t  brightness() const { return _brightness; }
     bool     previewActive() const { return millis() < _previewUntil; }
+    bool     identifyActive() const { return _identifyActive; }
+    LightOutput::Source source() const;
 
 private:
     static constexpr uint32_t PREVIEW_HOLD_MS = 10000;
@@ -46,6 +58,8 @@ private:
 
     void updateGammaTable(float gamma);
     void show();   // FastLED.show() with the power limit applied
+    void fill(CRGB color);   // all driven LEDs, then show()
+    void drawPreview();      // the calibration preview from the _pv* parameters
 
     // Apply saturation, white balance and gamma to a range of pixels.
     void processColors(CRGB* leds, uint16_t count);
@@ -75,6 +89,12 @@ private:
     uint32_t    _previewUntil = 0;
     bool        _previewShown = false;   // a preview was drawn and not yet cleared
     uint16_t    _previewLit   = 0;       // LEDs a preview lit beyond the current count
+    // Last requested preview, redrawn when an identify blink ends during it.
+    uint8_t     _pvCorner = 0, _pvTop = 0, _pvRight = 0, _pvBottom = 0, _pvLeft = 0;
+    bool        _pvClockwise = true;
+    bool        _identifyActive = false;
+    uint32_t    _identifyStart  = 0;
+    LightOutput::Identify::Phase _identifyPhase = LightOutput::Identify::Phase::Done;
     float       _estimatedWatts = 0;
     bool        _powerLimited   = false;
     uint32_t    _lastFrameMs  = 0;

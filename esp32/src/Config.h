@@ -41,6 +41,10 @@ public:
     // Mode: 0=plain (static color), 1=dynamic (ambilight UDP)
     uint8_t  ledMode;
 
+    // Lighting on/off. Off: the strip is dark in both modes and UDP frames are ignored;
+    // brightness, color and mode are kept. Calibration preview and identify still show.
+    bool     power;
+
     // Advanced color settings
     float    gamma;          // 0.5 - 3.0, default 2.2
     float    saturation;     // 0.0 - 2.0, default 1.0

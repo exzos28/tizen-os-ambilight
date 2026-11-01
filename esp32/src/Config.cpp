@@ -25,6 +25,7 @@ void Config::begin() {
     startCorner  = _prefs.getUChar ("start_corner", 0);
     clockwise    = _prefs.getBool  ("clockwise",   true);
     ledMode      = _prefs.getUChar ("led_mode",    1);
+    power        = _prefs.getBool  ("power",       true);
     gamma        = _prefs.getFloat ("gamma",       2.2f);
     saturation   = _prefs.getFloat ("saturation",  1.0f);
     whiteBalanceR = _prefs.getUChar ("wb_r",       255);
@@ -76,6 +77,7 @@ void Config::save() {
     _prefs.putUChar ("start_corner", startCorner);
     _prefs.putBool  ("clockwise",   clockwise);
     _prefs.putUChar ("led_mode",    ledMode);
+    _prefs.putBool  ("power",       power);
     _prefs.putFloat ("gamma",       gamma);
     _prefs.putFloat ("saturation",  saturation);
     _prefs.putUChar ("wb_r",        whiteBalanceR);
