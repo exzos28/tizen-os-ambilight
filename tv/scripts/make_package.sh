@@ -13,7 +13,7 @@
 # source, build tv/ui in VS Code instead (docs/INSTALL.md).
 #
 # Needs: .NET SDK 8 with the Tizen workload (Samsung/Tizen.NET workload-install.sh), Tizen Studio CLI (web-cli is enough; $TIZEN_STUDIO, default ~/tizen-studio),
-# expect, rsync, unzip, python3, node.
+# expect, rsync, zip, unzip, python3, node.
 #
 # Usage: tv/scripts/make_package.sh [output-dir]   (default: tv/release)
 set -euo pipefail
@@ -26,9 +26,13 @@ mkdir -p "$OUT"
 OUT="$(cd "$OUT" && pwd)"
 
 STUDIO="${TIZEN_STUDIO:-$HOME/tizen-studio}"
-TIZEN="$STUDIO/tools/ide/bin/tizen"
-[ -x "$TIZEN" ] || { echo "Tizen CLI not found at $TIZEN (set TIZEN_STUDIO)" >&2; exit 1; }
+TIZEN="$STUDIO/tools/ide/bin/tizen"   # classic CLI: certificates
+TZ="$STUDIO/tools/tizen-core/tz"      # Tizen-Core CLI: hybrid packaging, as the VS Code extension
+for tool in "$TIZEN" "$TZ"; do
+    [ -x "$tool" ] || { echo "$tool not found (set TIZEN_STUDIO); $STUDIO/tools has:" >&2; ls "$STUDIO/tools" >&2 || true; exit 1; }
+done
 command -v expect >/dev/null || { echo "expect is required" >&2; exit 1; }
+command -v zip >/dev/null || { echo "zip is required" >&2; exit 1; }
 
 VERSION="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["version"])' "$ROOT/package.json")"
 WORK="$(mktemp -d)"
@@ -62,15 +66,13 @@ mkdir -p "$KEYS"
     -n "$PROFILE" -e ci@example.org -f "$PROFILE" -- "$KEYS"
 P12="$(find "$KEYS" -name "$PROFILE.p12" | head -n 1)"
 [ -n "$P12" ] || { echo "the Tizen CLI did not create $KEYS/$PROFILE.p12" >&2; exit 1; }
-"$TIZEN" security-profiles add -n "$PROFILE" -a "$P12" -p "$CERT_PASSWORD"
-# security-profiles add writes the store next to the SDK; the CLI signs only from the
-# store set in its configuration.
-"$TIZEN" cli-config "profiles.path=$STUDIO/../tizen-studio-data/profile/profiles.xml"
+PROFILES="$WORK/profiles.xml"
+"$TZ" security-profiles add -n "$PROFILE" -a "$P12" -p "$CERT_PASSWORD" -x "$PROFILES" -A
 
-# Runs `tizen package` with the given arguments. The CLI asks for the certificate passwords
-# on a terminal even when they are stored, hence expect.
-tizen_package() {
-    expect -f - "$TIZEN" package "$@" <<'EXP'
+# Runs a CLI command. The Tizen CLIs may ask for the certificate passwords on a terminal even
+# when they are stored, hence expect; on failure the CLI logs are printed.
+run_cli() {
+    if ! expect -f - "$@" <<'EXP'
 set timeout 300
 spawn {*}$argv
 expect {
@@ -80,18 +82,21 @@ expect {
 lassign [wait] pid spawnid os_error status
 exit $status
 EXP
+    then
+        find "$STUDIO/.." "$HOME" -path '*tizen-studio-data*' -name '*.log' 2>/dev/null | while read -r log; do
+            echo "--- $log"; tail -n 60 "$log"
+        done
+        return 1
+    fi
 }
 
 echo "== Hybrid package"
-"$TIZEN" package --help || true
-# 1) the launcher alone; 2) the service .tpk added to that .wgt as a reference (-r only takes
-# a .tpk when the target is a package file, not a project directory).
-tizen_package -t wgt -s "$PROFILE" -- "$WORK/ui"
-WEB="$(find "$WORK/ui" -maxdepth 1 -name '*.wgt' | head -n 1)"
-[ -n "$WEB" ] || { echo "no .wgt produced for the launcher" >&2; exit 1; }
+# The launcher as a plain zip is enough for a base package: tz pack re-signs it and adds the
+# service .tpk as a reference package (hybrid), like the VS Code extension's build.
+(cd "$WORK/ui" && zip -qr "$WORK/web.wgt" .)
 WGT="$WORK/hybrid.wgt"
-mv "$WEB" "$WGT"
-tizen_package -t wgt -s "$PROFILE" -r "$TPK" -- "$WGT"
+run_cli "$TZ" pack -t wgt -s "$PROFILE" -p "$PROFILES" -k "$TPK" -b "$WORK/web.wgt" -o "$WGT"
+[ -f "$WGT" ] || { echo "tz pack produced no $WGT" >&2; exit 1; }
 
 NAME="ambilight-tv-v$VERSION.wgt"
 cp "$WGT" "$OUT/$NAME"
