@@ -38,8 +38,8 @@ The TV finds its controllers on its own. [Architecture](docs/ARCHITECTURE.md) ·
   <img src="docs/media/tv-home-problem@2x.png" width="49%" alt="TV app when the controller stops answering: the problem and a Search now button on top">
 </p>
 <p>
-  <img src="docs/media/web-ui-color@2x.png" width="160" alt="Controller web app: brightness and color correction">
-  <img src="docs/media/web-ui-layout@2x.png" width="160" alt="Controller web app: strip layout calibration">
+  <img src="docs/media/web-ui-home@2x.png" width="195" alt="Controller web app on a phone: lighting switch, brightness, mode and static colors, live status">
+  <img src="docs/media/web-ui-layout@2x.png" width="195" alt="Controller web app on a phone: strip layout with the sides in their preview colors, LEDs per side">
 </p>
 
 ## Supported TVs
@@ -64,6 +64,6 @@ flowchart LR
 
 ## More
 
-[Networking](docs/NETWORKING.md) · [HyperHDR](docs/HYPERHDR.md) · [TV apps](tv/README.md) · [Tools](tools/README.md) · [Contributing](docs/CONTRIBUTING.md) · MIT [License](LICENSE)
+[Networking](docs/NETWORKING.md) · [HyperHDR](docs/HYPERHDR.md) · [TV apps](tv/README.md) · [UI kit](packages/ui/README.md) · [Tools](tools/README.md) · [Contributing](docs/CONTRIBUTING.md) · MIT [License](LICENSE)
 
 <sub>Created for educational purposes through reverse engineering. No responsibility is assumed for any use of this code, including violations of third-party terms of service or damage to equipment. Use at your own risk.</sub>

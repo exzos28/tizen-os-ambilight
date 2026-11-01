@@ -40,11 +40,13 @@ For more detail — or if the launcher shows nothing useful:
 - Add a changeset if users will notice the change: `npm install` once at the repo root, then `npx changeset` (see [.changeset/README.md](../.changeset/README.md)). Docs- or CI-only changes don't need one.
 - Describe how you tested: TV model, strip type, what you observed.
 - If you change ports, packet formats, HTTP endpoints, MessagePort messages, settings or defaults, change the protocol definition in [`protocol/`](../protocol/README.md) first (schemas, `constants.json`, a fixture per message), then run `npm run protocol:gen` and `npm run protocol:check` at the repo root and commit the regenerated files. Also update [NETWORKING.md](NETWORKING.md), and for settings or defaults the tables in [ARCHITECTURE.md](ARCHITECTURE.md).
-- Firmware: make sure `pio run` builds (it also builds the web UI) and `pio test -e native` passes. Logic without Arduino dependencies goes into headers like `src/StripLayout.h` so it can be tested on the host. Web UI: `npm run type-check` in `esp32/web`.
+- Firmware: make sure `pio run` builds (it also builds the web UI) and `pio test -e native` passes. Logic without Arduino dependencies goes into headers like `src/StripLayout.h` so it can be tested on the host. Web UI: `npm run type-check` in `esp32/web`, and `npm run type-check && npm test` in `packages/ui` when you change the UI kit.
 
 ## Developing the web UI
 
-`npm run dev` in `esp32/web` starts Vite with hot reload, but the dev server has no proxy to the ESP32, so API calls fail unless you add one in `vite.config.ts`:
+`npm run dev` in `esp32/web` starts Vite with hot reload. Without a controller, add a mock to the URL: `?mock=ok` (streaming), `ap` (first-time Wi-Fi setup), `noframes`, `limited` (power limit) or `offline`, and a tab as the hash (`#picture`, `#layout`, `#device`). `npm run build:mock` builds the same single file with the mock into `dist-mock/` (for screenshots: open `dist-mock/index.html?mock=…` from disk). The mock exists only in these two modes; the firmware build (`npm run build`) leaves it out.
+
+To talk to a real ESP32 from the dev server, add a proxy in `vite.config.ts`:
 
 ```ts
 server: { proxy: { '/status': 'http://<esp32-ip>', '/config': 'http://<esp32-ip>', '/metrics': 'http://<esp32-ip>', '/save': 'http://<esp32-ip>', '/preview': 'http://<esp32-ip>', '/identify': 'http://<esp32-ip>', '/restart': 'http://<esp32-ip>' } }

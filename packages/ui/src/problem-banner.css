@@ -1,0 +1,65 @@
+/* Phone: icon + title on one row, text below, buttons full width. TV: icon | body | buttons. */
+.ui-banner {
+  display: grid;
+  grid-template-columns: var(--ui-icon-tile) minmax(0, 1fr);
+  align-items: start;
+  gap: var(--ui-gap-s) var(--ui-gap);
+  padding: var(--ui-pad-card);
+  border-radius: var(--ui-radius-card);
+}
+.ui-banner-warn { background: var(--ui-warn-bg); border: 1px solid var(--ui-warn-line); }
+.ui-banner-bad { background: var(--ui-bad-bg); border: 1px solid var(--ui-bad-line); }
+
+.ui-banner-icon {
+  width: var(--ui-icon-tile);
+  height: var(--ui-icon-tile);
+  border-radius: calc(var(--ui-icon-tile) / 4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.ui-banner-icon .ui-icon { width: 55%; height: 55%; }
+.ui-banner-warn .ui-banner-icon { background: var(--ui-warn-soft); color: var(--ui-warn); }
+.ui-banner-bad .ui-banner-icon { background: var(--ui-bad-soft); color: var(--ui-bad); }
+
+.ui-banner-body { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.ui-banner-title { font-size: var(--ui-fs-banner); font-weight: 700; line-height: 1.25; }
+.ui-banner-text { font-size: var(--ui-fs-body); color: var(--ui-warn-body); }
+.ui-banner-bad .ui-banner-text { color: var(--ui-bad-body); }
+.ui-banner-detail {
+  font-size: var(--ui-fs-small);
+  color: var(--ui-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ui-banner-hints {
+  margin: 2px 0 0;
+  padding-left: 1.2em;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: var(--ui-fs-small);
+  color: var(--ui-warn-body);
+}
+.ui-banner-bad .ui-banner-hints { color: var(--ui-bad-body); }
+
+.ui-banner-actions { grid-column: 1 / -1; display: flex; flex-direction: column; gap: var(--ui-gap-s); }
+.ui-banner-warn .ui-btn-secondary { border-color: var(--ui-warn-btn-line); color: var(--ui-warn-btn-text); }
+
+/* Phone: the title sits next to the icon, everything else under it. */
+:root:not([data-density='tv']) .ui-banner-body { display: contents; }
+:root:not([data-density='tv']) .ui-banner-title { align-self: center; }
+:root:not([data-density='tv']) .ui-banner-text,
+:root:not([data-density='tv']) .ui-banner-detail,
+:root:not([data-density='tv']) .ui-banner-hints { grid-column: 1 / -1; }
+
+[data-density='tv'] .ui-banner {
+  grid-template-columns: 88px minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 32px;
+  padding: 34px 40px;
+}
+[data-density='tv'] .ui-banner-body { gap: 10px; }
+[data-density='tv'] .ui-banner-hints { flex-direction: row; gap: 40px; padding-left: 24px; font-size: 19px; }
+[data-density='tv'] .ui-banner-actions { grid-column: auto; gap: 14px; width: 320px; }

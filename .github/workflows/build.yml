@@ -29,6 +29,10 @@ jobs:
       - name: Package tests
         run: npm run protocol:test
 
+      - name: UI kit (@ambilight/ui) type-check and tests
+        working-directory: packages/ui
+        run: npm ci && npm run type-check && npm test
+
   firmware:
     name: ESP32 firmware + web UI
     runs-on: ubuntu-latest

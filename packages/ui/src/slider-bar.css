@@ -1,0 +1,32 @@
+/* --ui-p (0…1) is set inline by SliderBar. */
+.ui-bar {
+  position: relative;
+  display: block;
+  align-self: stretch;
+  height: var(--ui-bar-h);
+  border-radius: calc(var(--ui-bar-h) / 2);
+  background: var(--ui-track);
+}
+.ui-bar-fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 100%;
+  width: calc(var(--ui-p) * 100%);
+  border-radius: inherit;
+  background: var(--ui-fill, var(--ui-text));
+}
+.ui-bar.muted .ui-bar-fill { background: var(--ui-knob-off); }
+.ui-bar-knob {
+  position: absolute;
+  top: calc((var(--ui-bar-h) - var(--ui-knob)) / 2);
+  left: calc(var(--ui-p) * 100% - var(--ui-knob) / 2);
+  width: var(--ui-knob);
+  height: var(--ui-knob);
+  border-radius: 50%;
+  background: #fff;
+  border: calc(var(--ui-knob) / 8) solid var(--ui-knob-ring, var(--ui-panel));
+}
+.ui-bar.inset .ui-bar-fill { width: calc(var(--ui-knob) / 2 + var(--ui-p) * (100% - var(--ui-knob))); }
+.ui-bar.inset .ui-bar-knob { left: calc(var(--ui-p) * (100% - var(--ui-knob))); }
+.focused .ui-bar-knob { --ui-knob-ring: var(--ui-panel-focus); }

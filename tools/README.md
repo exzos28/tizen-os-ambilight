@@ -40,4 +40,4 @@ python3 tools/led_tester.py --host <esp32-ip> --mode off
 | `--h` / `--v` | 6 / 4 | Samples per horizontal / vertical edge |
 | `--port` | 9001 | UDP port |
 
-The ESP32 must be in *Dynamic* mode. On Ctrl-C the tester sends one black frame.
+The ESP32 must be in *Follow the picture* mode (`led_mode=1`). On Ctrl-C the tester sends one black frame.
