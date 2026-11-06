@@ -107,9 +107,14 @@ namespace Service
             base.OnCreate();
             _version = ReadVersion();
 
-            // The launcher's saved outputs (set-outputs) if there are valid ones, otherwise
-            // res/ambilight.json from the package.
-            var config = OutputConfig.LoadEffective(Path.Combine(DirectoryInfo.Resource, Config.OutputConfigFile), SavedOutputsPath);
+            // A local Debug-only target may be packaged as res/ambilight.Debug.private.json.
+            // Release always uses the checked-in defaults; the launcher's saved outputs still win.
+            string packageConfig = Path.Combine(DirectoryInfo.Resource, Config.OutputConfigFile);
+#if DEBUG
+            string debugConfig = Path.Combine(DirectoryInfo.Resource, "ambilight.Debug.private.json");
+            if (File.Exists(debugConfig)) packageConfig = debugConfig;
+#endif
+            var config = OutputConfig.LoadEffective(packageConfig, SavedOutputsPath);
 
             // Discovery always runs, whatever the outputs: it finds ESP32s to stream to and
             // tools/server.py instances to send the event log to. It never blocks capture.
@@ -132,7 +137,8 @@ namespace Service
             // First run after 2 s. Right after the TV boots the video processor often isn't ready
             // yet, so failures are retried quickly at first (1, 2, 3, 5, 10 s), then every 30 s.
             _capture = new CaptureLoop(
-                token => Capture.Run(OnFrame, (evt, data) => SendLog(evt, data), _captureStatus, token),
+                token => Capture.Run(OnFrame, OnFullFrame, () => _hyperHdr != null,
+                    (evt, data) => SendLog(evt, data), _captureStatus, token),
                 _captureStatus, (e, d) => SendLog(e, d), 2000, new[] { 1_000, 2_000, 3_000, 5_000, 10_000, 30_000 });
             _capture.Start();
         }
@@ -164,10 +170,18 @@ namespace Service
 
         // Called on the capture thread for every frame; must not block. The outputs can be
         // swapped by set-outputs meanwhile (main thread), hence one read of each field.
-        private void OnFrame(EdgeFrame frame)
+        private void OnFrame(EdgeFrame frame, bool fullFrameOffered)
         {
             _esp32?.Send(frame);        // UDP, non-blocking
-            _hyperHdr?.Offer(frame);    // mailbox; sent on the HyperHDR thread
+            if (!fullFrameOffered) _hyperHdr?.Offer(frame); // PPI edge fallback for HyperHDR
+        }
+
+        private bool OnFullFrame(PixelFrame frame)
+        {
+            var hyperHdr = _hyperHdr;
+            if (hyperHdr == null) return false;
+            hyperHdr.Offer(frame);      // one-slot mailbox; sent on the HyperHDR thread
+            return true;
         }
 
         #endregion

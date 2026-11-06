@@ -3,17 +3,18 @@
 The TV service can stream to a [HyperHDR](https://github.com/awawa-dev/HyperHDR) server instead of — or in addition to — this project's ESP32 firmware. HyperHDR then drives whatever LEDs it is set up for (WLED, Hyperk, Adalight, Philips Hue…), with its own smoothing and color calibration.
 
 > [!WARNING]
-> **Untested on a real TV.** The HyperHDR output has been tested only in CI: against a real HyperHDR v22 server (streaming, registration, the server freezing, crashing and restarting), with the TV capture replaced by synthetic frames. It has **not** been run on a Samsung TV yet — please report how it works for you in [#1](https://github.com/exzos28/tizen-os-ambilight/issues/1).
+> **Full-frame capture is not yet verified on an unprotected S95C video plane.** HyperHDR v22 acknowledged a bounded synthetic RGB RawImage over FlatBuffers at temporary priority 250; the test disconnected immediately and did not change server configuration. Samsung's `secvideo_api_capture_video_main` path is ABI-guarded and falls back to PPI edge samples when unavailable or when the TV rejects capture (for example, protected media returns DRM `rc=-4`).
 
 ## How it works
 
 ```
-TV service ── 14 edge samples ──► 64×36 image ──► HyperHDR FlatBuffers server (TCP 19400)
-                                                     │
-                                                     └─► your LED device(s)
+TV service ── valid NV12 frame ──► RGB RawImage (up to 960×540) ──┐
+                                                                  ├─► HyperHDR FlatBuffers server (TCP 19400)
+TV service ── PPI edge samples ──► configured edge image ─────────┘
+                 └──────────────────────────────────────────────────► ESP32 (unchanged)
 ```
 
-The TV measures 14 points along the screen edges (~7 updates/s). For HyperHDR the service turns them into a small image: every pixel takes the color of the nearest screen edge, interpolated along that edge — the same interpolation the ESP32 firmware uses. HyperHDR treats it like any other video source and maps it to LEDs with its own LED layout.
+When available, the service converts the TV's full-frame NV12 capture directly to RGB and sends that image to HyperHDR. The existing PPI edge sampler still feeds the ESP32 and remains HyperHDR's fallback: if full-frame capture is unavailable or rejected, the service synthesizes the configured small image from the 14 edge points. The configured image width/height apply to this fallback only.
 
 ## Setup
 
@@ -64,7 +65,7 @@ the package, so changing it means rebuilding and reinstalling — see
 | `hyperhdr.host` | — | Required when enabled. An IP address is safest; a host name must be resolvable by the TV |
 | `hyperhdr.port` | `19400` | HyperHDR's Flatbuffers server port |
 | `hyperhdr.priority` | `150` | HyperHDR shows the source with the **lowest** number. Its own USB/system grabbers use 240/245, so 150 overrides them while the TV is streaming |
-| `hyperhdr.imageWidth` / `imageHeight` | `64` / `36` | 8–256. Larger doesn't add detail (there are only 14 samples), only makes each LED area smoother |
+| `hyperhdr.imageWidth` / `imageHeight` | `64` / `36` | 8–256. Used for the sampled-edge fallback; full-frame capture sends its validated source dimensions |
 
 An invalid section is disabled and reported as a `ConfigWarning` event in the service log (see [tools/server.py](../tools/README.md)). Settings sent with `set-outputs` use the same keys, ranges and defaults (without the image size, which always comes from `res/ambilight.json`), but an invalid value there rejects the whole change instead.
 
@@ -79,9 +80,9 @@ An invalid section is disabled and reported as a `ConfigWarning` event in the se
 
 ## Limitations
 
-- **Untested on a TV** — see the warning above.
+- **Full-plane capture is not yet tested on an unprotected video source on the S95C** — see the warning above. The existing sampled capture and HyperHDR transport were already verified separately.
 - **TV standby**: what capture returns while the TV is in standby has not been measured. If the service keeps sending black frames, the TV source keeps its priority in HyperHDR until the service stops.
-- **Same samples for every output**: the number of sample points is shared by all outputs; raising it for HyperHDR also lowers the ESP32 frame rate.
+- **PPI edge samples are shared with ESP32**: changing their count affects the fallback image and ESP32 frame rate; it does not change full-frame resolution.
 - **No on-TV settings screen yet**: the service supports changing the outputs at run time (`set-outputs`), but the launcher has no screen for it yet, so for now configuration is a file in the package.
 
 ## Third-party code

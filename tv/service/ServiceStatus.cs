@@ -17,6 +17,8 @@ namespace Service
         private readonly object _lock = new object();
 
         private string _state = "waiting";   // waiting | starting | running | failed
+        private string _backend;              // active frame source: secvideo-nv12 or ppi-edge
+        private string _backendError;
         private bool _paused;                // reported as state "paused", whatever _state is
         private CaptureFailure _failure;
         private string _error;
@@ -29,6 +31,9 @@ namespace Service
         private long _frames;
         private long _lastFrameTicks;
         private int _frameMs;
+        private long _pixelFrames;
+        private long _lastPixelFrameTicks;
+        private int _pixelFrameMs;
         private int _reads, _badReads, _lastBadRet;
         private EdgeFrame _lastFrame;
 
@@ -38,12 +43,26 @@ namespace Service
             lock (_lock)
             {
                 _state = "starting";
+                _backend = null;
+                _backendError = null;
                 _failure = CaptureFailure.None;
                 _error = null;
                 _retryAtTicks = 0;
                 _hasHw = false;
                 _frames = 0;
+                _pixelFrames = 0;
+                _lastFrameTicks = 0;
+                _lastPixelFrameTicks = 0;
                 _lastFrame = null;
+            }
+        }
+
+        public void Backend(string backend, string error)
+        {
+            lock (_lock)
+            {
+                _backend = backend;
+                _backendError = error;
             }
         }
 
@@ -80,6 +99,16 @@ namespace Service
             lock (_lock) _retryAtTicks = Environment.TickCount64 + delayMs;
         }
 
+        public void FullFrame(int frameMs)
+        {
+            lock (_lock)
+            {
+                _pixelFrames++;
+                _lastPixelFrameTicks = Environment.TickCount64;
+                _pixelFrameMs = frameMs;
+            }
+        }
+
         // reads = samples read this frame, badReads = how many returned an error (they keep
         // the previous color), lastBadRet = the error code of the last failed read.
         public void Frame(EdgeFrame frame, int frameMs, int reads, int badReads, int lastBadRet)
@@ -105,6 +134,8 @@ namespace Service
                 string state = _paused ? "paused" : _state;
                 w.WriteStartObject();
                 w.WriteString("state", state);
+                w.WriteString("backend", _backend);
+                w.WriteString("backendError", _backendError);
                 w.WriteString("failure", _failure == CaptureFailure.None ? null : _failure.ToString().ToLowerInvariant());
                 w.WriteString("error", _error);
                 w.WriteNumber("failedAttempts", _failedAttempts);
@@ -124,7 +155,13 @@ namespace Service
                     w.WriteEndObject();
                 }
 
-                w.WriteNumber("frames", _frames);
+                w.WriteNumber("frames", _frames); // fresh PPI spot-sampling cycles
+                w.WriteNumber("pixelFrames", _pixelFrames); // fresh full-plane images offered to HyperHDR
+                if (_pixelFrames > 0)
+                {
+                    w.WriteNumber("pixelFrameMs", _pixelFrameMs);
+                    w.WriteNumber("lastPixelFrameAgoMs", now - _lastPixelFrameTicks);
+                }
                 if (_lastFrame != null)
                 {
                     w.WriteNumber("frameMs", _frameMs);

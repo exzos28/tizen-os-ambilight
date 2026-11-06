@@ -2,6 +2,8 @@
   "version": "1.1.0",
   "capture": {
     "state": "running",
+    "backend": "secvideo-nv12",
+    "backendError": null,
     "failure": null,
     "error": null,
     "failedAttempts": 0,
@@ -17,6 +19,9 @@
     },
     "frames": 4217,
     "frameMs": 141,
+    "pixelFrames": 4217,
+    "pixelFrameMs": 40,
+    "lastPixelFrameAgoMs": 38,
     "lastFrameAgoMs": 38,
     "reads": 14,
     "badReads": 0,
@@ -27,7 +32,7 @@
   },
   "esp32": {
     "enabled": true,
-    "hosts": ["192.168.1.245"],
+    "hosts": ["192.0.2.42"],
     "framesSent": 4217,
     "sendErrors": 0,
     "lastError": null

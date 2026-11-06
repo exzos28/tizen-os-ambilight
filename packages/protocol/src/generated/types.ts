@@ -751,8 +751,9 @@ export interface ServiceStatus {
    */
   version: string | null
   /**
-   * Screen capture state. The frame fields (`frameMs` … `rgb`) are present once a frame was
-   * captured since the last (re)start.
+   * Screen capture state. The backend identifies whether the latest HyperHDR input used full-frame
+   * pixels or PPI edge samples. `frames` and `pixelFrames` are separate fresh-capture counters;
+   * neither counts interpolation or network rendering.
    */
   capture: CaptureStatus
   /** UDP output to the discovered controllers. */
@@ -891,8 +892,9 @@ export interface HwCondition {
 }
 
 /**
- * Screen capture state. The frame fields (`frameMs` … `rgb`) are present once a frame was captured
- * since the last (re)start.
+ * Screen capture state. The backend identifies whether the latest HyperHDR input used full-frame
+ * pixels or PPI edge samples. `frames` and `pixelFrames` are separate fresh-capture counters;
+ * neither counts interpolation or network rendering.
  */
 export interface CaptureStatus {
   /**
@@ -901,6 +903,16 @@ export interface CaptureStatus {
    * (see `retryInMs`).
    */
   state: CaptureState
+  /**
+   * Active screen frame source: `secvideo-nv12` for full-frame pixels or `ppi-edge` for the
+   * sampled-edge path.
+   */
+  backend?: string | null
+  /**
+   * Most recent full-plane capture/delivery error while using the PPI fallback; null when
+   * full-plane capture succeeds or is not requested.
+   */
+  backendError?: string | null
   /** Why the last start failed; null if it didn't. */
   failure: CaptureFailure | null
   /** Error message of the last failure. */
@@ -921,18 +933,39 @@ export interface CaptureStatus {
   /** What the hardware reported (`ppi_ve_get_rgb_measure_condition`) and the delay in use. */
   hw?: HwCondition
   /**
-   * Frames captured since capture (re)started.
+   * Fresh PPI spot-sampling cycles since capture (re)started; not an interpolation or
+   * network-render counter.
    *
    * @minimum 0
    */
   frames: number
   /**
-   * Duration of the last frame.
+   * Duration of the last capture cycle, including optional full-plane capture.
    *
    * @minimum 0
    * @unit ms
    */
   frameMs?: number
+  /**
+   * Fresh full-plane RGB images offered to HyperHDR since capture (re)started.
+   *
+   * @minimum 0
+   */
+  pixelFrames?: number
+  /**
+   * Duration of the latest full-plane capture, conversion, and handoff.
+   *
+   * @minimum 0
+   * @unit ms
+   */
+  pixelFrameMs?: number
+  /**
+   * Time since the latest full-plane image was handed to HyperHDR.
+   *
+   * @minimum 0
+   * @unit ms
+   */
+  lastPixelFrameAgoMs?: number
   /**
    * Time since the last frame.
    *

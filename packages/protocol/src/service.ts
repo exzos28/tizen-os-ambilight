@@ -142,10 +142,15 @@ function checkServiceStatus(s: Json): ServiceStatus {
 
   const c = object(s.capture, 'status.capture')
   expect(oneOf(c.state, CaptureStateValues), 'status.capture.state')
+  expect(c.backend === undefined || c.backend === null || typeof c.backend === 'string', 'status.capture.backend')
+  expect(c.backendError === undefined || c.backendError === null || typeof c.backendError === 'string', 'status.capture.backendError')
   expect(c.failure === null || oneOf(c.failure, CaptureFailureValues), 'status.capture.failure')
   expect(c.error === null || typeof c.error === 'string', 'status.capture.error')
   expect(typeof c.failedAttempts === 'number', 'status.capture.failedAttempts')
   expect(typeof c.frames === 'number', 'status.capture.frames')
+  expect(c.pixelFrames === undefined || typeof c.pixelFrames === 'number', 'status.capture.pixelFrames')
+  expect(c.pixelFrameMs === undefined || typeof c.pixelFrameMs === 'number', 'status.capture.pixelFrameMs')
+  expect(c.lastPixelFrameAgoMs === undefined || typeof c.lastPixelFrameAgoMs === 'number', 'status.capture.lastPixelFrameAgoMs')
   expect(c.rgb === undefined || (typeof c.rgb === 'string' && typeof c.h === 'number' && typeof c.v === 'number'), 'status.capture.rgb')
 
   const e = object(s.esp32, 'status.esp32')
