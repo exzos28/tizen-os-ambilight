@@ -33,6 +33,8 @@ int ppi_ve_get_rgb_measure_pixel(int idx, VEPPIRgbMeasure_t *rgb);
 
 This is the same mechanism that Samsung's **Hue Sync** app uses internally — discovered by decompiling `Tizen.TV.System.ContentAnalysis.dll`, the .NET wrapper Samsung provides to partner apps. We bypass the managed wrapper and call `libvideoenhance.so` directly via dlopen/P/Invoke. The full story is in [docs/RESEARCH.md](../docs/RESEARCH.md).
 
+When HyperHDR is enabled, the service also tries Samsung's `secvideo_api_capture_video_main` API from `libvideo-capture.so.0.1.0` for a caller-buffered NV12 frame (bounded to 960×540), then converts it to RGB and offers it directly as a HyperHDR RawImage. This ABI-derived path is restricted to the verified 32-bit layout and rejects invalid dimensions, pointers, pitches, incomplete planes, and interlaced output. PPI sampling still runs for the ESP32 and is used as HyperHDR's fallback whenever no valid full frame is returned; protected media has returned DRM `rc=-4`. Unprotected full-frame capture has not yet been verified on the S95C.
+
 ### Capture loop
 
 The hardware has a limited number of measurement slots (2 on tested TVs). To sample all edge points, the service iterates through them in batches, setting the next batch's positions while the current results are read:
@@ -76,7 +78,9 @@ Sample point counts, edge inset and capture delay are compile-time constants in 
 ```
 service/
   Service_App.cs      App lifecycle, outputs, HTTP event log
-  Capture.cs          HW PPI capture loop via libvideoenhance.so → EdgeFrame
+  Capture.cs          HW PPI edge capture plus optional full-frame capture coordination
+  VideoCapture.cs     Guarded secvideo NV12 adapter with caller-owned planes and ABI checks
+  PixelFrame.cs       Bounded RGB frame, NV12 validation/conversion, HyperHDR frame envelope
   CaptureLoop.cs      Runs capture on its own thread: retries, pause / resume, re-init
   Discovery.cs        Background UDP discovery of ESP32s / tools/server.py
   ServiceStatus.cs    Capture state + JSON for the launcher's status

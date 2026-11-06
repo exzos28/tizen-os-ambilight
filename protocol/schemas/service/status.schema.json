@@ -78,13 +78,15 @@
     },
     "CaptureStatus": {
       "title": "CaptureStatus",
-      "description": "Screen capture state. The frame fields (`frameMs` … `rgb`) are present once a frame was captured since the last (re)start.",
+      "description": "Screen capture state. The backend identifies whether the latest HyperHDR input used full-frame pixels or PPI edge samples. `frames` and `pixelFrames` are separate fresh-capture counters; neither counts interpolation or network rendering.",
       "type": "object",
       "additionalProperties": false,
       "required": ["state", "failure", "error", "failedAttempts", "frames"],
       "dependentRequired": { "rgb": ["h", "v"] },
       "properties": {
         "state": { "$ref": "#/$defs/CaptureState" },
+        "backend": { "type": ["string", "null"], "description": "Active screen frame source: `secvideo-nv12` for full-frame pixels or `ppi-edge` for the sampled-edge path." },
+        "backendError": { "type": ["string", "null"], "description": "Most recent full-plane capture/delivery error while using the PPI fallback; null when full-plane capture succeeds or is not requested." },
         "failure": {
           "anyOf": [{ "$ref": "#/$defs/CaptureFailure" }, { "type": "null" }],
           "description": "Why the last start failed; null if it didn't."
@@ -93,8 +95,12 @@
         "failedAttempts": { "type": "integer", "minimum": 0, "description": "Failed starts since the service started." },
         "retryInMs": { "type": "integer", "minimum": 0, "x-unit": "ms", "description": "Time until the next start attempt; only while `failed`." },
         "hw": { "$ref": "#/$defs/HwCondition" },
-        "frames": { "type": "integer", "minimum": 0, "description": "Frames captured since capture (re)started." },
-        "frameMs": { "type": "integer", "minimum": 0, "x-unit": "ms", "description": "Duration of the last frame." },
+        "frames": { "type": "integer", "minimum": 0, "description": "Fresh PPI spot-sampling cycles since capture (re)started; not an interpolation or network-render counter." },
+        "frameMs": { "type": "integer", "minimum": 0, "x-unit": "ms", "description": "Duration of the last capture cycle, including optional full-plane capture." },
+        "pixelFrames": { "type": "integer", "minimum": 0, "description": "Fresh full-plane RGB images offered to HyperHDR since capture (re)started." },
+        "pixelFrameMs": { "type": "integer", "minimum": 0, "x-unit": "ms", "description": "Duration of the latest full-plane capture, conversion, and handoff." },
+        "lastPixelFrameAgoMs": { "type": "integer", "minimum": 0, "x-unit": "ms", "description": "Time since the latest full-plane image was handed to HyperHDR." },
+
         "lastFrameAgoMs": { "type": "integer", "minimum": 0, "x-unit": "ms", "description": "Time since the last frame." },
         "reads": { "type": "integer", "minimum": 0, "description": "Samples read in the last frame." },
         "badReads": { "type": "integer", "minimum": 0, "description": "How many of them returned an error (they keep the previous color)." },

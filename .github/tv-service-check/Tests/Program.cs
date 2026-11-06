@@ -3,6 +3,7 @@
 //
 //   dotnet run                          unit tests; writes FlatBuffers samples to ./out and the
 //                                       service's status / command JSON to ./out/contract
+//   dotnet run -- -frame-e2e HOST PORT  500 ms synthetic full-frame input at priority 250
 //   dotnet run -- -e2e HOST PORT HTTP   live session against a running HyperHDR
 using System;
 using System.Collections.Generic;
@@ -21,11 +22,15 @@ namespace Service
 
         static int Main(string[] args)
         {
+            if (args.Length >= 1 && args[0] == "-frame-e2e")
+                return FullFrameEndToEnd(args[1], int.Parse(args[2]));
             if (args.Length >= 1 && args[0] == "-e2e")
                 return EndToEnd(args[1], int.Parse(args[2]), int.Parse(args[3]));
 
             LazyLoadTests();   // first: before anything else touches Google.FlatBuffers
             EdgeImageTests();
+            Nv12FrameTests();
+            HyperHdrFrameTests();
             ProtocolTests();
             ConfigTests();
             CommandConfigTests();
@@ -145,6 +150,46 @@ namespace Service
             Check(Same(Px(o, 16, 8, 0), new byte[] { 10, 0, 0 }) && Same(Px(o, 16, 15, 8), new byte[] { 0, 20, 0 })
                   && Same(Px(o, 16, 8, 15), new byte[] { 0, 0, 30 }) && Same(Px(o, 16, 0, 8), new byte[] { 40, 0, 0 }),
                   "one sample per edge fills each edge with that sample");
+        }
+
+        // ---------------------------------------------------------------- NV12 capture
+
+        private static void Nv12FrameTests()
+        {
+            // Two rows with four-byte pitches; padding bytes must not be interpreted as pixels.
+            var y = new byte[] { 16, 235, 7, 7, 81, 145, 9, 9 };
+            var uv = new byte[] { 128, 128, 128, 128 };
+            Check(Nv12FrameConverter.TryConvert(y, uv, 2, 2, 4, 4, out var rgb, out var error)
+                  && error == null && rgb.Length == 12
+                  && rgb[0] == 0 && rgb[3] == 255 && rgb[6] == 76 && rgb[9] == 150,
+                "NV12 conversion honors independent row pitches and ignores padding");
+
+            Check(!Nv12FrameConverter.TryConvert(y, uv, 962, 2, 962, 962, out rgb, out _)
+                  && rgb == null, "NV12 dimensions above the allocated capture bounds are rejected");
+            Check(!Nv12FrameConverter.TryConvert(y, uv, 3, 2, 4, 4, out rgb, out _)
+                  && rgb == null, "odd NV12 dimensions are rejected");
+            Check(!Nv12FrameConverter.TryConvert(y, uv, 2, 2, 1, 2, out rgb, out _)
+                  && rgb == null, "NV12 pitches smaller than a complete row are rejected");
+            Check(!Nv12FrameConverter.TryConvert(new byte[3], uv, 2, 2, 2, 2, out rgb, out _)
+                  && rgb == null, "truncated NV12 planes are rejected");
+        }
+
+        private static void HyperHdrFrameTests()
+        {
+            var rgb = new byte[2 * 2 * 3];
+            for (int i = 0; i < rgb.Length; i++) rgb[i] = (byte)i;
+            var pixels = new PixelFrame(2, 2, rgb);
+            byte[] edgeImage = null;
+            byte[] resolved = HyperHdrOutput.ResolveImage(HyperHdrFrame.FromPixels(pixels), 64, 36,
+                ref edgeImage, out int width, out int height);
+            Check(ReferenceEquals(resolved, rgb) && width == 2 && height == 2 && edgeImage == null,
+                "full-frame HyperHDR input forwards the original RGB and dimensions without edge synthesis");
+
+            resolved = HyperHdrOutput.ResolveImage(HyperHdrFrame.FromEdge(DistinctFrame()), 16, 9,
+                ref edgeImage, out width, out height);
+            Check(width == 16 && height == 9 && ReferenceEquals(resolved, edgeImage)
+                  && resolved.Length == 16 * 9 * 3,
+                "edge fallback still synthesizes the configured HyperHDR image");
         }
 
         // ---------------------------------------------------------------- Protocol
@@ -388,8 +433,9 @@ namespace Service
             JsonElement Json() => JsonDocument.Parse(StatusJson.Build(status.WriteJson)).RootElement;
 
             var j = Json();
-            Check(j.GetProperty("state").GetString() == "waiting" && j.GetProperty("failure").ValueKind == JsonValueKind.Null,
-                "status before capture starts: waiting, no failure");
+            Check(j.GetProperty("state").GetString() == "waiting" && j.GetProperty("failure").ValueKind == JsonValueKind.Null
+                  && j.GetProperty("backend").ValueKind == JsonValueKind.Null,
+                "status before capture starts: waiting, no failure or active backend");
 
             status.Starting();
             status.Failed(CaptureFailure.Library, "libvideoenhance.so: \"not found\"");
@@ -406,6 +452,19 @@ namespace Service
             Check(j.GetProperty("state").GetString() == "starting" && j.GetProperty("failure").ValueKind == JsonValueKind.Null
                   && !j.TryGetProperty("retryInMs", out _), "restart clears the previous failure");
             Check(j.GetProperty("hw").GetProperty("fullW").GetInt32() == 3840 && j.GetProperty("hw").GetProperty("blocks").GetInt32() == 2, "hw condition is reported");
+            status.Backend("secvideo-nv12", null);
+            status.FullFrame(80);
+            var backend = Json();
+            Check(backend.GetProperty("backend").GetString() == "secvideo-nv12"
+                  && backend.GetProperty("pixelFrames").GetInt64() == 1
+                  && backend.GetProperty("pixelFrameMs").GetInt32() == 80
+                  && backend.GetProperty("backendError").ValueKind == JsonValueKind.Null,
+                "full-plane backend and fresh pixel rate metrics are exposed separately from PPI samples");
+            status.Backend("ppi-edge", "secvideo_api_capture_video_main returned rc=-4");
+            backend = Json();
+            Check(backend.GetProperty("backend").GetString() == "ppi-edge"
+                  && backend.GetProperty("backendError").GetString().Contains("rc=-4"),
+                "PPI fallback exposes the full-plane capture error");
 
             var frame = DistinctFrame();
             status.Frame(frame, 140, 14, 3, -1);
@@ -765,6 +824,50 @@ namespace Service
             Write("command-reply.id-too-long.json", ReplyBundle(ServiceCommands.Handle(new string('x', ServiceCommands.MaxIdLength + 1), "resume", null, target)));
 
             Console.WriteLine($"wrote {written.Count} contract samples to {dir}: {string.Join(", ", written)}");
+        }
+
+        // ---------------------------------------------------------------- Full-frame wire check
+
+        private static int FullFrameEndToEnd(string host, int port)
+        {
+            var settings = OutputConfig.Parse($@"{{ ""esp32"": {{ ""enabled"": false }}, ""hyperhdr"": {{ ""enabled"": true, ""host"": ""{host}"", ""port"": {port}, ""priority"": 250 }} }}").HyperHdr;
+            var log = new List<string>();
+            var output = new HyperHdrOutput(settings, (e, d) =>
+            {
+                lock (log) log.Add($"{e}: {d}");
+                Console.WriteLine($"[log] {e}: {d}");
+            });
+            output.Start();
+
+            const int width = 320, height = 180;
+            var rgb = new byte[width * height * 3];
+            for (int y = 0; y < height; y++)
+            for (int x = 0; x < width; x++)
+            {
+                int i = (y * width + x) * 3;
+                bool red = x < width / 2;
+                rgb[i] = red ? (byte)255 : (byte)0;
+                rgb[i + 1] = (byte)(y * 255 / (height - 1));
+                rgb[i + 2] = red ? (byte)0 : (byte)255;
+            }
+            var frame = new PixelFrame(width, height, rgb);
+            long until = Environment.TickCount64 + 500;
+            while (Environment.TickCount64 < until)
+            {
+                output.Offer(frame);
+                Thread.Sleep(100);
+            }
+
+            bool connected = output.IsConnected;
+            long replies = output.RepliesReceived;
+            lock (log) Check(!log.Exists(l => l.StartsWith("HyperHdrReplyError")), "full-frame input receives no HyperHDR error replies");
+            output.Dispose(); // closes the socket and releases priority 250
+            Check(connected, "full-frame input connected to HyperHDR");
+            Check(replies >= 2, $"HyperHDR acknowledged the Register and full-frame RawImages (replies={replies})");
+            Check(!output.IsConnected, "the temporary HyperHDR client socket is closed on cleanup");
+
+            Console.WriteLine(_failures == 0 ? "FULL-FRAME E2E PASSED" : $"FULL-FRAME E2E: {_failures} FAILURE(S)");
+            return _failures == 0 ? 0 : 1;
         }
 
         // ---------------------------------------------------------------- End to end
