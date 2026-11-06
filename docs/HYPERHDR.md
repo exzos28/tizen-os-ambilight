@@ -88,3 +88,5 @@ An invalid section is disabled and reported as a `ConfigWarning` event in the se
 ## Third-party code
 
 The TV service uses [Google.FlatBuffers](https://www.nuget.org/packages/Google.FlatBuffers) (Apache-2.0) to encode messages; it is bundled into the TV package. The message layout follows HyperHDR's `hyperhdr_request.fbs` (MIT).
+
+The full-frame capture investigation was informed by [RitwickVerma/TizenAmbilight](https://github.com/RitwickVerma/TizenAmbilight) (Ritwick Verma, MIT), particularly its reverse-engineering notes on Samsung's `secvideo_api_capture_video_main` API, NV12 video plane, and DRM-related PPI fallback. The adapter and HyperHDR integration here are a separate implementation for this project; no TizenAmbilight source code is copied.
