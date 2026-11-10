@@ -6,6 +6,9 @@
 
 CRGB LEDController::_leds[MAX_LEDS];
 CRGB LEDController::_target[MAX_LEDS];
+ColorPipeline::LedState LEDController::_state[MAX_LEDS];
+
+namespace CP = ColorPipeline;
 
 LEDController& LEDController::instance() {
     static LEDController inst;
@@ -20,7 +23,7 @@ void LEDController::begin(uint16_t numLeds, uint8_t brightness) {
     FastLED.setBrightness(_brightness);
     FastLED.clear(true);
 
-    updateGammaTable(Config::instance().gamma);
+    updateOutputLut();
 }
 
 void LEDController::setNumLeds(uint16_t numLeds) {
@@ -52,6 +55,7 @@ void LEDController::setNumLeds(uint16_t numLeds) {
     _numLeds = newCount;
     FastLED[0].setLeds(_leds, _numLeds);
     show();
+    clearSmoothing();   // the strip is black now: dynamic mode blends back in from there
     Log.printf("[LED] setNumLeds done: driving %d LEDs\n", _numLeds);
 }
 
@@ -110,7 +114,10 @@ void LEDController::repaint() {
     case LightOutput::Source::Preview:  drawPreview(); break;
     case LightOutput::Source::Plain:    setColor(cfg.colorR, cfg.colorG, cfg.colorB); break;
     case LightOutput::Source::Dark:
-    case LightOutput::Source::Dynamic:  fill(CRGB::Black); break;   // update() blends frames in
+    case LightOutput::Source::Dynamic:
+        fill(CRGB::Black);
+        clearSmoothing();   // update() blends frames in from black
+        break;
     }
 }
 
@@ -199,36 +206,6 @@ void LEDController::showLeds(uint16_t count) {
     if (count != _numLeds) FastLED[0].setLeds(_leds, _numLeds);
 }
 
-// One RGB sample of a UDP frame side (protocol::FRAME_BYTES_PER_SAMPLE bytes each).
-static CRGB sampleAt(const uint8_t* src, uint8_t i) {
-    const uint8_t* p = src + i * protocol::FRAME_BYTES_PER_SAMPLE;
-    return CRGB(p[0], p[1], p[2]);
-}
-
-void LEDController::interpolateSide(const uint8_t* src, uint8_t srcCount,
-                                    CRGB* dst, uint8_t dstCount) {
-    if (dstCount == 0 || srcCount == 0) return;
-    for (uint8_t i = 0; i < dstCount; i++) {
-        StripLayout::InterpPos p = StripLayout::interpPosition(i, dstCount, srcCount);
-        uint8_t lo = p.lo, hi = p.hi, frac = p.frac;
-        if (lo == hi) { dst[i] = sampleAt(src, lo); continue; }
-
-        CHSV hsv_lo = rgb2hsv_approximate(sampleAt(src, lo));
-        CHSV hsv_hi = rgb2hsv_approximate(sampleAt(src, hi));
-
-        // Shortest-path hue interpolation to avoid spinning around the colour wheel.
-        int16_t dh = (int16_t)hsv_hi.h - (int16_t)hsv_lo.h;
-        if (dh >  128) dh -= 256;
-        if (dh < -128) dh += 256;
-
-        CHSV result;
-        result.h = (uint8_t)((int16_t)hsv_lo.h + (int16_t)(dh * frac / 255));
-        result.s = lerp8by8(hsv_lo.s, hsv_hi.s, frac);
-        result.v = lerp8by8(hsv_lo.v, hsv_hi.v, frac);
-        hsv2rgb_rainbow(result, dst[i]);
-    }
-}
-
 // Fills dst[] from per-side colors following the calibration (start corner, direction,
 // LEDs per side). Traversal order and side directions: see StripLayout.h.
 void LEDController::fillStrip(CRGB* dst,
@@ -247,49 +224,52 @@ void LEDController::fillStrip(CRGB* dst,
 // Ambilight
 // ---------------------------------------------------------------------------
 
-void LEDController::updateGammaTable(float gamma) {
-    if (gamma == _lastGamma) return;
-    _lastGamma = gamma;
-    for (int i = 0; i < 256; i++) {
-        _gammaTable[i] = (uint8_t)(pow((float)i / 255.0, gamma) * 255.0 + 0.5);
-    }
-}
-
-void LEDController::processColors(CRGB* leds, uint16_t count) {
+void LEDController::updateOutputLut() {
     auto& cfg = Config::instance();
-    updateGammaTable(cfg.gamma);
-
-    for (uint16_t i = 0; i < count; i++) {
-        CRGB& c = leds[i];
-
-        // 1. Saturation Boost (HSV)
-        if (cfg.saturation != 1.0f) {
-            CHSV hsv = rgb2hsv_approximate(c);
-            uint16_t s = (uint16_t)(hsv.s * cfg.saturation);
-            hsv.s = (uint8_t)(s > 255 ? 255 : s);
-            hsv2rgb_rainbow(hsv, c);
-        }
-
-        // 2. White Balance
-        if (cfg.whiteBalanceR != 255) c.r = (uint8_t)((uint16_t)c.r * cfg.whiteBalanceR / 255);
-        if (cfg.whiteBalanceG != 255) c.g = (uint8_t)((uint16_t)c.g * cfg.whiteBalanceG / 255);
-        if (cfg.whiteBalanceB != 255) c.b = (uint8_t)((uint16_t)c.b * cfg.whiteBalanceB / 255);
-
-        // 3. Gamma Correction
-        c.r = _gammaTable[c.r];
-        c.g = _gammaTable[c.g];
-        c.b = _gammaTable[c.b];
-    }
+    bool gammaChanged = cfg.gamma != _lutGamma;
+    if (!gammaChanged && cfg.whiteBalanceR == _lutWb[0] && cfg.whiteBalanceG == _lutWb[1] &&
+        cfg.whiteBalanceB == _lutWb[2])
+        return;
+    if (gammaChanged) CP::buildGammaTable(cfg.gamma, _gammaTable);   // 256 pow(), only on a change
+    CP::buildOutputLut(_gammaTable, cfg.whiteBalanceR, cfg.whiteBalanceG, cfg.whiteBalanceB, _lut);
+    _lutGamma = cfg.gamma;
+    _lutWb[0] = cfg.whiteBalanceR;
+    _lutWb[1] = cfg.whiteBalanceG;
+    _lutWb[2] = cfg.whiteBalanceB;
 }
 
+void LEDController::decideTransitions(bool sceneCut) {
+    for (uint16_t i = 0; i < _numLeds; i++)
+        CP::onFrame(_state[i], CP::Rgb{_target[i].r, _target[i].g, _target[i].b}, sceneCut);
+}
+
+void LEDController::clearSmoothing() {
+    for (uint16_t i = 0; i < MAX_LEDS; i++) CP::clear(_state[i]);
+    _prevAvgLuma = 0;
+    decideTransitions(false);
+}
+
+// Pipeline order and constants: ColorPipeline.h. Runs per frame (~7 fps); update() smooths
+// toward the result.
 void LEDController::applyAmbilight(const uint8_t* data, uint8_t hCount, uint8_t vCount) {
     auto& cfg = Config::instance();
 
-    constexpr uint8_t BPS = protocol::FRAME_BYTES_PER_SAMPLE;
-    const uint8_t* topSrc    = data;
-    const uint8_t* rightSrc  = topSrc    + hCount * BPS;
-    const uint8_t* bottomSrc = rightSrc  + vCount * BPS;
-    const uint8_t* leftSrc   = bottomSrc + hCount * BPS;
+    // The samples in frame order, which is the clockwise ring around the screen.
+    constexpr uint16_t MAX_SAMPLES = 2u * (protocol::FRAME_MAX_SIDE_COUNT + protocol::FRAME_MAX_SIDE_COUNT);
+    static_assert(protocol::FRAME_BYTES_PER_SAMPLE == 3, "samples are R, G, B");
+    static CP::Rgb raw [MAX_SAMPLES];
+    static CP::Rgb ring[MAX_SAMPLES];
+    uint16_t n = 2u * (hCount + vCount);
+    if (n > MAX_SAMPLES) return;   // UDPReceiver rejects such frames already
+    for (uint16_t i = 0; i < n; i++) raw[i] = {data[3 * i], data[3 * i + 1], data[3 * i + 2]};
+
+    uint8_t avg = CP::averageLuma(raw, n);
+    bool    cut = CP::sceneCut(_prevAvgLuma, avg);
+    _prevAvgLuma = avg;
+
+    CP::ringSmooth(raw, ring, n);
+    uint16_t sat = CP::saturationQ8(cfg.saturation);
+    for (uint16_t i = 0; i < n; i++) ring[i] = CP::saturate(ring[i], sat);
 
     // Interpolate each side's samples to the configured LED counts.
     // Static to avoid consuming ~3 KB of the ESP32 task stack.
@@ -298,22 +278,30 @@ void LEDController::applyAmbilight(const uint8_t* data, uint8_t hCount, uint8_t 
     static CRGB bottomC[MAX_LEDS_PER_SIDE];
     static CRGB leftC  [MAX_LEDS_PER_SIDE];
 
-    interpolateSide(topSrc,    hCount, topC,    cfg.ledTop);
-    interpolateSide(rightSrc,  vCount, rightC,  cfg.ledRight);
-    interpolateSide(bottomSrc, hCount, bottomC, cfg.ledBottom);
-    interpolateSide(leftSrc,   vCount, leftC,   cfg.ledLeft);
-
-    // Apply color corrections
-    processColors(topC,    cfg.ledTop);
-    processColors(rightC,  cfg.ledRight);
-    processColors(bottomC, cfg.ledBottom);
-    processColors(leftC,   cfg.ledLeft);
+    const CP::Rgb* topSrc    = ring;
+    const CP::Rgb* rightSrc  = topSrc    + hCount;
+    const CP::Rgb* bottomSrc = rightSrc  + vCount;
+    const CP::Rgb* leftSrc   = bottomSrc + hCount;
+    CP::interpolateSide(topSrc,    hCount, topC,    cfg.ledTop);
+    CP::interpolateSide(rightSrc,  vCount, rightC,  cfg.ledRight);
+    CP::interpolateSide(bottomSrc, hCount, bottomC, cfg.ledBottom);
+    CP::interpolateSide(leftSrc,   vCount, leftC,   cfg.ledLeft);
 
     fillStrip(_target, topC, rightC, bottomC, leftC,
               cfg.startCorner, cfg.clockwise,
               cfg.ledTop, cfg.ledRight, cfg.ledBottom, cfg.ledLeft);
 
+    // Dark threshold on what the LED would output, then slow or fast transition per LED.
+    updateOutputLut();
+    for (uint16_t i = 0; i < _numLeds; i++) {
+        CP::Rgb t{_target[i].r, _target[i].g, _target[i].b};
+        CP::darkThreshold(_state[i], t, CP::luma(_lut.apply(t)));
+        CP::onFrame(_state[i], t, cut);
+        _target[i] = CRGB(t.r, t.g, t.b);
+    }
+
     _lastFrameMs = millis();
+    _autoOff     = false;
 }
 
 // ---------------------------------------------------------------------------
@@ -397,9 +385,10 @@ void LEDController::drawPreview() {
 void LEDController::update() {
     auto& cfg = Config::instance();
 
-    // Limit update rate to ~60 FPS (16ms) to keep transitions consistent.
+    // Limit update rate to ~60 FPS (16ms). The smoothing uses the real elapsed time.
     uint32_t now = millis();
-    if (now - _lastUpdateMs < 16) return;
+    uint32_t dt  = now - _lastUpdateMs;
+    if (dt < 16) return;
     _lastUpdateMs = now;
 
     // Identify blink: owns the strip until it ends. Redraws on phase changes and after
@@ -424,22 +413,28 @@ void LEDController::update() {
         repaint();
     }
 
-    // In Ambilight mode, handle timeout (Auto-Off) and smooth blending.
+    // In Ambilight mode, handle timeout (Auto-Off) and smooth toward the target.
     if (source() == LightOutput::Source::Dynamic) {
-        // If no frames received for a long time, fade the target to black.
-        if (now - _lastFrameMs > AUTO_OFF_TIMEOUT_MS) {
+        // No frames for a while: the target goes dark, like a black frame would.
+        if (!_autoOff && now - _lastFrameMs > AUTO_OFF_TIMEOUT_MS) {
+            _autoOff = true;
             fill_solid(_target, _numLeds, CRGB::Black);
+            bool cut = CP::sceneCut(_prevAvgLuma, 0);
+            _prevAvgLuma = 0;
+            decideTransitions(cut);
         }
 
-        // Smoothly blend current LED state toward the target.
+        // Every LED one step toward its target with its time constant, then the output LUT;
+        // shown only if an output value changed (a settled strip isn't pushed again).
+        // Integer only: ~60 Hz for up to MAX_LEDS LEDs.
+        updateOutputLut();
+        CP::Alphas a = CP::alphas(dt, cfg.smoothingMs);
         bool changed = false;
         for (uint16_t i = 0; i < _numLeds; i++) {
-            if (_leds[i] != _target[i]) {
-                CRGB prev = _leds[i];
-                _leds[i] = blend(prev, _target[i], SMOOTH_ALPHA);
-                // 8-bit blending can stall a step short of the target; snap to it
-                // so the strip settles and FastLED.show() stops being called.
-                if (_leds[i] == prev) _leds[i] = _target[i];
+            CP::step(_state[i], CP::Rgb{_target[i].r, _target[i].g, _target[i].b}, a.slow, a.fast);
+            CP::Rgb o = _lut.apply(CP::shown(_state[i]));
+            if (_leds[i].r != o.r || _leds[i].g != o.g || _leds[i].b != o.b) {
+                _leds[i] = CRGB(o.r, o.g, o.b);
                 changed = true;
             }
         }

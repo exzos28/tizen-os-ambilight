@@ -1,6 +1,7 @@
 #pragma once
 #include <Arduino.h>
 #include <FastLED.h>
+#include "ColorPipeline.h"
 #include "LightOutput.h"
 #include "generated/ProtocolLimits.h"
 
@@ -67,7 +68,6 @@ private:
     static constexpr uint32_t AUTO_OFF_TIMEOUT_MS = 5000;
     LEDController() = default;
 
-    void updateGammaTable(float gamma);
     void show();   // FastLED.show() of the driven LEDs with the power limit applied
     // Like show(), but pushes the first `count` LEDs (count may exceed _numLeds); the
     // controller drives _numLeds again afterwards.
@@ -84,12 +84,13 @@ private:
     void drawIdentify(LightOutput::Identify::Phase phase);   // phase over Identify::coverage()
     void finishIdentify();   // clears what the blink lit and repaint()s, in one show
 
-    // Apply saturation, white balance and gamma to a range of pixels.
-    void processColors(CRGB* leds, uint16_t count);
-
-    // Interpolate srcCount RGB samples → dstCount CRGB entries (linear).
-    static void interpolateSide(const uint8_t* src, uint8_t srcCount,
-                                CRGB* dst, uint8_t dstCount);
+    // Rebuilds the output LUT (white balance, gamma) if those settings changed.
+    void updateOutputLut();
+    // The strip was drawn black elsewhere: the smoothing starts from black again, and each
+    // LED's transition to the current target is decided anew (ColorPipeline::onFrame).
+    void clearSmoothing();
+    // ColorPipeline::onFrame for every driven LED against the current target.
+    void decideTransitions(bool sceneCut);
 
     // Fill dst[] from per-side CRGB arrays using startCorner + clockwise mapping.
     // Side natural directions: TOP[0]=top-left, RIGHT[0]=top-right,
@@ -101,12 +102,13 @@ private:
                    uint8_t ledTop, uint8_t ledRight,
                    uint8_t ledBottom, uint8_t ledLeft);
 
-    // Fraction (0-255) of the target blended in per update step.
-    // Since update() runs very fast, we use a smaller value for smooth transitions.
-    static constexpr uint8_t SMOOTH_ALPHA = 32;
-
-    static CRGB _leds[MAX_LEDS];    // displayed (blended)
-    static CRGB _target[MAX_LEDS];  // latest decoded frame
+    static CRGB _leds[MAX_LEDS];    // displayed (output: after white balance and gamma)
+    // Latest decoded frame in strip order, screen-referred (saturation applied, before white
+    // balance and gamma), after the dark threshold.
+    static CRGB _target[MAX_LEDS];
+    // Dynamic mode: what each LED shows, screen-referred in 8.8 fixed point, and its
+    // dark-threshold and fast-transition flags (ColorPipeline::LedState).
+    static ColorPipeline::LedState _state[MAX_LEDS];
     uint16_t    _numLeds      = 0;
     uint8_t     _brightness   = protocol::BRIGHTNESS_DEFAULT;
     uint32_t    _previewUntil = 0;
@@ -126,6 +128,10 @@ private:
     bool        _powerLimited   = false;
     uint32_t    _lastFrameMs  = 0;
     uint32_t    _lastUpdateMs = 0;
+    bool        _autoOff      = false;   // the target went dark after AUTO_OFF_TIMEOUT_MS
+    uint8_t     _prevAvgLuma  = 0;       // average sample luma of the last frame (scene cuts)
     uint8_t     _gammaTable[256];
-    float       _lastGamma    = -1.0f;
+    ColorPipeline::OutputLut _lut;
+    float       _lutGamma     = -1.0f;   // settings _lut was built for; -1 = not built
+    uint8_t     _lutWb[3]     = {0, 0, 0};
 };

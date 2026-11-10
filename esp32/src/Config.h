@@ -57,6 +57,9 @@ public:
     uint8_t  whiteBalanceR;  // 0 - 255
     uint8_t  whiteBalanceG;  // 0 - 255
     uint8_t  whiteBalanceB;  // 0 - 255
+    // Time constant of the frame smoothing for small changes, ms (0 = none); large changes
+    // and scene cuts use ColorPipeline::FAST_TAU_MS. 0 - 1000, default 200.
+    uint16_t smoothingMs;
 
     // Power limit: if the estimated strip power exceeds powerLimitW, the global brightness
     // is scaled down for that frame. 0 = no limit. pixelWatts = power of one LED pixel at
