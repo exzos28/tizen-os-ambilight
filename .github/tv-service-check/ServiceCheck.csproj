@@ -1,13 +1,15 @@
 <!--
   CI-only compile check for tv/service: builds the service sources against the
-  Tizen 9 reference assemblies from NuGet, without the Tizen workload or a
+  Tizen API 6 reference assemblies (the service's tizen60 target) from NuGet, without the Tizen workload or a
   signing profile. The real package is still built with the Tizen extension.
 -->
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net8.0</TargetFramework>
+    <!-- netcoreapp3.1: the API surface of the tizen60 target, so APIs added later fail here. -->
+    <TargetFramework>netcoreapp3.1</TargetFramework>
+    <CheckEolTargetFramework>false</CheckEolTargetFramework>
     <LangVersion>10</LangVersion>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
@@ -20,7 +22,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Tizen.NET" Version="9.0.0.16760" />
+    <PackageReference Include="Tizen.NET.API6" Version="6.0.0.14995" />
     <PackageReference Include="Google.FlatBuffers" Version="25.2.10" />
   </ItemGroup>
 

@@ -86,7 +86,7 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 8.0.x
-      - name: Compile against Tizen 9 reference assemblies
+      - name: Compile against Tizen API 6 reference assemblies
         run: dotnet build .github/tv-service-check/ServiceCheck.csproj -warnaserror:CS0168,CS0219,CS0162
 
       - name: Unit tests (edge image, HyperHDR protocol, config, saved outputs, status, commands, capture loop)

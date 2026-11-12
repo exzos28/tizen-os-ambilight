@@ -12,7 +12,7 @@
 # Used by CI (.github/workflows/tv-package.yml). To install from source, build tv/ui in
 # VS Code instead (docs/INSTALL.md).
 #
-# Needs: .NET SDK 8 with the Tizen workload (Samsung/Tizen.NET workload-install.sh), the Tizen-Core
+# Needs: .NET SDK 8 (the service uses Tizen.NET.Sdk from NuGet), the Tizen-Core
 # CLI ($TIZEN_SDK/tools/tizen-core/tz, default ~/tizen-sdk) with the certificate generator,
 # rsync, zip, unzip, python3, Node.js 24 with npm (builds the launcher from tv/app).
 #
@@ -37,7 +37,7 @@ trap 'rm -rf "$WORK"' EXIT
 node "$ROOT/scripts/sync-versions.mjs" --check
 
 echo "== Service (.tpk), version $VERSION"
-# The same project VS Code builds (net6.0-tizen9.0 via the Tizen workload), in a scratch copy
+# The same project VS Code builds (tizen60 via Tizen.NET.Sdk), in a scratch copy
 # so local bin/ and obj/ don't leak in.
 rsync -a --exclude bin --exclude obj "$ROOT/tv/service/" "$WORK/service/"
 dotnet build "$WORK/service/Service.csproj" -c Release -v:m -nologo

@@ -108,9 +108,11 @@ namespace Service
                     return false;
                 }
 
-                var getCondition = GetFunc<GetConditionFunc>(lib, "ppi_ve_get_rgb_measure_condition", "ve_get_rgb_measure_condition");
-                var setPosition  = GetFunc<SetPositionFunc>(lib, "ppi_ve_set_rgb_measure_position", "ve_set_rgb_measure_position");
-                var getPixel     = GetFunc<GetPixelFunc>(lib, "ppi_ve_get_rgb_measure_pixel", "ve_get_rgb_measure_pixel");
+                // cs_ve_* (older firmware): same structs and 10-bit values; its pixel call writes
+                // only R, G, B — lowInputLagOnOff is never read here.
+                var getCondition = GetFunc<GetConditionFunc>(lib, "ppi_ve_get_rgb_measure_condition", "ve_get_rgb_measure_condition", "cs_ve_get_rgb_measure_condition");
+                var setPosition  = GetFunc<SetPositionFunc>(lib, "ppi_ve_set_rgb_measure_position", "ve_set_rgb_measure_position", "cs_ve_set_rgb_measure_position");
+                var getPixel     = GetFunc<GetPixelFunc>(lib, "ppi_ve_get_rgb_measure_pixel", "ve_get_rgb_measure_pixel", "cs_ve_get_rgb_measure_pixel");
 
                 if (getCondition == null || setPosition == null || getPixel == null)
                 {
