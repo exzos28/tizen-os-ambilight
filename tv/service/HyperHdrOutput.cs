@@ -8,8 +8,8 @@ namespace Service
 {
     // Streams frames to a HyperHDR server as images over its FlatBuffers TCP input.
     //
-    // Threading: Offer() only swaps the newest frame into a one-slot mailbox and never
-    // blocks, so a slow or dead server cannot stall capture. A sender thread connects,
+    // Threading: Offer() only swaps the newest edge or full-frame image into a one-slot mailbox
+    // and never blocks, so a slow or dead server cannot stall capture. A sender thread connects,
     // registers, renders and sends; a reader thread per connection consumes HyperHDR's
     // replies (it answers every message, and unread replies would pile up on the server).
     //
@@ -31,7 +31,7 @@ namespace Service
         private readonly CancellationTokenSource _cts = new CancellationTokenSource();
         private Thread _sender;
 
-        private EdgeFrame _pending;          // mailbox, swapped atomically
+        private HyperHdrFrame _pending;      // mailbox, swapped atomically
         private Socket _socket;              // owned by the sender thread
         private int _generation;             // bumps on every (re)connect; stale readers ignore themselves
         private long _sent, _replied;        // messages awaiting a reply = _sent - _replied
@@ -81,7 +81,13 @@ namespace Service
 
         public void Offer(EdgeFrame frame)
         {
-            Interlocked.Exchange(ref _pending, frame);
+            Interlocked.Exchange(ref _pending, HyperHdrFrame.FromEdge(frame));
+            _wake.Set();
+        }
+
+        public void Offer(PixelFrame frame)
+        {
+            Interlocked.Exchange(ref _pending, HyperHdrFrame.FromPixels(frame));
             _wake.Set();
         }
 
@@ -104,7 +110,7 @@ namespace Service
         {
             var token = _cts.Token;
             var wakeOrStop = new[] { _wake, token.WaitHandle };
-            byte[] image = null;   // rendered frame, reused (EncodeRawImage copies it)
+            byte[] edgeImage = null;   // rendered fallback, reused (EncodeRawImage copies it)
             while (!token.IsCancellationRequested)
             {
                 try
@@ -133,9 +139,9 @@ namespace Service
                     var frame = Interlocked.Exchange(ref _pending, null);
                     if (frame == null) continue;
 
-                    image ??= new byte[_settings.ImageWidth * _settings.ImageHeight * 3];
-                    EdgeImage.Render(frame, _settings.ImageWidth, _settings.ImageHeight, image);
-                    Send(HyperHdrProtocol.EncodeRawImage(image, _settings.ImageWidth, _settings.ImageHeight));
+                    byte[] rgb = ResolveImage(frame, _settings.ImageWidth, _settings.ImageHeight,
+                        ref edgeImage, out int width, out int height);
+                    Send(HyperHdrProtocol.EncodeRawImage(rgb, width, height));
                 }
                 catch (Exception ex)
                 {
@@ -144,6 +150,25 @@ namespace Service
                     Drop(ex.Message);
                 }
             }
+        }
+
+        internal static byte[] ResolveImage(HyperHdrFrame frame, int edgeWidth, int edgeHeight,
+            ref byte[] edgeImage, out int width, out int height)
+        {
+            if (frame?.Pixels != null)
+            {
+                width = frame.Pixels.Width;
+                height = frame.Pixels.Height;
+                return frame.Pixels.Rgb;
+            }
+            if (frame?.Edge != null)
+            {
+                width = edgeWidth;
+                height = edgeHeight;
+                edgeImage ??= new byte[width * height * 3];
+                return EdgeImage.Render(frame.Edge, width, height, edgeImage);
+            }
+            throw new ArgumentNullException(nameof(frame));
         }
 
         private void Connect()
@@ -179,7 +204,7 @@ namespace Service
             new Thread(() => ReaderLoop(socket, generation)) { IsBackground = true, Name = "HyperHDR reader" }.Start();
 
             Send(HyperHdrProtocol.EncodeRegister(_settings.Origin, _settings.Priority));
-            _log("HyperHdrConnected", Invariant($"{Endpoint} priority={_settings.Priority} image={_settings.ImageWidth}x{_settings.ImageHeight}"));
+            _log("HyperHdrConnected", Invariant($"{Endpoint} priority={_settings.Priority} edgeFallbackImage={_settings.ImageWidth}x{_settings.ImageHeight}"));
         }
 
         private void Send(byte[] message)
@@ -190,7 +215,14 @@ namespace Service
                 if (_sent == _replied) _waitingSinceTicks = Environment.TickCount64;   // first unanswered message starts the clock
                 _sent++;
             }
-            socket.Send(HyperHdrProtocol.Frame(message));
+            byte[] framed = HyperHdrProtocol.Frame(message);
+            int offset = 0;
+            while (offset < framed.Length)
+            {
+                int sent = socket.Send(framed, offset, framed.Length - offset, SocketFlags.None);
+                if (sent <= 0) throw new SocketException((int)SocketError.ConnectionReset);
+                offset += sent;
+            }
         }
 
         private void ReaderLoop(Socket socket, int generation)

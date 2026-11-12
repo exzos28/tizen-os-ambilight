@@ -2,10 +2,13 @@
   "version": null,
   "capture": {
     "state": "waiting",
+    "backend": null,
+    "backendError": null,
     "failure": null,
     "error": null,
     "failedAttempts": 0,
-    "frames": 0
+    "frames": 0,
+    "pixelFrames": 0
   },
   "esp32": {
     "enabled": true,

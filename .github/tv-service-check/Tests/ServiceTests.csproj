@@ -23,6 +23,8 @@
     <Compile Include="../../../tv/service/Esp32Output.cs" />
     <Compile Include="../../../tv/service/EdgeFrame.cs" />
     <Compile Include="../../../tv/service/EdgeImage.cs" />
+    <Compile Include="../../../tv/service/PixelFrame.cs" />
+    <Compile Include="../../../tv/service/VideoCapture.cs" />
     <Compile Include="../../../tv/service/HyperHdrProtocol.cs" />
     <Compile Include="../../../tv/service/HyperHdrOutput.cs" />
     <Compile Include="../../../tv/service/OutputConfig.cs" />

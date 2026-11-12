@@ -26,6 +26,13 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Debug may use a local-only TV target; never package that config in Release. -->
+    <None Remove="res/ambilight.Debug.private.json" Condition=" '$(Configuration)' != 'Debug' " />
+    <Content Remove="res/ambilight.Debug.private.json" Condition=" '$(Configuration)' != 'Debug' " />
+    <TizenTpkUserExcludeFiles Include="res/ambilight.Debug.private.json" Condition=" '$(Configuration)' != 'Debug' " />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- Apache-2.0; used to encode HyperHDR FlatBuffers messages (HyperHdrProtocol.cs) -->
     <PackageReference Include="Google.FlatBuffers" Version="25.2.10" />
   </ItemGroup>

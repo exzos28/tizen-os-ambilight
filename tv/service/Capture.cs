@@ -90,10 +90,11 @@ namespace Service
         static readonly object _runLock = new object();
 
         // Returns true on clean stop (token cancelled — CaptureLoop does that to pause,
-        // re-initialise or exit), false on failure. Hands every captured frame to onFrame (on
-        // this thread); onFrame must not block. Progress and failures also go to status, for
-        // the launcher's status panel.
-        public static bool Run(Action<EdgeFrame> onFrame, Action<string, string> log, CaptureStatus status, CancellationToken token)
+        // re-initialise or exit), false on failure. Delivers PPI edges and optional validated
+        // full-frame pixels on this thread; callbacks must not block. Progress and failures also
+        // go to status, for the launcher's status panel.
+        public static bool Run(Action<EdgeFrame, bool> onFrame, Func<PixelFrame, bool> onFullFrame,
+            Func<bool> fullFrameEnabled, Action<string, string> log, CaptureStatus status, CancellationToken token)
         {
             lock (_runLock)
             {
@@ -193,69 +194,135 @@ namespace Service
                 }
                 if (delay > 0) Thread.Sleep(delay);
 
-                while (!token.IsCancellationRequested)
+                VideoCapture videoCapture = null;
+                bool videoCaptureUnavailable = false;
+                string videoUnavailableReason = null;
+                string activeBackend = null;
+                string lastBackendDetail = null;
+                try
                 {
-                    long frameStart = sw.ElapsedMilliseconds;
-                    int badReads = 0, lastBadRet = 0;
-
-                    for (int batchIdx = 0; batchIdx < numBatches; batchIdx++)
+                    while (!token.IsCancellationRequested)
                     {
+                        long frameStart = sw.ElapsedMilliseconds;
+                        int badReads = 0, lastBadRet = 0;
+
+                        for (int batchIdx = 0; batchIdx < numBatches; batchIdx++)
+                        {
+                            if (token.IsCancellationRequested) break;
+
+                            int curStart = batchIdx * blocksPerCycle;
+                            int curSize = Math.Min(blocksPerCycle, totalPoints - curStart);
+
+                            for (int i = 0; i < curSize; i++)
+                            {
+                                ret = getPixel(i, out VEPPIRgbMeasure rgb);
+                                int ci = (curStart + i) * 3;
+                                if (ret == 0)
+                                {
+                                    // HW API returns 10-bit values (0–1023), scale to 8-bit
+                                    colors[ci]     = (byte)(Clamp(rgb.mean_R, 0, 1023) >> 2);
+                                    colors[ci + 1] = (byte)(Clamp(rgb.mean_G, 0, 1023) >> 2);
+                                    colors[ci + 2] = (byte)(Clamp(rgb.mean_B, 0, 1023) >> 2);
+                                }
+                                else
+                                {
+                                    badReads++;   // the sample keeps its previous color
+                                    lastBadRet = ret;
+                                }
+                            }
+
+                            int nextBatchIdx = (batchIdx + 1) % numBatches;
+                            int nextStart = nextBatchIdx * blocksPerCycle;
+                            int nextSize = Math.Min(blocksPerCycle, totalPoints - nextStart);
+                            for (int i = 0; i < nextSize; i++)
+                            {
+                                setPosition(i, positions[nextStart + i].x, positions[nextStart + i].y);
+                            }
+
+                            if (delay > 0) Thread.Sleep(delay);
+                        }
+
                         if (token.IsCancellationRequested) break;
 
-                        int curStart = batchIdx * blocksPerCycle;
-                        int curSize = Math.Min(blocksPerCycle, totalPoints - curStart);
-
-                        for (int i = 0; i < curSize; i++)
+                        long pixelFrameStart = sw.ElapsedMilliseconds;
+                        PixelFrame pixels = null;
+                        string videoError = null;
+                        if (fullFrameEnabled != null && fullFrameEnabled())
                         {
-                            ret = getPixel(i, out VEPPIRgbMeasure rgb);
-                            int ci = (curStart + i) * 3;
-                            if (ret == 0)
+                            if (videoCapture == null && !videoCaptureUnavailable)
                             {
-                                // HW API returns 10-bit values (0–1023), scale to 8-bit
-                                colors[ci]     = (byte)(Clamp(rgb.mean_R, 0, 1023) >> 2);
-                                colors[ci + 1] = (byte)(Clamp(rgb.mean_G, 0, 1023) >> 2);
-                                colors[ci + 2] = (byte)(Clamp(rgb.mean_B, 0, 1023) >> 2);
+                                try { videoCapture = VideoCapture.TryOpen(out videoError); }
+                                catch (Exception ex) { videoError = $"opening video capture failed: {ex.Message}"; }
+                                if (videoCapture == null)
+                                {
+                                    videoCaptureUnavailable = true;
+                                    videoUnavailableReason = videoError;
+                                }
                             }
-                            else
+                            if (videoCapture != null)
                             {
-                                badReads++;   // the sample keeps its previous color
-                                lastBadRet = ret;
+                                try
+                                {
+                                    if (videoCapture.TryCapture(out pixels, out videoError)) videoError = null;
+                                }
+                                catch (Exception ex) { videoError = $"video capture failed: {ex.Message}"; }
+                            }
+                            else if (videoCaptureUnavailable)
+                            {
+                                videoError = videoUnavailableReason;
                             }
                         }
 
-                        int nextBatchIdx = (batchIdx + 1) % numBatches;
-                        int nextStart = nextBatchIdx * blocksPerCycle;
-                        int nextSize = Math.Min(blocksPerCycle, totalPoints - nextStart);
-                        for (int i = 0; i < nextSize; i++)
+                        frameCount++;
+                        // Outputs and the status may keep the frame they are given, so a frame is never
+                        // changed once handed out. A new one is made only when the colors changed;
+                        // a still picture keeps handing out the same, unchanged frame.
+                        if (frame == null || !colors.AsSpan().SequenceEqual(frame.Rgb))
+                            frame = new EdgeFrame(hCount, vCount, (byte[])colors.Clone());
+                        long actualMs = sw.ElapsedMilliseconds - frameStart;
+                        status.Frame(frame, (int)actualMs, totalPoints, badReads, lastBadRet);
+
+                        bool fullFrameOffered = false;
+                        if (pixels != null && onFullFrame != null)
                         {
-                            setPosition(i, positions[nextStart + i].x, positions[nextStart + i].y);
+                            try { fullFrameOffered = onFullFrame(pixels); }
+                            catch (Exception ex) { videoError = $"full-frame delivery failed: {ex.Message}"; }
                         }
+                        string backend = fullFrameOffered ? "secvideo-nv12" : "ppi-edge";
+                        string backendDetail = fullFrameOffered
+                            ? Invariant($"{pixels.Width}x{pixels.Height}")
+                            : videoError;
+                        if (fullFrameOffered) status.FullFrame((int)(sw.ElapsedMilliseconds - pixelFrameStart));
+                        ReportBackend(status, log, backend, backendDetail, fullFrameOffered ? null : videoError,
+                            ref activeBackend, ref lastBackendDetail);
+                        onFrame(frame, fullFrameOffered);
 
-                        if (delay > 0) Thread.Sleep(delay);
-                    }
-
-                    frameCount++;
-                    if (token.IsCancellationRequested) break;
-                    // Outputs and the status may keep the frame they are given, so a frame is never
-                    // changed once handed out. A new one is made only when the colors changed;
-                    // a still picture keeps handing out the same, unchanged frame.
-                    if (frame == null || !colors.AsSpan().SequenceEqual(frame.Rgb))
-                        frame = new EdgeFrame(hCount, vCount, (byte[])colors.Clone());
-                    long actualMs = sw.ElapsedMilliseconds - frameStart;
-                    status.Frame(frame, (int)actualMs, totalPoints, badReads, lastBadRet);
-                    onFrame(frame);
-
-                    if (frameCount % 200 == 1)
-                    {
-                        var c = frame.Rgb;
-                        int t = frame.TopOffset, r = frame.RightOffset, l = frame.LeftOffset;
-                        log("Frame", Invariant($"#{frameCount} {(actualMs > 0 ? 1000 / actualMs : 999)}fps p0=({c[t]},{c[t + 1]},{c[t + 2]})"));
-                        log("SideColors", Invariant($"right[0]=({c[r]},{c[r + 1]},{c[r + 2]}) left[0]=({c[l]},{c[l + 1]},{c[l + 2]})"));
+                        if (frameCount % 200 == 1)
+                        {
+                            var c = frame.Rgb;
+                            int t = frame.TopOffset, r = frame.RightOffset, l = frame.LeftOffset;
+                            log("Frame", Invariant($"#{frameCount} {(actualMs > 0 ? 1000 / actualMs : 999)}fps p0=({c[t]},{c[t + 1]},{c[t + 2]})"));
+                            log("SideColors", Invariant($"right[0]=({c[r]},{c[r + 1]},{c[r + 2]}) left[0]=({c[l]},{c[l + 1]},{c[l + 2]})"));
+                        }
                     }
                 }
+                finally { videoCapture?.Dispose(); }
 
                 return true; // clean stop: token cancelled
             }
+        }
+
+        private static void ReportBackend(CaptureStatus status, Action<string, string> log, string backend,
+            string detail, string error, ref string activeBackend, ref string lastBackendDetail)
+        {
+            status.Backend(backend, error);
+            bool changed = backend != activeBackend;
+            bool newDetail = detail != null && detail != lastBackendDetail;
+            if (changed || newDetail)
+                log("CaptureBackend", $"source={backend}" + (detail != null ? $" detail={detail}" : ""));
+            activeBackend = backend;
+            if (backend == "secvideo-nv12") lastBackendDetail = null;
+            else if (detail != null) lastBackendDetail = detail;
         }
 
         static int Clamp(int val, int min, int max)
