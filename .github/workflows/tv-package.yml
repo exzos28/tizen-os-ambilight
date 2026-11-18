@@ -36,14 +36,7 @@ jobs:
         with:
           dotnet-version: 8.0.x
 
-      # The service targets net6.0-tizen9.0 like the VS Code project, which needs Samsung's
-      # Tizen workload.
-      - name: Install the Tizen .NET workload
-        run: |
-          curl -fsSL -o "$RUNNER_TEMP/workload-install.sh" \
-            https://raw.githubusercontent.com/Samsung/Tizen.NET/main/workload/scripts/workload-install.sh
-          sudo bash "$RUNNER_TEMP/workload-install.sh" -d "$DOTNET_ROOT"
-          dotnet workload list
+      # The service builds with Tizen.NET.Sdk (tizen60), restored from NuGet: no Tizen workload.
 
       # Tizen-Core CLI (tz), the packager the VS Code Tizen extension uses, from the official
       # Tizen SDK package repository (versions and SHA256 from its pkg_list_ubuntu-64).

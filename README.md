@@ -44,10 +44,14 @@ The TV finds its controllers on its own. [Architecture](docs/ARCHITECTURE.md) ·
 
 ## Supported TVs
 
-| Model | Year | Status |
-|---|---|---|
-| QN90D · QN92D · Q60D | 2024 | ✅ |
-| Q6F | — | ❌ [#2](https://github.com/exzos28/tizen-os-ambilight/issues/2) |
+The app installs on Tizen 5.5 and later (2020+ TVs). Capture also needs the picture-measurement hardware that Samsung opened for Hue Sync, so not every model has it.
+
+| Model | Year | Tizen | Status |
+|---|---|---|---|
+| QN90D · QN92D · Q60D | 2024 | 8.0 – 9.0 | ✅ |
+| S90C | 2023 | 7.0 | ✅ [#15](https://github.com/exzos28/tizen-os-ambilight/issues/15) |
+| S95B | 2022 | 6.5 | ✅ with Hue Sync turned off [#14](https://github.com/exzos28/tizen-os-ambilight/issues/14) |
+| Q6F | — | — | ⚠️ [#2](https://github.com/exzos28/tizen-os-ambilight/issues/2) |
 
 [Install the app](#install-the-tv-app) — its home screen tells you whether your TV works. [Report it](docs/CONTRIBUTING.md) either way.
 

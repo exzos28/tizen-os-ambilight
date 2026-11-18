@@ -134,7 +134,7 @@ namespace Service
                     w.WriteNumber("lastBadRet", _lastBadRet);
                     w.WriteNumber("h", _lastFrame.H);
                     w.WriteNumber("v", _lastFrame.V);
-                    w.WriteString("rgb", Convert.ToHexString(_lastFrame.Rgb));   // EdgeFrame order
+                    w.WriteString("rgb", StatusJson.Hex(_lastFrame.Rgb));   // EdgeFrame order
                 }
                 w.WriteEndObject();
             }
@@ -179,6 +179,19 @@ namespace Service
             w.WriteStartObject();
             w.WriteBoolean("enabled", false);
             w.WriteEndObject();
+        }
+
+        // Upper-case hex, like Convert.ToHexString, which the tizen60 target (.NET Core 3.1) lacks.
+        internal static string Hex(byte[] bytes)
+        {
+            const string digits = "0123456789ABCDEF";
+            var c = new char[bytes.Length * 2];
+            for (int i = 0; i < bytes.Length; i++)
+            {
+                c[i * 2] = digits[bytes[i] >> 4];
+                c[i * 2 + 1] = digits[bytes[i] & 0xF];
+            }
+            return new string(c);
         }
     }
 }

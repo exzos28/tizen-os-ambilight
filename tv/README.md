@@ -14,7 +14,7 @@ cd tv/app && npm ci && npm run build   # writes ui/index.html and ui/assets/
 
 `npm run dev` in `app/` runs the launcher in a desktop browser against a built-in mock (`?state=ok|lost|none|off|unsupported`). Build, signing and installation: [docs/INSTALL.md § TV apps](../docs/INSTALL.md#4-tv-apps); the launcher's design: [docs/ARCHITECTURE.md § TV launcher](../docs/ARCHITECTURE.md#2-tv-launcher-tvui).
 
-Releases attach the package as `ambilight-tv-vX.Y.Z.wgt`, built in CI by `scripts/make_package.sh` (`.github/workflows/tv-package.yml`): the launcher with `npm ci && npm run build` in `app/`, the service from `service/Service.csproj` with the Tizen .NET workload (as in VS Code), the hybrid `.wgt` with the Tizen-Core CLI (`tz pack`, as the VS Code extension), signed with the Tizen SDK's default certificate for Apps2Samsung to re-sign.
+Releases attach the package as `ambilight-tv-vX.Y.Z.wgt`, built in CI by `scripts/make_package.sh` (`.github/workflows/tv-package.yml`): the launcher with `npm ci && npm run build` in `app/`, the service from `service/Service.csproj` with Tizen.NET.Sdk (`tizen60`, as in VS Code), the hybrid `.wgt` with the Tizen-Core CLI (`tz pack`, as the VS Code extension), signed with the Tizen SDK's default certificate for Apps2Samsung to re-sign.
 
 ## How it works
 

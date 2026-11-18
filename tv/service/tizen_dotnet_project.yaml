@@ -3,7 +3,7 @@ csproj_file: Service.csproj
 
 # Default profile, Tizen API version
 profile: tizen
-api_version: "9.0"
+api_version: "5.5"
 
 # Build type [Debug/ Release/ Test]
 build_type: Debug
