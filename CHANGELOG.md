@@ -1,5 +1,23 @@
 # tizen-os-ambilight
 
+## 1.3.0
+
+### Minor Changes
+
+- [#17](https://github.com/exzos28/tizen-os-ambilight/pull/17) [`6d81a15`](https://github.com/exzos28/tizen-os-ambilight/commit/6d81a1549adec7602d927ef8a4c9227fc972ac73) Thanks [@exzos28](https://github.com/exzos28)! - ESP32: colors fade in RGB with adaptive smoothing (new `smoothing_ms` setting), and saturation is boosted around luma so brightness stays the same. The protocol package adds shared response presets: Movies, Everyday, Music, Games.
+
+- [#28](https://github.com/exzos28/tizen-os-ambilight/pull/28) [`35ecbeb`](https://github.com/exzos28/tizen-os-ambilight/commit/35ecbeb043342ae5a51515f039d84930caba1ca5) Thanks [@exzos28](https://github.com/exzos28)! - TV app: Home has a Style card with four presets (Movies, Everyday, Music, Games) and shows the status of capture and the outputs in the header. The live preview and the test pattern moved to Diagnostics.
+
+### Patch Changes
+
+- [#29](https://github.com/exzos28/tizen-os-ambilight/pull/29) [`c283501`](https://github.com/exzos28/tizen-os-ambilight/commit/c283501892822b9377d4e4f0db5bf037b18c47f7) Thanks [@exzos28](https://github.com/exzos28)! - ESP32: flashes, subtitles and credits no longer strobe the strip (a large step up is softened, scene cuts stay crisp), fades stay smooth, dark scenes stay lit longer, and the strip fades in and out instead of popping when frames start or stop. The Music and Games styles are calmer: 120 ms / saturation 1.1 and 80 ms / 1.15.
+
+- [#22](https://github.com/exzos28/tizen-os-ambilight/pull/22) [`ca4d119`](https://github.com/exzos28/tizen-os-ambilight/commit/ca4d119e9a161118f98ff320fc95397154d88104) Thanks [@AirAlarm](https://github.com/AirAlarm)! - ESP32: the station link is supervised again after a Wi-Fi dropout. The board now re-begins the saved network every 60 s and restarts itself if it stays down for 90 s, instead of sitting silent with the strip blanked until it is power-cycled. `GET /metrics` also reports `reset_reason` and `wifi_status`, so a report can say why the board restarted.
+
+- [#31](https://github.com/exzos28/tizen-os-ambilight/pull/31) [`de9312d`](https://github.com/exzos28/tizen-os-ambilight/commit/de9312dc4d15cc72d51c266511abade537bbd4ec) Thanks [@exzos28](https://github.com/exzos28)! - TV service: the top and bottom sample points sit deeper (330 px instead of 250 px on a 4K picture), so on 2.39:1 films they measure the picture instead of the black bars and the top and bottom of the strip light up.
+
+- [#18](https://github.com/exzos28/tizen-os-ambilight/pull/18) [`c9ff521`](https://github.com/exzos28/tizen-os-ambilight/commit/c9ff521384ae5cb8167e2851b665075d8f8f4189) Thanks [@exzos28](https://github.com/exzos28)! - TV service: built for Tizen 5.5 and newer, so it also starts on 2020–2023 TVs (it needed Tizen 8.0 before), and capture tries the older `cs_ve_*` functions of the video processor.
+
 ## 1.2.1
 
 ### Patch Changes
