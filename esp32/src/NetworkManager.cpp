@@ -12,6 +12,10 @@ bool NetworkManager::connectSTA(const String& ssid, const String& password,
                                 uint8_t preferredLastOctet, uint32_t timeoutMs) {
     if (ssid.isEmpty()) return false;
 
+    // Kept for the reconnects in handle(): a dropped link must be re-begun by us.
+    _staSsid     = ssid;
+    _staPassword = password;
+
     WiFi.mode(WIFI_STA);
     WiFi.setAutoReconnect(true);
     WiFi.persistent(true);
@@ -73,7 +77,30 @@ void NetworkManager::startAP(const String& ssid, const String& staSsid,
 }
 
 void NetworkManager::handle() {
-    if (!_apMode) return;
+    if (!_apMode) {
+        // Station supervision. WiFi.setAutoReconnect(true) stops retrying on its own after
+        // a while, which leaves the board silent on the network (the TV then sees no
+        // controller and the strip blanks out) until someone power-cycles it: re-begin the
+        // saved network ourselves, and restart the board if it stays down.
+        uint32_t now = millis();
+        if (WiFi.status() == WL_CONNECTED) {
+            _lastOkMs    = now;
+            _nextStaRetry = 0;
+            return;
+        }
+        if (_lastOkMs != 0 && now - _lastOkMs >= STA_RESTART_AFTER_MS) {
+            Log.println("[WiFi] Link down too long — restarting");
+            delay(100);
+            ESP.restart();
+        }
+        if (_nextStaRetry == 0 || (int32_t)(now - _nextStaRetry) >= 0) {
+            Log.printf("[WiFi] Link lost — reconnecting to %s\n", _staSsid.c_str());
+            WiFi.begin(_staSsid.c_str(), _staPassword.c_str());
+            _nextStaRetry = now + STA_RETRY_INTERVAL_MS;
+        }
+        return;
+    }
+
     _dns.processNextRequest();
 
     if (_staSsid.isEmpty()) return;

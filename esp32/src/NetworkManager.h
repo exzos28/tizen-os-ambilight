@@ -21,7 +21,8 @@ public:
     // AP — and the device restarts in STA mode once it connects.
     void startAP(const String& ssid, const String& staSsid, const String& staPassword);
 
-    // Must be called every loop() iteration when in AP mode.
+    // Must be called every loop() iteration: supervises the station link in STA mode and
+    // runs the captive portal in AP mode.
     void handle();
 
     bool   isConnected() const;
@@ -31,6 +32,9 @@ public:
 private:
     static constexpr uint32_t STA_RETRY_INTERVAL_MS = 60000;
     static constexpr uint32_t STA_ATTEMPT_MS        = 15000;
+    // A dropped link restarts the board after this long: WiFi.setAutoReconnect() stops
+    // retrying on its own and the board then sits silent until it is power-cycled.
+    static constexpr uint32_t STA_RESTART_AFTER_MS  = 90000;
 
     NetworkManager() = default;
     bool      _apMode          = false;
@@ -38,5 +42,7 @@ private:
     String    _staPassword;
     uint32_t  _staAttemptStart = 0;   // 0 = no attempt running
     uint32_t  _nextStaAttempt  = 0;
+    uint32_t  _lastOkMs        = 0;   // STA: last time the link was up
+    uint32_t  _nextStaRetry    = 0;   // STA: 0 = reconnect now
     DNSServer _dns;
 };
