@@ -180,8 +180,9 @@ export interface Esp32Config {
    */
   saturation: number
   /**
-   * Time constant of the temporal smoothing of TV frames for small changes. A large change (a
-   * scene cut, a sudden dark or bright area) always follows within about 40 ms. 0 = no smoothing.
+   * Time constant of the temporal smoothing of TV frames for small changes. A scene cut or a large
+   * step down follows within about 40 ms, a large step up at half this time (at least 40 ms). 0 =
+   * no smoothing.
    *
    * @minimum 0
    * @maximum 1000
@@ -389,8 +390,9 @@ export interface SaveLedsRequest {
    */
   saturation?: number
   /**
-   * Time constant of the temporal smoothing of TV frames for small changes. A large change (a
-   * scene cut, a sudden dark or bright area) always follows within about 40 ms. 0 = no smoothing.
+   * Time constant of the temporal smoothing of TV frames for small changes. A scene cut or a large
+   * step down follows within about 40 ms, a large step up at half this time (at least 40 ms). 0 =
+   * no smoothing.
    *
    * @minimum 0
    * @maximum 1000

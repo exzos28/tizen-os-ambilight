@@ -487,13 +487,20 @@ undefined hue, so going through HSV invented colors between neighbouring samples
 2. **Saturate** around the Rec.709 luma (`saturation`), so the brightness stays the same.
 3. **Interpolate** each side's samples to its LED count (`ledTop/Right/Bottom/Left`) in RGB,
    then **map** the sides onto the physical strip using `startCorner` and `clockwise`.
-4. **Dark threshold** on the output luma with hysteresis (off below 6, on again above 10),
-   so near-black scenes don't toggle LEDs.
-5. **Pick the time constant** per LED: `smoothing_ms` (default 200, 0 = none) for small
-   changes; 40 ms for a large one (more than 20 % luma) and for every LED on a scene cut
-   (the frame's average luma moves that much).
+4. **Pick the path** per LED from how its target changed since the last frame (not from
+   what it shows, so a fade that the LED lags behind stays smooth):
+   - small change, including every step of a fade: `smoothing_ms` (default 200, 0 = none);
+   - a scene cut (the frame's average luma moves by more than 20 %) or a large step down:
+     40 ms, so cuts stay crisp;
+   - a large step up (luma by more than 20 %, or a channel by more than 96: a color cut at the
+     same brightness) without a scene cut: half of `smoothing_ms`, at least 40 ms. A flash or
+     a subtitle on one sample is followed but softened instead of strobing;
+   - the first frame after the strip was dark or cleared, and going dark 5 s after the last
+     frame: 500 ms, a fade instead of a pop.
+5. **Dark threshold** on the output luma with hysteresis (off below 2, on again above 4), so
+   near-black scenes don't toggle LEDs.
 
-`update()` runs at ~60 Hz and moves each LED toward its target with that time constant
+`update()` runs at ~60 Hz and moves each LED toward its target with that path's time constant
 (8.8 fixed point, independent of the update rate), then applies the output lookup table
 (white balance, then gamma).
 
@@ -617,7 +624,7 @@ Stored in the `ambilight` NVS namespace, editable in the web UI (`esp32/src/Conf
 | `power` | `power` | true | Lighting on/off (`POST /save/power`, `0`/`1`). Off: dark in both modes, UDP frames ignored; other settings kept |
 | `gamma` | `gamma` | 2.2 | Gamma correction (UI range 0.5–3.0) |
 | `saturation` | `saturation` | 1.0 | Saturation multiplier (UI range 0–2) |
-| `smoothingMs` | `smoothing_ms` | 200 | Time constant of the smoothing of small changes in ms (0–1000, 0 = none); large changes and scene cuts always use 40 ms |
+| `smoothingMs` | `smoothing_ms` | 200 | Time constant of the smoothing of small changes in ms (0–1000, 0 = none); scene cuts and large steps down use 40 ms, large steps up half of it (at least 40 ms) |
 | `whiteBalanceR/G/B` | `wb_r` / `wb_g` / `wb_b` | 255 | Per-channel scale |
 | `preferredLastOctet` | `ip_octet` | 245 | Static IP last octet in the router's subnet; 0 = DHCP; valid 0–254 (checked against the real gateway/mask at connect) |
 | `powerLimitW` | `power_limit_w` | 0 | Max estimated strip power in W; 0 = no limit (0–2000) |

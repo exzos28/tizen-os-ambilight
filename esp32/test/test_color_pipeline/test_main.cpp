@@ -168,14 +168,14 @@ void test_dark_threshold_has_hysteresis() {
     TEST_ASSERT_TRUE(nextLit(false, DARK_ON_LUMA + 1));
     TEST_ASSERT_TRUE(nextLit(true, DARK_OFF_LUMA));         // stays lit down to OFF
     TEST_ASSERT_FALSE(nextLit(true, DARK_OFF_LUMA - 1));
-    TEST_ASSERT_TRUE(nextLit(true, 8));                     // in the gap: keeps its state
-    TEST_ASSERT_FALSE(nextLit(false, 8));
+    TEST_ASSERT_TRUE(nextLit(true, DARK_OFF_LUMA + 1));     // in the gap: keeps its state
+    TEST_ASSERT_FALSE(nextLit(false, DARK_OFF_LUMA + 1));
 }
 
 void test_dark_threshold_blackens_an_unlit_target_without_flicker() {
     LedState s{};
-    // A value hovering 7–9 around the threshold never lights a dark LED…
-    const uint8_t hover[] = {7, 9, 8, 9, 7};
+    // A value hovering at ON and below never lights a dark LED…
+    const uint8_t hover[] = {DARK_ON_LUMA, DARK_OFF_LUMA + 1, DARK_ON_LUMA, DARK_OFF_LUMA};
     for (uint8_t y : hover) {
         Rgb t{30, 30, 30};
         darkThreshold(s, t, y);
@@ -183,9 +183,9 @@ void test_dark_threshold_blackens_an_unlit_target_without_flicker() {
     }
     // …lights above ON, then stays lit while it hovers in the gap…
     Rgb t{40, 40, 40};
-    darkThreshold(s, t, 11);
+    darkThreshold(s, t, DARK_ON_LUMA + 1);
     assertRgb({40, 40, 40}, t);
-    const uint8_t gap[] = {7, 9, 6, 8};
+    const uint8_t gap[] = {DARK_OFF_LUMA, DARK_ON_LUMA, DARK_OFF_LUMA + 1};
     for (uint8_t y : gap) {
         Rgb u{30, 30, 30};
         darkThreshold(s, u, y);
@@ -193,18 +193,20 @@ void test_dark_threshold_blackens_an_unlit_target_without_flicker() {
     }
     // …and goes dark below OFF.
     Rgb u{20, 20, 20};
-    darkThreshold(s, u, 5);
+    darkThreshold(s, u, DARK_OFF_LUMA - 1);
     assertRgb({0, 0, 0}, u);
     TEST_ASSERT_EQUAL_UINT8(0, s.flags & LED_LIT);
 }
 
 // ---------------------------------------------------------------- temporal smoothing
 
+// An LED settled on c: showing it, and c was the last frame's target.
 static LedState showing(Rgb c) {
     LedState s{};
     s.c[0] = (uint16_t)(c.r << 8);
     s.c[1] = (uint16_t)(c.g << 8);
     s.c[2] = (uint16_t)(c.b << 8);
+    s.prev = c;
     return s;
 }
 
@@ -212,7 +214,7 @@ static LedState showing(Rgb c) {
 static void run(LedState& s, Rgb target, uint16_t smoothingMs, uint32_t totalMs, uint32_t dtMs = 16) {
     for (uint32_t t = 0; t < totalMs; t += dtMs) {
         Alphas a = alphas(dtMs, smoothingMs);
-        step(s, target, a.slow, a.fast);
+        step(s, target, a);
     }
 }
 
@@ -222,8 +224,16 @@ void test_alpha_follows_the_time_constant() {
     TEST_ASSERT_INT_WITHIN(2, 314, alphaQ12(16, 200));
     TEST_ASSERT_TRUE(alphaQ12(1, 1000) >= 1);
     TEST_ASSERT_EQUAL_UINT16(ALPHA_ONE, alphaQ12(100000, 50));
-    Alphas a = alphas(16, 10);   // a setting below FAST_TAU_MS: fast is never slower
+    Alphas a = alphas(16, 10);   // a setting below FAST_TAU_MS: rise and fast are never slower
     TEST_ASSERT_TRUE(a.fast >= a.slow);
+    TEST_ASSERT_TRUE(a.rise >= a.slow);
+    TEST_ASSERT_TRUE(a.fade <= a.slow);
+    Alphas m = alphas(16, 400);  // rise: half the setting
+    TEST_ASSERT_EQUAL_UINT16(alphaQ12(16, 200), m.rise);
+    TEST_ASSERT_EQUAL_UINT16(alphaQ12(16, FAST_TAU_MS), m.fast);
+    TEST_ASSERT_EQUAL_UINT16(alphaQ12(16, FADE_TAU_MS), m.fade);
+    Alphas g = alphas(16, 60);   // half of 60 is below FAST_TAU_MS: rise = fast
+    TEST_ASSERT_EQUAL_UINT16(g.fast, g.rise);
 }
 
 void test_approach_never_overshoots_and_settles_exactly() {
@@ -255,15 +265,15 @@ void test_smoothing_converges_in_real_time() {
 
 void test_zero_smoothing_jumps() {
     LedState s = showing({10, 20, 30});
-    onFrame(s, {11, 21, 31}, false);
+    onFrame(s, {11, 21, 31}, false, false);
     run(s, {11, 21, 31}, 0, 16);
     assertRgb({11, 21, 31}, shown(s));
 }
 
 void test_small_change_takes_the_slow_path() {
     LedState s = showing({100, 100, 100});
-    onFrame(s, {120, 120, 120}, false);
-    TEST_ASSERT_EQUAL_UINT8(0, s.flags & LED_FAST);
+    onFrame(s, {120, 120, 120}, false, false);
+    TEST_ASSERT_TRUE(path(s) == Path::Slow);
     run(s, {120, 120, 120}, 400, 48);
     TEST_ASSERT_TRUE(shown(s).r < 105);   // 3 updates into τ = 400 ms: barely moved
 }
@@ -271,24 +281,45 @@ void test_small_change_takes_the_slow_path() {
 // The rainbow noise: same brightness, hue jumping between frames — slow, not followed.
 void test_hue_only_change_stays_slow() {
     LedState s = showing({60, 50, 50});
-    onFrame(s, {50, 52, 62}, false);
-    TEST_ASSERT_EQUAL_UINT8(0, s.flags & LED_FAST);
+    onFrame(s, {50, 52, 62}, false, false);
+    TEST_ASSERT_TRUE(path(s) == Path::Slow);
 }
 
-void test_large_change_to_dark_goes_through_at_once() {
+// A fade: small steps every frame stay slow even though the shown color lags behind by more
+// than a large change (the old rule, against the shown color, jumped back and forth).
+void test_a_fade_stays_on_the_slow_path() {
+    LedState s = showing({200, 200, 200});
+    for (int v = 180; v >= 0; v -= 20) {
+        Rgb t{(uint8_t)v, (uint8_t)v, (uint8_t)v};
+        onFrame(s, t, false, false);
+        TEST_ASSERT_TRUE(path(s) == Path::Slow);
+        run(s, t, 400, 144);   // one frame at ~7 fps
+    }
+    TEST_ASSERT_TRUE(luma(shown(s)) > 20);   // lagging behind the fade, still slow
+}
+
+void test_large_step_down_goes_through_at_once() {
     LedState s = showing({220, 200, 180});
-    onFrame(s, {0, 0, 0}, false);
-    TEST_ASSERT_TRUE((s.flags & LED_FAST) != 0);
+    onFrame(s, {0, 0, 0}, false, false);
+    TEST_ASSERT_TRUE(path(s) == Path::Fast);
     run(s, {0, 0, 0}, 1000, 112);   // fast τ = 40 ms whatever the setting
     TEST_ASSERT_TRUE(luma(shown(s)) < 15);
 }
 
-void test_large_change_out_of_dark_appears_at_once() {
-    LedState s = showing({0, 0, 0});
-    onFrame(s, {200, 40, 40}, false);   // luma ≈ 79
-    TEST_ASSERT_TRUE((s.flags & LED_FAST) != 0);
-    run(s, {200, 40, 40}, 1000, 112);
-    TEST_ASSERT_TRUE(shown(s).r > 185);
+// A flash or a subtitle on one sample: followed at half the setting, not strobed.
+void test_large_step_up_is_softened() {
+    LedState s = showing({10, 10, 10});
+    onFrame(s, {255, 255, 255}, false, false);
+    TEST_ASSERT_TRUE(path(s) == Path::Rise);
+    run(s, {255, 255, 255}, 400, 112);   // τ = 200 ms: about 43 % of the way after 112 ms
+    TEST_ASSERT_INT_WITHIN(20, 115, shown(s).r);
+}
+
+// A cut between two colors of about the same brightness is a large change too.
+void test_color_cut_at_the_same_brightness_is_large() {
+    TEST_ASSERT_FALSE(largeLumaChange(luma(Rgb{200, 40, 40}), luma(Rgb{40, 40, 200})));
+    TEST_ASSERT_TRUE(largeChange({200, 40, 40}, {40, 40, 200}));
+    TEST_ASSERT_FALSE(largeChange({60, 50, 50}, {50, 52, 62}));
 }
 
 // A scene cut makes every LED fast, even one whose own change is small.
@@ -297,25 +328,35 @@ void test_scene_cut_uses_the_fast_constant_for_every_led() {
     TEST_ASSERT_TRUE(sceneCut(10, 120));
     TEST_ASSERT_FALSE(sceneCut(100, 100 + LARGE_CHANGE_LUMA));
     LedState s = showing({50, 50, 50});
-    onFrame(s, {60, 60, 60}, true);
-    TEST_ASSERT_TRUE((s.flags & LED_FAST) != 0);
+    onFrame(s, {60, 60, 60}, true, false);
+    TEST_ASSERT_TRUE(path(s) == Path::Fast);
     // The next frame without a cut is slow again.
-    onFrame(s, {62, 62, 62}, false);
-    TEST_ASSERT_EQUAL_UINT8(0, s.flags & LED_FAST);
+    onFrame(s, {62, 62, 62}, false, false);
+    TEST_ASSERT_TRUE(path(s) == Path::Slow);
 }
 
-void test_fast_flag_lasts_for_the_whole_transition() {
+// The first frame after the strip was dark fades in, whatever changed.
+void test_first_frame_fades_in() {
+    LedState s{};
+    onFrame(s, {255, 255, 255}, true, true);
+    TEST_ASSERT_TRUE(path(s) == Path::Fade);
+    run(s, {255, 255, 255}, 50, 112);   // even with a fast setting: τ = FADE_TAU_MS
+    TEST_ASSERT_TRUE(shown(s).r < 70);
+}
+
+void test_path_lasts_for_the_whole_transition() {
     LedState s = showing({0, 0, 0});
-    onFrame(s, {255, 255, 255}, false);
-    run(s, {255, 255, 255}, 400, 80);   // most of the way already: still fast until the next frame
-    TEST_ASSERT_TRUE((s.flags & LED_FAST) != 0);
+    onFrame(s, {255, 255, 255}, false, false);
+    run(s, {255, 255, 255}, 400, 80);   // part of the way: still the same path until the next frame
+    TEST_ASSERT_TRUE(path(s) == Path::Rise);
 }
 
-void test_clear_returns_to_black_and_unlit() {
+void test_clear_returns_to_black_unlit_and_slow() {
     LedState s = showing({100, 100, 100});
-    s.flags = LED_LIT | LED_FAST;
+    s.flags = LED_LIT | PATH_MASK;
     clear(s);
     assertRgb({0, 0, 0}, shown(s));
+    assertRgb({0, 0, 0}, s.prev);
     TEST_ASSERT_EQUAL_UINT8(0, s.flags);
 }
 
@@ -343,10 +384,13 @@ int main() {
     RUN_TEST(test_zero_smoothing_jumps);
     RUN_TEST(test_small_change_takes_the_slow_path);
     RUN_TEST(test_hue_only_change_stays_slow);
-    RUN_TEST(test_large_change_to_dark_goes_through_at_once);
-    RUN_TEST(test_large_change_out_of_dark_appears_at_once);
+    RUN_TEST(test_a_fade_stays_on_the_slow_path);
+    RUN_TEST(test_large_step_down_goes_through_at_once);
+    RUN_TEST(test_large_step_up_is_softened);
+    RUN_TEST(test_color_cut_at_the_same_brightness_is_large);
     RUN_TEST(test_scene_cut_uses_the_fast_constant_for_every_led);
-    RUN_TEST(test_fast_flag_lasts_for_the_whole_transition);
-    RUN_TEST(test_clear_returns_to_black_and_unlit);
+    RUN_TEST(test_first_frame_fades_in);
+    RUN_TEST(test_path_lasts_for_the_whole_transition);
+    RUN_TEST(test_clear_returns_to_black_unlit_and_slow);
     return UNITY_END();
 }

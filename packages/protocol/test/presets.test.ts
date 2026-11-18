@@ -53,8 +53,8 @@ describe('presetOf', () => {
   })
 
   it('accepts the float the device stores', () => {
-    assert.equal(presetOf({ smoothing_ms: 100, saturation: Math.fround(1.15) }), 'music')
-    assert.equal(presetOf({ smoothing_ms: 52, saturation: 1.31 }), 'games')
+    assert.equal(presetOf({ smoothing_ms: 120, saturation: Math.fround(1.1) }), 'music')
+    assert.equal(presetOf({ smoothing_ms: 82, saturation: 1.16 }), 'games')
   })
 
   it('is custom when a value differs', () => {

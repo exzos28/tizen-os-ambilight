@@ -4,9 +4,9 @@
 //
 //   per frame (~7 fps)   samples → ringSmooth (1-2-1 around the screen) → saturate (around
 //                        Rec.709 luma) → interpolateSide (RGB, per side) → strip order →
-//                        darkThreshold (hysteresis on the output luma) → onFrame (picks the
-//                        slow or fast time constant per LED)
-//   per update (~60 Hz)  approach the target in 8.8 fixed point with that time constant →
+//                        onFrame (picks the path per LED from the change since the last frame)
+//                        → darkThreshold (hysteresis on the output luma)
+//   per update (~60 Hz)  approach the target in 8.8 fixed point with that path's time constant →
 //                        output LUT (white balance, then gamma)
 //
 // Colors stay RGB throughout: nothing goes through hue, so dark or grey samples, whose hue
@@ -31,16 +31,26 @@ inline bool operator!=(Rgb a, Rgb b) { return !(a == b); }
 // DARK_ON_LUMA. Output values this low are only a few PWM steps, where a near-black scene
 // toggles LEDs on and off and rounding tints them; the gap keeps a value hovering at the
 // threshold from flickering.
-constexpr uint8_t DARK_OFF_LUMA = 6;
-constexpr uint8_t DARK_ON_LUMA  = 10;
+constexpr uint8_t DARK_OFF_LUMA = 2;
+constexpr uint8_t DARK_ON_LUMA  = 4;
 static_assert(DARK_OFF_LUMA < DARK_ON_LUMA, "the dark threshold needs a hysteresis gap");
 
-// A change of more than LARGE_CHANGE_LUMA (20 % of full scale, screen-referred luma) between
-// what an LED shows and its new target is a large one and uses FAST_TAU_MS instead of the
-// smoothing_ms setting, darker or brighter alike. So does every LED when the average luma of
-// a frame differs from the previous frame's by more than that (a scene cut).
-constexpr uint8_t  LARGE_CHANGE_LUMA = 51;
-constexpr uint16_t FAST_TAU_MS       = 40;
+// How an LED follows a new target (Path), from how its target changed since the last frame:
+// - a scene cut (the frame's average luma moves by more than LARGE_CHANGE_LUMA, 20 % of full
+//   scale) and a large step down: FAST_TAU_MS, so cuts and cuts to dark stay crisp;
+// - a large step up (luma by more than LARGE_CHANGE_LUMA, or a channel by more than
+//   LARGE_CHANGE_CHANNEL: a color cut at the same brightness) without a scene cut: half the
+//   smoothing_ms setting, at least FAST_TAU_MS. A flash, a subtitle or a credit line crossing
+//   one sample is a single LED-sized step up: it is followed, but softened, not strobed;
+// - anything else, including a fade (small steps every frame): the smoothing_ms setting;
+// - the first frame after the strip was dark or cleared, and going dark when the frames stop:
+//   FADE_TAU_MS, a gentle fade instead of a pop.
+// Comparing with the last frame's target (not with what the LED shows) keeps a slow fade on
+// the slow path even when the shown color lags behind it.
+constexpr uint8_t  LARGE_CHANGE_LUMA    = 51;
+constexpr uint8_t  LARGE_CHANGE_CHANNEL = 96;
+constexpr uint16_t FAST_TAU_MS          = 40;
+constexpr uint16_t FADE_TAU_MS          = 500;
 
 // Smoothing factors are Q12: 4096 = jump to the target.
 constexpr uint16_t ALPHA_ONE = 4096;
@@ -154,23 +164,34 @@ inline void buildOutputLut(const uint8_t gammaTable[256], uint8_t wbR, uint8_t w
 
 // ---------------------------------------------------------------------------- per LED
 
+// The time constant an LED follows its target with (see FAST_TAU_MS above).
+enum class Path : uint8_t { Slow = 0, Rise = 1, Fast = 2, Fade = 3 };
+
 // What the smoothing keeps per LED: the shown color (screen-referred, before white balance
-// and gamma) in 8.8 fixed point, and two flags.
+// and gamma) in 8.8 fixed point, the last frame's target before the dark threshold, and flags.
 struct LedState {
     uint16_t c[3];   // r, g, b × 256
-    uint8_t  flags;  // LED_LIT, LED_FAST
+    Rgb      prev;   // last frame's target, before the dark threshold
+    uint8_t  flags;  // LED_LIT, the Path in PATH_MASK
 };
-constexpr uint8_t LED_LIT  = 1;   // dark threshold: currently lit
-constexpr uint8_t LED_FAST = 2;   // the transition to the current target uses FAST_TAU_MS
+constexpr uint8_t LED_LIT    = 1;   // dark threshold: currently lit
+constexpr uint8_t PATH_SHIFT = 1;
+constexpr uint8_t PATH_MASK  = 3 << PATH_SHIFT;
+
+inline Path path(const LedState& s) { return (Path)((s.flags & PATH_MASK) >> PATH_SHIFT); }
+inline void setPath(LedState& s, Path p) {
+    s.flags = (uint8_t)((s.flags & ~PATH_MASK) | ((uint8_t)p << PATH_SHIFT));
+}
 
 inline uint8_t shownChannel(uint16_t v) { return (uint8_t)((v + 128u) >> 8); }
 inline Rgb shown(const LedState& s) {
     return {shownChannel(s.c[0]), shownChannel(s.c[1]), shownChannel(s.c[2])};
 }
 
-// Back to black, unlit, nothing pending (e.g. after the strip was drawn black elsewhere).
+// Back to black, unlit, slow path (e.g. after the strip was drawn black elsewhere).
 inline void clear(LedState& s) {
     s.c[0] = s.c[1] = s.c[2] = 0;
+    s.prev = {0, 0, 0};
     s.flags = 0;
 }
 
@@ -188,21 +209,35 @@ inline void darkThreshold(LedState& s, Rgb& target, uint8_t outLuma) {
     if (!lit) target = {0, 0, 0};
 }
 
-inline bool largeChange(uint8_t fromLuma, uint8_t toLuma) {
-    int d = (int)fromLuma - (int)toLuma;
-    return (d < 0 ? -d : d) > LARGE_CHANGE_LUMA;
+inline int absDiff(int a, int b) { return a > b ? a - b : b - a; }
+
+inline bool largeLumaChange(uint8_t fromLuma, uint8_t toLuma) {
+    return absDiff(fromLuma, toLuma) > LARGE_CHANGE_LUMA;
+}
+
+// A large change between two frames' targets: the brightness, or one channel by a lot (a cut
+// between two colors of the same brightness). Hue noise in dark or grey samples moves the
+// channels by far less.
+inline bool largeChange(Rgb from, Rgb to) {
+    return largeLumaChange(luma(from), luma(to)) || absDiff(from.r, to.r) > LARGE_CHANGE_CHANNEL
+        || absDiff(from.g, to.g) > LARGE_CHANGE_CHANNEL || absDiff(from.b, to.b) > LARGE_CHANGE_CHANNEL;
 }
 
 inline bool sceneCut(uint8_t prevAverageLuma, uint8_t averageLuma) {
-    return largeChange(prevAverageLuma, averageLuma);
+    return largeLumaChange(prevAverageLuma, averageLuma);
 }
 
-// A new target arrived: the transition to it is fast on a scene cut or when it differs from
-// what the LED shows by a large luma step (either direction), slow otherwise — so a change of
-// hue alone, like sample noise, stays smoothed.
-inline void onFrame(LedState& s, Rgb target, bool cut) {
-    bool fast = cut || largeChange(luma(shown(s)), luma(target));
-    s.flags = (uint8_t)(fast ? (s.flags | LED_FAST) : (s.flags & ~LED_FAST));
+// A new frame's target for this LED (before the dark threshold): picks its path from the
+// change since the last frame's target. fadeIn: the strip was dark or cleared before this
+// frame.
+inline void onFrame(LedState& s, Rgb target, bool cut, bool fadeIn) {
+    Path p = fadeIn ? Path::Fade
+        : cut ? Path::Fast
+        : !largeChange(s.prev, target) ? Path::Slow
+        : luma(target) < luma(s.prev) ? Path::Fast
+        : Path::Rise;
+    setPath(s, p);
+    s.prev = target;
 }
 
 // Smoothing factor for dtMs elapsed with time constant tauMs: 1 − e^(−dt/τ) in Q12, at least
@@ -226,23 +261,28 @@ inline uint16_t approach(uint16_t v, uint8_t target, uint16_t alpha) {
     return (uint16_t)(step == 0 ? t : (int32_t)v + step);
 }
 
-// Advances one LED toward its target with the slow or fast factor its LED_FAST flag picks.
-inline void step(LedState& s, Rgb target, uint16_t slowAlpha, uint16_t fastAlpha) {
-    uint16_t a = (s.flags & LED_FAST) ? fastAlpha : slowAlpha;
-    s.c[0] = approach(s.c[0], target.r, a);
-    s.c[1] = approach(s.c[1], target.g, a);
-    s.c[2] = approach(s.c[2], target.b, a);
-}
-
-// The two factors for one update: slow from the smoothing_ms setting, fast from FAST_TAU_MS
-// (never slower than the slow one, for settings below it).
+// The factors for one update, one per Path: slow from the smoothing_ms setting; rise from half
+// of it, at least FAST_TAU_MS; fast from FAST_TAU_MS; rise and fast never slower than slow
+// (for settings below them). Fade from FADE_TAU_MS, never faster than slow.
 struct Alphas {
-    uint16_t slow, fast;
+    uint16_t slow, rise, fast, fade;
 };
 inline Alphas alphas(uint32_t dtMs, uint16_t smoothingMs) {
     uint16_t slow = alphaQ12(dtMs, smoothingMs);
+    uint16_t half = (uint16_t)(smoothingMs / 2);
+    uint16_t rise = alphaQ12(dtMs, half > FAST_TAU_MS ? half : FAST_TAU_MS);
     uint16_t fast = alphaQ12(dtMs, FAST_TAU_MS);
-    return {slow, fast > slow ? fast : slow};
+    uint16_t fade = alphaQ12(dtMs, FADE_TAU_MS);
+    return {slow, rise > slow ? rise : slow, fast > slow ? fast : slow, fade < slow ? fade : slow};
+}
+
+// Advances one LED toward its target with the factor of its path.
+inline void step(LedState& s, Rgb target, const Alphas& a) {
+    Path p = path(s);
+    uint16_t k = p == Path::Fast ? a.fast : p == Path::Rise ? a.rise : p == Path::Fade ? a.fade : a.slow;
+    s.c[0] = approach(s.c[0], target.r, k);
+    s.c[1] = approach(s.c[1], target.g, k);
+    s.c[2] = approach(s.c[2], target.b, k);
 }
 
 }  // namespace ColorPipeline
