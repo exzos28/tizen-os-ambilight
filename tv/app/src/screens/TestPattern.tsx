@@ -13,15 +13,16 @@ import './test-pattern.css';
 const LABEL_MS = 3000;
 
 // Where the service samples (tv/service/Capture.cs, Config.cs), in stage px: half the
-// 3840×2160 panel, so EdgeInsetPx 250 → 125 and the 16 px block → 8.
-const SW = 1920, SH = 1080, INSET = 125, BLOCK = 8, H_POINTS = 4, V_POINTS = 3;
-const near = INSET + BLOCK / 2;
+// 3840×2160 panel, so EdgeInsetSidePx 250 → 125, EdgeInsetTopBottomPx 330 → 165 and the 16 px
+// block → 8.
+const SW = 1920, SH = 1080, INSET_X = 125, INSET_Y = 165, BLOCK = 8, H_POINTS = 4, V_POINTS = 3;
+const nearX = INSET_X + BLOCK / 2, nearY = INSET_Y + BLOCK / 2;
 /** Centres of the sampled blocks, clockwise from the top-left, in the service's frame order. */
 const SAMPLES: [number, number][] = [];
-for (let i = 0; i < H_POINTS; i++) SAMPLES.push([(i + 0.5) * SW / H_POINTS, near]);
-for (let i = 0; i < V_POINTS; i++) SAMPLES.push([SW - near, (i + 0.5) * SH / V_POINTS]);
-for (let i = H_POINTS - 1; i >= 0; i--) SAMPLES.push([(i + 0.5) * SW / H_POINTS, SH - near]);
-for (let i = V_POINTS - 1; i >= 0; i--) SAMPLES.push([near, (i + 0.5) * SH / V_POINTS]);
+for (let i = 0; i < H_POINTS; i++) SAMPLES.push([(i + 0.5) * SW / H_POINTS, nearY]);
+for (let i = 0; i < V_POINTS; i++) SAMPLES.push([SW - nearX, (i + 0.5) * SH / V_POINTS]);
+for (let i = H_POINTS - 1; i >= 0; i--) SAMPLES.push([(i + 0.5) * SW / H_POINTS, SH - nearY]);
+for (let i = V_POINTS - 1; i >= 0; i--) SAMPLES.push([nearX, (i + 0.5) * SH / V_POINTS]);
 
 // ---------------------------------------------------------------- color wheel
 
