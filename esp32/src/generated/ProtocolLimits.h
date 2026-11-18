@@ -153,6 +153,13 @@ constexpr float SATURATION_MIN     = 0.0f;
 constexpr float SATURATION_MAX     = 2.0f;
 constexpr float SATURATION_DEFAULT = 1.0f;
 
+// smoothing_ms: Time constant of the temporal smoothing of TV frames for small changes. A large
+// change (a scene cut, a sudden dark or bright area) always follows within about 40 ms. 0 = no
+// smoothing. Unit: ms.
+constexpr uint16_t SMOOTHING_MS_MIN     = 0;
+constexpr uint16_t SMOOTHING_MS_MAX     = 1000;
+constexpr uint16_t SMOOTHING_MS_DEFAULT = 200;
+
 // wb_r: White balance, red channel scale (255 = unchanged).
 constexpr uint8_t WB_R_MIN     = 0;
 constexpr uint8_t WB_R_MAX     = 255;

@@ -4,6 +4,7 @@
   "color": "#ff8800",
   "gamma": 2.2,
   "saturation": 1.2,
+  "smoothing_ms": 100,
   "wb_r": 255,
   "wb_g": 240,
   "wb_b": 220,

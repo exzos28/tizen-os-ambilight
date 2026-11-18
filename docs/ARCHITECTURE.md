@@ -477,14 +477,23 @@ plain mode, preview) `repaint()` also drops the last decoded frame, so turning t
 or dynamic mode back on stays dark until a fresh frame arrives instead of fading in an old
 one.
 
-Frame processing (`applyAmbilight()`):
+Frame processing (`applyAmbilight()`, the steps in `ColorPipeline.h`, host-tested in
+`test/test_color_pipeline`). Colors stay RGB throughout: dark or grey samples have a noisy,
+undefined hue, so going through HSV invented colors between neighbouring samples.
 
-1. **Interpolate** each side's samples to the configured LED count for that side
-   (`ledTop/Right/Bottom/Left`), in HSV with shortest-path hue.
-2. **Color correction**: saturation boost → white balance → gamma (lookup table).
-3. **Map** sides onto the physical strip using `startCorner` and `clockwise`.
-4. **Smooth**: `update()` runs at ~60 Hz and blends the displayed colors toward the
-   target (`SMOOTH_ALPHA = 32/255` per step).
+1. **Ring smooth**: a 1-2-1 blur of the samples around the screen.
+2. **Saturate** around the Rec.709 luma (`saturation`), so the brightness stays the same.
+3. **Interpolate** each side's samples to its LED count (`ledTop/Right/Bottom/Left`) in RGB,
+   then **map** the sides onto the physical strip using `startCorner` and `clockwise`.
+4. **Dark threshold** on the output luma with hysteresis (off below 6, on again above 10),
+   so near-black scenes don't toggle LEDs.
+5. **Pick the time constant** per LED: `smoothing_ms` (default 200, 0 = none) for small
+   changes; 40 ms for a large one (more than 20 % luma) and for every LED on a scene cut
+   (the frame's average luma moves that much).
+
+`update()` runs at ~60 Hz and moves each LED toward its target with that time constant
+(8.8 fixed point, independent of the update rate), then applies the output lookup table
+(white balance, then gamma).
 
 `showCalibrationPreview()` lights the sides red / green / yellow / blue
 (top / right / bottom / left) and the first LED white for 10 s. When it expires,
@@ -606,6 +615,7 @@ Stored in the `ambilight` NVS namespace, editable in the web UI (`esp32/src/Conf
 | `power` | `power` | true | Lighting on/off (`POST /save/power`, `0`/`1`). Off: dark in both modes, UDP frames ignored; other settings kept |
 | `gamma` | `gamma` | 2.2 | Gamma correction (UI range 0.5–3.0) |
 | `saturation` | `saturation` | 1.0 | Saturation multiplier (UI range 0–2) |
+| `smoothingMs` | `smoothing_ms` | 200 | Time constant of the smoothing of small changes in ms (0–1000, 0 = none); large changes and scene cuts always use 40 ms |
 | `whiteBalanceR/G/B` | `wb_r` / `wb_g` / `wb_b` | 255 | Per-channel scale |
 | `preferredLastOctet` | `ip_octet` | 245 | Static IP last octet in the router's subnet; 0 = DHCP; valid 0–254 (checked against the real gateway/mask at connect) |
 | `powerLimitW` | `power_limit_w` | 0 | Max estimated strip power in W; 0 = no limit (0–2000) |

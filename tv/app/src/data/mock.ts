@@ -85,7 +85,7 @@ export function createMock(state: MockState, preset: MockOutputs = readMockOutpu
     wifi_ssid: 'Home', ota_host: 'ambilight', ip_octet: 245,
     num_leds: 32, max_leds: limits.num_leds.max, brightness: 200, color: '#ffd9a8', led_mode: LedMode.dynamic,
     led_top: 10, led_right: 6, led_bottom: 10, led_left: 6, start_corner: 0, clockwise: true,
-    gamma: 2.2, saturation: 1.2, wb_r: 255, wb_g: 240, wb_b: 220,
+    gamma: 2.2, saturation: 1.2, smoothing_ms: 200, wb_r: 255, wb_g: 240, wb_b: 220,
     power_limit_w: 0, pixel_watts: 0.3, power: true,
   };
 

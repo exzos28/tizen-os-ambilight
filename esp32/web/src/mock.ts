@@ -31,7 +31,7 @@ export function createMockClient(scenario: MockScenario): Esp32Client {
     wifi_ssid: ap ? '' : 'HomeNet', ota_host: 'ambilight', ip_octet: 245,
     num_leds: 32, max_leds: limits.num_leds.max, brightness: 200, color: '#ffd9a8', led_mode: LedMode.dynamic,
     led_top: 10, led_right: 6, led_bottom: 10, led_left: 6, start_corner: 0, clockwise: true,
-    gamma: 2.2, saturation: 1.2, wb_r: 255, wb_g: 236, wb_b: 214,
+    gamma: 2.2, saturation: 1.2, smoothing_ms: 200, wb_r: 255, wb_g: 236, wb_b: 214,
     power_limit_w: scenario === 'limited' ? 10 : 60, pixel_watts: 0.72, power: true,
   }
   const status: Esp32Status = ap
