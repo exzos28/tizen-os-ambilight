@@ -16,6 +16,13 @@
 .diag .ui-card { padding: 28px 32px; gap: 18px; border-radius: 22px; }
 .diag .ui-card-title { font-size: 26px; font-weight: 600; }
 
+/* ---- live preview */
+.diag .diag-preview { flex-direction: row; align-items: center; gap: 32px; }
+.diag-preview-text { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; min-width: 0; }
+.diag-preview-text h2 { font-size: 26px; font-weight: 600; }
+.diag-preview-text .ui-btn { margin-top: 6px; }
+.diag-fps { font-size: 22px; color: var(--ui-text-2); }
+
 /* ---- verdict */
 .diag-verdict { display: flex; align-items: center; gap: 16px; }
 .diag-verdict-icon {

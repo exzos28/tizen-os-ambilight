@@ -37,7 +37,7 @@ The TV finds its controllers on its own. [Architecture](docs/ARCHITECTURE.md) ·
 ## Screens
 
 <p>
-  <img src="docs/media/tv-home@2x.png" width="49%" alt="TV app home: lighting switch, brightness, mode, live preview of the captured colors, status">
+  <img src="docs/media/tv-home@2x.png" width="49%" alt="TV app home: lighting switch, brightness, mode, style presets, status">
   <img src="docs/media/tv-home-problem@2x.png" width="49%" alt="TV app when the controller stops answering: the problem and a Search now button on top">
 </p>
 <p>

@@ -12,9 +12,9 @@ Before buying anything:
 2. In [Apps2Samsung](https://github.com/Apps2Samsung/Apps2Samsung): pick the TV → **Tizen OS Ambilight** → *Install*.
 3. Open **Ambilight** on the TV → **Start**.
 
-<img src="media/tv-home@2x.png" srcset="media/tv-home.png 1x, media/tv-home@2x.png 2x, media/tv-home@3x.png 3x" width="600" alt="TV app home screen with a live preview of the captured colors">
+<img src="media/tv-home@2x.png" srcset="media/tv-home.png 1x, media/tv-home@2x.png 2x, media/tv-home@3x.png 3x" width="600" alt="TV app home screen with the status of screen capture at the top">
 
-**This TV is supported** and colors in the preview → go on. Otherwise this TV can't do it. Either way, [report your TV](CONTRIBUTING.md).
+**Screen capture · Working** at the top → go on. A banner saying the TV doesn't expose the capture API → this TV can't do it. Either way, [report your TV](CONTRIBUTING.md).
 
 ---
 

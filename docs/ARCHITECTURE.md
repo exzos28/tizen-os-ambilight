@@ -189,13 +189,13 @@ widget is not preloaded (no `prelaunch.support`), and Back on Home exits it.
 |---|---|
 | `src/App.tsx` | Shell: section rail + the one mounted screen, remote keys, status poll |
 | `src/focus.ts` | Focus manager: focusable elements as rows with column positions, explicit neighbours where needed |
-| `src/screens/Home.tsx` | Lighting on/off, brightness, mode + static colors, live preview, status, problem banner |
+| `src/screens/Home.tsx` | Lighting on/off, brightness, mode + static colors, style (response preset), the status pills in the header, problem banner |
 | `src/screens/TestPattern.tsx` | Full-screen test patterns for the strip and its calibration, ◀ ▶ to switch ([Test pattern](#test-pattern)) |
 | `src/screens/Layout.tsx` | Strip layout: start corner, direction, LEDs per side; preview and save ([Strip layout](#strip-layout)) |
 | `src/screens/Outputs.tsx` | The two outputs, each with its own switch: ESP32 controllers (list, *Blink to identify*, *Search again*) and HyperHDR (host, port, priority, connection); sends `set-outputs` |
 | `src/screens/Setup.tsx` | First-run wizard *What lights do you have?*; `shouldShowSetup(status)` |
 | `src/screens/hyperhdr.tsx` | The HyperHDR fields and connection line Outputs and the wizard share |
-| `src/screens/Diagnostics.tsx` | Whether this TV supports capture, what its hardware reports, the outputs' counters, settings warnings, the QR code of a pre-filled TV report ([Diagnostics](#diagnostics)) |
+| `src/screens/Diagnostics.tsx` | Whether this TV supports capture, what its hardware reports, the live preview with *Test pattern*, the outputs' counters, settings warnings, the QR code of a pre-filled TV report ([Diagnostics](#diagnostics)) |
 | `src/qr.ts` | QR code encoder (byte mode, level L) for the report link |
 | `src/status.ts` | Status lines, problems (most important first) and the header pill from the service status |
 | `src/controllers.ts` | The discovered controllers over HTTP: `/status` + `/config` once, `/metrics` every second while Home is shown; writes |
@@ -224,10 +224,11 @@ form-urlencoded with a 3 s timeout. A change goes to every controller that answe
 | Brightness (◀ ▶ in 5% steps, after OK) | `POST /save/leds brightness=0..255`, sent 300 ms after the last key |
 | Follow the picture / Static color | `POST /save/mode led_mode=1\|0` |
 | Static color swatch | `POST /save/leds color=#rrggbb` (+ `led_mode=0`) |
+| Style: *Movies* / *Everyday* / *Music* / *Games* | `POST /save/leds smoothing_ms=… saturation=…` from `responsePresets` (`@ambilight/protocol`) (+ `led_mode=1`). The tile matching every controller's config (`presetOf`) is marked; none while they differ or the values were set by hand (*Custom*). Firmware without `smoothing_ms` can't take a style |
 
 ### Test pattern
 
-`src/screens/TestPattern.tsx`, opened from Home: full-screen patterns to check the strip and
+`src/screens/TestPattern.tsx`, opened from the live preview on Diagnostics: full-screen patterns to check the strip and
 its calibration. ◀ ▶ switch (wrapping around), OK or Back close it; the last pattern is kept
 until the app exits. A label in the middle of the screen (name, what the strip should do,
 the keys) hides after 3 s and comes back on any key; it stays away from the edges where the
@@ -366,6 +367,7 @@ The *Diagnostics* section shows the same status in full, for a TV compatibility 
 |---|---|
 | This TV | Verdict (same reading as Home's banner: *This TV is supported*, *does not expose the capture API* for a `library` / `symbols` failure, *hardware is not ready* for `hardware`, stalled / failing reads), model (`tizen.systeminfo` `model_name`), app and service versions, the capture library and whether it loaded, `hw` (`ret`, screen, slots, block size, delay in use and the one the hardware asks for), frame time and fps, failed reads per frame with `lastBadRet`; while `failed`, the attempts, the retry time and `error` |
 | Output settings | `outputs.source` and `configWarnings` |
+| Live preview | `capture.rgb` as inner bands and what the first controller's LEDs show as dots, the fps; OK opens the *Test pattern* (closing it comes back here) |
 | Outputs | Per controller: its status line (as on Home), firmware and Wi-Fi from `/status`, uptime, heap (free, lowest, total), `frames_rx` and the last frame's age from `/metrics`; the service's `framesSent` / `sendErrors` / `lastError`; HyperHDR: connection, `replies`, `lastError` |
 | Report this TV | QR code of `issues/new?template=tv-compatibility.yml` with `title`, `model`, `result` (*Works* / *Partially works* / *Doesn't work* from the verdict; left out while the status can't tell) and `log` filled in: the `HwCondition` line in the service's event format, the capture state with `frameMs` / `reads` / `badReads` / `lastBadRet`, or the `CaptureError` with `failure` and `error` |
 

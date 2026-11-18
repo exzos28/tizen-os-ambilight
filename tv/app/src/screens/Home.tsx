@@ -1,18 +1,19 @@
-// Home: lighting on/off, brightness, mode, live preview and a compact status list. When
-// something is wrong a problem banner with the fix (if there is one) comes first.
+// Home: lighting on/off, brightness, mode and the style (response preset), with the status of
+// capture and the outputs in the header. When something is wrong a problem banner with the
+// fix (if there is one) comes first. The live preview and the test pattern are on Diagnostics.
 
 import { useEffect, useState } from 'preact/hooks';
 import {
-  Button, Card, CircleIcon, ColorSwatches, Kbd, KeyHint, LivePreview, Option, ProblemBanner, SWATCHES, ScreenIcon,
-  SliderBar, StatusLine, StatusList, StatusPill, Switch,
+  Button, Card, CircleIcon, ColorSwatches, Kbd, KeyHint, Option, ProblemBanner, SWATCHES, ScreenIcon,
+  SliderBar, StatusPill, Switch,
 } from '@ambilight/ui';
 import { Footer } from '../components/Footer';
 import { type Controller, type ControllerActions, unreachable } from '../controllers';
-import { LedMode, type ServiceStatus, limits } from '@ambilight/protocol';
+import { LedMode, type ServiceStatus, limits, presetOf, responsePresets } from '@ambilight/protocol';
 import type { Backend, ServiceLink } from '../data';
 import { EDGE_LEFT, type FocusGrid, type Key, step } from '../focus';
 import {
-  type Problem, type Row, captureRow, controllerRow, controllerTitle, fps, hyperHdrRow, live, summary,
+  type Problem, type Row, captureRow, controllerRow, controllerTitle, hyperHdrRow, live,
 } from '../status';
 
 /** The screen handles a key: true = consumed, 'rail' = move the focus to the rail. */
@@ -26,18 +27,22 @@ interface Props {
   actions: ControllerActions;
   problems: Problem[];
   model: string | null;
-  /** Focus this element on mount instead of the default. */
-  initialFocus: string | null;
   /** The focus is on the screen (not on the rail). */
   active: boolean;
   bindKeys: (h: KeyHandler) => void;
-  onTestPattern: () => void;
   onControllers: () => void;
 }
 
 const BRIGHTNESS_MAX = limits.brightness.max;
 const pctOf = (b: number) => Math.round((b * 100) / BRIGHTNESS_MAX);
 const byteOf = (pct: number) => Math.round((pct * BRIGHTNESS_MAX) / 100);
+
+/** One focus row of style tiles; cols line up with the tiles above (lighting, brightness, mode). */
+const styleRow = (): FocusGrid[number] => responsePresets.map((_, i) => ({
+  id: `style-${i}`,
+  col: [0, 1, 2, 2.05][i] ?? 2,
+  nav: i === 0 ? { up: 'lighting' } : i === 1 ? { up: 'brightness' } : {},
+}));
 
 export function Home(p: Props) {
   const { link, controllers, actions, problems } = p;
@@ -52,8 +57,14 @@ export function Home(p: Props) {
   const lead = cfgs[0];
   const on = cfgs.some((c) => c.power);
   const mixed = (f: (c: (typeof cfgs)[number]) => unknown) => cfgs.some((c) => f(c) !== f(lead));
+  const following = lead?.led_mode === LedMode.dynamic;
 
-  const [focus, setFocus] = useState<string>(p.initialFocus ?? (problem?.action ? 'banner-primary' : 'lighting'));
+  // Style: firmware older than the presets has no smoothing_ms and can't take one.
+  const stylesWork = cfgs.length > 0 && cfgs.every((c) => typeof c.smoothing_ms === 'number');
+  const styleOf = cfgs.map(presetOf);
+  const style = stylesWork && styleOf.every((s) => s === styleOf[0]) ? styleOf[0] : null;
+
+  const [focus, setFocus] = useState<string>(problem?.action ? 'banner-primary' : 'lighting');
   const [adjusting, setAdjusting] = useState(false);
   const [busy, setBusy] = useState<string | null>(null); // label of a running banner action
 
@@ -64,22 +75,20 @@ export function Home(p: Props) {
   if (problem?.controller) grid.push([{ id: 'banner-secondary', col: 2, nav: { down: 'lighting' } }]);
   if (compact) {
     grid.push([
-      { id: 'lighting', col: 0, nav: { down: 'test-pattern' } },
-      { id: 'brightness', col: 1, nav: { down: 'test-pattern' } },
+      { id: 'lighting', col: 0, nav: { down: 'style-0' } },
+      { id: 'brightness', col: 1, nav: { down: 'style-1' } },
       { id: 'mode', col: 2 },
     ]);
-    grid.push(SWATCHES.map((_, i) => ({ id: `swatch-${i}`, col: 2 + i / 100, nav: i === 0 ? { left: 'brightness' } : {} })));
-    grid.push([{ id: 'test-pattern', col: 3 }]);
   } else {
     grid.push([
-      { id: 'lighting', col: 0, nav: { down: 'test-pattern' } },
-      { id: 'brightness', col: 1, nav: { down: 'test-pattern' } },
+      { id: 'lighting', col: 0, nav: { down: 'style-0' } },
+      { id: 'brightness', col: 1, nav: { down: 'style-1' } },
       { id: 'mode-follow', col: 2 },
     ]);
     grid.push([{ id: 'mode-static', col: 2, nav: { left: 'brightness' } }]);
-    grid.push(SWATCHES.map((_, i) => ({ id: `swatch-${i}`, col: 2 + i / 100, nav: i === 0 ? { left: 'brightness' } : {} })));
-    grid.push([{ id: 'test-pattern', col: 0, nav: { up: 'lighting' } }]);
   }
+  grid.push(SWATCHES.map((_, i) => ({ id: `swatch-${i}`, col: 2 + i / 100, nav: i === 0 ? { left: 'brightness' } : {} })));
+  grid.push(styleRow());
   const ids = grid.flat().map((it) => it.id);
   const current = ids.includes(focus) ? focus : problem?.action ? 'banner-primary' : 'lighting';
   useEffect(() => { if (current !== focus) setFocus(current); }, [current]);
@@ -119,15 +128,19 @@ export function Home(p: Props) {
   const ok = (id: string) => {
     if (id === 'lighting') toggleLighting();
     else if (id === 'brightness') setAdjusting((a) => !a);
-    else if (id === 'mode') setMode(lead?.led_mode === LedMode.dynamic ? LedMode.plain : LedMode.dynamic);
+    else if (id === 'mode') setMode(following ? LedMode.plain : LedMode.dynamic);
     else if (id === 'mode-follow') setMode(LedMode.dynamic);
     else if (id === 'mode-static') setMode(LedMode.plain);
     else if (id.startsWith('swatch-')) {
       if (!canControl) return;
       actions.setColor(SWATCHES[+id.slice(7)].color);
       if (lead?.led_mode !== LedMode.plain) setMode(LedMode.plain);
-    } else if (id === 'test-pattern') p.onTestPattern();
-    else if (id === 'banner-primary') runBanner();
+    } else if (id.startsWith('style-')) {
+      // A style is about following the picture: picking one also switches to it.
+      if (!canControl || !stylesWork) return;
+      actions.setResponse(responsePresets[+id.slice(6)].values);
+      if (!following) setMode(LedMode.dynamic);
+    } else if (id === 'banner-primary') runBanner();
     else if (id === 'banner-secondary') p.onControllers();
   };
 
@@ -148,14 +161,13 @@ export function Home(p: Props) {
   const f = (id: string) => p.active && current === id;
 
   // ---------------------------------------------------------------- view
-  const pill = summary(link, problems);
-  const rows: Row[] = [captureRow(link, compact)];
+  const rows: Row[] = [captureRow(link, true)];
   // While the service lists hosts: those. When it lists none: the ones it lost in this session.
   const esp = status?.esp32;
   const listed = !esp?.enabled ? [] : controllers.filter((c) => c.present === esp.hosts.length > 0);
   listed.forEach((c, i) => rows.push(controllerRow(c, controllerTitle(i, listed.length), status, p.prev)));
   if (!esp) rows.push({ title: 'LED controller', detail: '—', value: '—', tone: 'off' });
-  else if (!esp.enabled) rows.push({ title: 'LED controllers', detail: 'Turned off in ambilight.json', value: 'Off', tone: 'off' });
+  else if (!esp.enabled) rows.push({ title: 'LED controllers', detail: 'Turned off', value: 'Off', tone: 'off' });
   else if (!listed.length) rows.push({ title: 'LED controller', detail: 'Searching the network', value: 'Not found', tone: 'warn' });
   rows.push(hyperHdrRow(link));
 
@@ -168,7 +180,13 @@ export function Home(p: Props) {
       : !on ? 'The strip is dark'
         : lead.led_mode === LedMode.plain ? 'Showing a static color'
           : capture && !capturing ? 'No picture to follow' : 'Following the picture';
-  const modeText = !lead ? '—' : mixed((c) => c.led_mode) ? 'Mixed' : lead.led_mode === LedMode.dynamic ? 'Follow the picture' : 'Static color';
+  const modeText = !lead ? '—' : mixed((c) => c.led_mode) ? 'Mixed' : following ? 'Follow the picture' : 'Static color';
+  const styleNote = !cfgs.length ? '—'
+    : !stylesWork ? 'Update the controller firmware to pick a style'
+      : style == null ? 'Controllers differ · OK sets all'
+        : style === 'custom' ? 'Custom: set on Picture'
+          : !following ? 'Picking one switches to Follow the picture'
+            : 'How the strip follows the picture';
   const swatches = (
     <ColorSwatches selected={lead?.led_mode === LedMode.plain ? lead.color : null}
       focusedIndex={SWATCHES.findIndex((_, i) => f(`swatch-${i}`))} small={compact} />
@@ -181,7 +199,9 @@ export function Home(p: Props) {
           <h1>Home</h1>
           <p class="subtitle">{p.model ? `Samsung ${p.model}` : 'Samsung TV'}{capture?.hw ? ` · ${capture.hw.fullW}×${capture.hw.fullH}` : ''}</p>
         </div>
-        <StatusPill tone={pill.tone}>{pill.text}</StatusPill>
+        <div class="home-status" aria-label="Status">
+          {rows.map((r) => <StatusPill key={r.title} tone={r.tone}>{r.title}<span class="home-status-value">{r.value}</span></StatusPill>)}
+        </div>
       </header>
 
       {problem && (
@@ -233,8 +253,8 @@ export function Home(p: Props) {
           <Card class="tile-big tile-mode">
             <span class="ui-label">Mode</span>
             <div class="modes" role="radiogroup" aria-label="Lighting mode">
-              <div role="radio" aria-checked={lead?.led_mode === LedMode.dynamic}>
-                <Option checked={lead?.led_mode === LedMode.dynamic} focused={f('mode-follow')} icon={<ScreenIcon size={26} />}>Follow the picture</Option>
+              <div role="radio" aria-checked={following}>
+                <Option checked={following} focused={f('mode-follow')} icon={<ScreenIcon size={26} />}>Follow the picture</Option>
               </div>
               <div role="radio" aria-checked={lead?.led_mode === LedMode.plain}>
                 <Option checked={lead?.led_mode === LedMode.plain} focused={f('mode-static')} icon={<CircleIcon size={26} />}>Static color</Option>
@@ -245,29 +265,18 @@ export function Home(p: Props) {
         </section>
       )}
 
-      {compact ? (
-        <section class="status-cards" aria-label="Status">
-          {rows.map((r) => <StatusLine key={r.title} tone={r.tone} title={r.title} detail={r.detail} value={r.value} card />)}
-          <Button tabIndex={-1} focused={f('test-pattern')}>Test pattern</Button>
-        </section>
-      ) : (
-        <div class="lower">
-          <Card class="preview-panel" label="Live preview">
-            <LivePreview rgb={capture?.rgb} h={capture?.h} v={capture?.v} live={capturing} config={lead} width={520} />
-            <div class="preview-text">
-              <h2>Live preview</h2>
-              <p class="ui-muted">Inner bands: what the TV samples. Dots: what the {lead ? `${lead.num_leds} ` : ''}LEDs show.</p>
-              <span class="ui-num fps">{capture && capturing ? `${fps(capture)} fps` : '—'}</span>
-              <Button tabIndex={-1} focused={f('test-pattern')}>Test pattern</Button>
+      <Card class={`style-card${compact ? ' compact' : ''}${following && stylesWork ? '' : ' idle'}`} label="Style">
+        <div class="spread"><span class="ui-label">Style</span><span class="ui-muted">{styleNote}</span></div>
+        <div class="styles" role="radiogroup" aria-label="Style">
+          {responsePresets.map((s, i) => (
+            <div key={s.id} role="radio" aria-checked={style === s.id}
+              class={`ui-option style${style === s.id ? ' checked' : ''}${f(`style-${i}`) ? ' focused' : ''}`}>
+              <span class="style-name">{s.label}</span>
+              {!compact && <span class="style-desc">{s.description}</span>}
             </div>
-          </Card>
-          <Card class="status-panel" label="Status">
-            <StatusList>
-              {rows.map((r) => <StatusLine key={r.title} tone={r.tone} title={r.title} detail={r.detail} value={r.value} />)}
-            </StatusList>
-          </Card>
+          ))}
         </div>
-      )}
+      </Card>
 
       <Footer>
         {problem?.action ? (
@@ -281,6 +290,7 @@ export function Home(p: Props) {
           <>
             <KeyHint k="OK">Lighting on / off</KeyHint>
             <KeyHint k="▶">Brightness, mode</KeyHint>
+            <KeyHint k="▼">Style</KeyHint>
             <KeyHint k="◀">Menu</KeyHint>
             <KeyHint k="↩">Back to TV</KeyHint>
           </>

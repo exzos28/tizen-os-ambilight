@@ -121,7 +121,7 @@ The TV side is one **hybrid package** (package ID `fCAYP0k0uD`) with two apps:
 
 | App | Path | Type | Purpose |
 |-----|------|------|---------|
-| Ambilight | `tv/ui/` (source: `tv/app/`) | Web app | Launcher: lighting on/off, brightness, mode, live preview and status (is this TV supported?) |
+| Ambilight | `tv/ui/` (source: `tv/app/`) | Web app | Launcher: lighting on/off, brightness, mode, style and status (is this TV supported?) |
 | Service | `tv/service/` | .NET service | Captures edge colors and streams them to the ESP32. Declared with `on-boot="true"` |
 
 `tv/ui/tizen_web_project.yaml` lists `../service` as a dependency, so building the launcher also builds the service and packs both into one package.
@@ -177,7 +177,7 @@ To work on the launcher without a TV, run `npm run dev` in `tv/app` and open the
 
 The service starts on its own when the TV boots, about a minute after power-on (Tizen starts background services late in the boot). After the first install, open **Ambilight** on the TV and press **Start** in the banner. The service waits 2 s, broadcasts a discovery probe and starts streaming to every ESP32 that answers. The strip should follow the picture within a few seconds.
 
-Home in **Ambilight** shows whether everything works, turns the lighting on and off, sets the brightness and switches between following the picture and a static color — on every controller at once. If something is wrong, a banner on top says what and offers the fix when there is one (*Start*, *Search now*). *Test pattern* shows patterns to check the strip and its calibration (a color wheel the strip should follow, solid colors, the sides, a chase around the edge, a grey ramp and more); ◀ ▶ switch them, OK or Back close it. Back exits the app.
+Home in **Ambilight** shows whether everything works, turns the lighting on and off, sets the brightness, switches between following the picture and a static color, and picks the style: *Movies* (calm and slow), *Everyday*, *Music* (lively) or *Games* (instant) — on every controller at once. If something is wrong, a banner on top says what and offers the fix when there is one (*Start*, *Search now*). *Test pattern* (on *Diagnostics*, under the live preview) shows patterns to check the strip and its calibration (a color wheel the strip should follow, solid colors, the sides, a chase around the edge, a grey ramp and more); ◀ ▶ switch them, OK or Back close it. Back exits the app.
 
 The service keeps looking for controllers in the background (new ones and IP changes are picked up within ~30 s); *Search now* probes immediately.
 
