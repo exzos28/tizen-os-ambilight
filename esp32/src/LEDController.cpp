@@ -238,15 +238,15 @@ void LEDController::updateOutputLut() {
     _lutWb[2] = cfg.whiteBalanceB;
 }
 
-void LEDController::decideTransitions(bool sceneCut) {
-    for (uint16_t i = 0; i < _numLeds; i++)
-        CP::onFrame(_state[i], CP::Rgb{_target[i].r, _target[i].g, _target[i].b}, sceneCut);
+void LEDController::setPaths(CP::Path path) {
+    for (uint16_t i = 0; i < _numLeds; i++) CP::setPath(_state[i], path);
 }
 
 void LEDController::clearSmoothing() {
     for (uint16_t i = 0; i < MAX_LEDS; i++) CP::clear(_state[i]);
     _prevAvgLuma = 0;
-    decideTransitions(false);
+    _fadeIn = true;
+    setPaths(CP::Path::Fade);
 }
 
 // Pipeline order and constants: ColorPipeline.h. Runs per frame (~7 fps); update() smooths
@@ -291,17 +291,19 @@ void LEDController::applyAmbilight(const uint8_t* data, uint8_t hCount, uint8_t 
               cfg.startCorner, cfg.clockwise,
               cfg.ledTop, cfg.ledRight, cfg.ledBottom, cfg.ledLeft);
 
-    // Dark threshold on what the LED would output, then slow or fast transition per LED.
+    // The path per LED from the change since the last frame, then the dark threshold on what
+    // the LED would output.
     updateOutputLut();
     for (uint16_t i = 0; i < _numLeds; i++) {
         CP::Rgb t{_target[i].r, _target[i].g, _target[i].b};
+        CP::onFrame(_state[i], t, cut, _fadeIn);
         CP::darkThreshold(_state[i], t, CP::luma(_lut.apply(t)));
-        CP::onFrame(_state[i], t, cut);
         _target[i] = CRGB(t.r, t.g, t.b);
     }
 
     _lastFrameMs = millis();
     _autoOff     = false;
+    _fadeIn      = false;
 }
 
 // ---------------------------------------------------------------------------
@@ -418,10 +420,12 @@ void LEDController::update() {
         // No frames for a while: the target goes dark, like a black frame would.
         if (!_autoOff && now - _lastFrameMs > AUTO_OFF_TIMEOUT_MS) {
             _autoOff = true;
+            // Fade out gently, and fade the next frame in: the frames stopped (the TV went
+            // to standby, the service paused), it isn't a cut in the picture.
             fill_solid(_target, _numLeds, CRGB::Black);
-            bool cut = CP::sceneCut(_prevAvgLuma, 0);
             _prevAvgLuma = 0;
-            decideTransitions(cut);
+            _fadeIn = true;
+            setPaths(CP::Path::Fade);
         }
 
         // Every LED one step toward its target with its time constant, then the output LUT;
@@ -431,7 +435,7 @@ void LEDController::update() {
         CP::Alphas a = CP::alphas(dt, cfg.smoothingMs);
         bool changed = false;
         for (uint16_t i = 0; i < _numLeds; i++) {
-            CP::step(_state[i], CP::Rgb{_target[i].r, _target[i].g, _target[i].b}, a.slow, a.fast);
+            CP::step(_state[i], CP::Rgb{_target[i].r, _target[i].g, _target[i].b}, a);
             CP::Rgb o = _lut.apply(CP::shown(_state[i]));
             if (_leds[i].r != o.r || _leds[i].g != o.g || _leds[i].b != o.b) {
                 _leds[i] = CRGB(o.r, o.g, o.b);

@@ -153,9 +153,9 @@ constexpr float SATURATION_MIN     = 0.0f;
 constexpr float SATURATION_MAX     = 2.0f;
 constexpr float SATURATION_DEFAULT = 1.0f;
 
-// smoothing_ms: Time constant of the temporal smoothing of TV frames for small changes. A large
-// change (a scene cut, a sudden dark or bright area) always follows within about 40 ms. 0 = no
-// smoothing. Unit: ms.
+// smoothing_ms: Time constant of the temporal smoothing of TV frames for small changes. A scene cut
+// or a large step down follows within about 40 ms, a large step up at half this time (at least 40
+// ms). 0 = no smoothing. Unit: ms.
 constexpr uint16_t SMOOTHING_MS_MIN     = 0;
 constexpr uint16_t SMOOTHING_MS_MAX     = 1000;
 constexpr uint16_t SMOOTHING_MS_DEFAULT = 200;

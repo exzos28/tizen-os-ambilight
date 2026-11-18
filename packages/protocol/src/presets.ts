@@ -16,8 +16,8 @@ export interface ResponsePreset {
 export const responsePresets: readonly ResponsePreset[] = [
   { id: 'movies', label: 'Movies', description: 'Calm and slow', values: { smoothing_ms: 400, saturation: 1.0 } },
   { id: 'everyday', label: 'Everyday', description: 'Balanced', values: { smoothing_ms: 200, saturation: 1.0 } },
-  { id: 'music', label: 'Music', description: 'Lively, more color', values: { smoothing_ms: 100, saturation: 1.15 } },
-  { id: 'games', label: 'Games', description: 'Instant', values: { smoothing_ms: 50, saturation: 1.3 } },
+  { id: 'music', label: 'Music', description: 'Lively, more color', values: { smoothing_ms: 120, saturation: 1.1 } },
+  { id: 'games', label: 'Games', description: 'Fast', values: { smoothing_ms: 80, saturation: 1.15 } },
 ]
 
 /** The preset of a fresh device: the `smoothing_ms` and `saturation` defaults. */

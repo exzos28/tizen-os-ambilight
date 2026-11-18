@@ -44,8 +44,9 @@ export const limits = {
   /** Saturation multiplier applied to TV frames (1 = unchanged). */
   saturation: { min: 0, max: 2, default: 1 },
   /**
-   * Time constant of the temporal smoothing of TV frames for small changes. A large change (a
-   * scene cut, a sudden dark or bright area) always follows within about 40 ms. 0 = no smoothing.
+   * Time constant of the temporal smoothing of TV frames for small changes. A scene cut or a large
+   * step down follows within about 40 ms, a large step up at half this time (at least 40 ms). 0 =
+   * no smoothing.
    */
   smoothing_ms: { min: 0, max: 1000, default: 200, unit: 'ms' },
   /** White balance, red channel scale (255 = unchanged). */

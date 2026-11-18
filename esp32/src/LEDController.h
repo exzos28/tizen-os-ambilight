@@ -86,11 +86,11 @@ private:
 
     // Rebuilds the output LUT (white balance, gamma) if those settings changed.
     void updateOutputLut();
-    // The strip was drawn black elsewhere: the smoothing starts from black again, and each
-    // LED's transition to the current target is decided anew (ColorPipeline::onFrame).
+    // The strip was drawn black elsewhere: the smoothing starts from black again, fading
+    // toward the current target, and the next frame fades in.
     void clearSmoothing();
-    // ColorPipeline::onFrame for every driven LED against the current target.
-    void decideTransitions(bool sceneCut);
+    // The same path for every driven LED until the next frame decides anew.
+    void setPaths(ColorPipeline::Path path);
 
     // Fill dst[] from per-side CRGB arrays using startCorner + clockwise mapping.
     // Side natural directions: TOP[0]=top-left, RIGHT[0]=top-right,
@@ -130,6 +130,7 @@ private:
     uint32_t    _lastUpdateMs = 0;
     bool        _autoOff      = false;   // the target went dark after AUTO_OFF_TIMEOUT_MS
     uint8_t     _prevAvgLuma  = 0;       // average sample luma of the last frame (scene cuts)
+    bool        _fadeIn       = true;    // the next frame fades in (the strip was dark or cleared)
     uint8_t     _gammaTable[256];
     ColorPipeline::OutputLut _lut;
     float       _lutGamma     = -1.0f;   // settings _lut was built for; -1 = not built
