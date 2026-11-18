@@ -3,7 +3,7 @@
 // `smoothing_ms` and `saturation`. A separate axis from color presets (gamma, white balance).
 import type { Esp32Config } from './generated/types.ts'
 
-export type ResponsePresetId = 'subtle' | 'moderate' | 'high' | 'intense'
+export type ResponsePresetId = 'movies' | 'everyday' | 'music' | 'games'
 
 export interface ResponsePreset {
   id: ResponsePresetId
@@ -14,14 +14,14 @@ export interface ResponsePreset {
 }
 
 export const responsePresets: readonly ResponsePreset[] = [
-  { id: 'subtle', label: 'Subtle', description: 'Films, calm', values: { smoothing_ms: 400, saturation: 1.0 } },
-  { id: 'moderate', label: 'Moderate', description: 'Everything', values: { smoothing_ms: 200, saturation: 1.0 } },
-  { id: 'high', label: 'High', description: 'Sport, music videos', values: { smoothing_ms: 100, saturation: 1.15 } },
-  { id: 'intense', label: 'Intense', description: 'Games, least delay', values: { smoothing_ms: 50, saturation: 1.3 } },
+  { id: 'movies', label: 'Movies', description: 'Calm and slow', values: { smoothing_ms: 400, saturation: 1.0 } },
+  { id: 'everyday', label: 'Everyday', description: 'Balanced', values: { smoothing_ms: 200, saturation: 1.0 } },
+  { id: 'music', label: 'Music', description: 'Lively, more color', values: { smoothing_ms: 100, saturation: 1.15 } },
+  { id: 'games', label: 'Games', description: 'Instant', values: { smoothing_ms: 50, saturation: 1.3 } },
 ]
 
 /** The preset of a fresh device: the `smoothing_ms` and `saturation` defaults. */
-export const defaultResponsePreset: ResponsePresetId = 'moderate'
+export const defaultResponsePreset: ResponsePresetId = 'everyday'
 
 /** Within these a value counts as the preset's (the device stores saturation as a float). */
 export const presetTolerance = { smoothing_ms: 5, saturation: 0.025 } as const

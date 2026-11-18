@@ -8,7 +8,7 @@ const byId = (id: string) => responsePresets.find((p) => p.id === id)!
 
 describe('responsePresets', () => {
   it('are the four presets, slowest first, with labels and descriptions', () => {
-    assert.deepEqual(responsePresets.map((p) => p.id), ['subtle', 'moderate', 'high', 'intense'])
+    assert.deepEqual(responsePresets.map((p) => p.id), ['movies', 'everyday', 'music', 'games'])
     for (let i = 1; i < responsePresets.length; i++) {
       assert.ok(responsePresets[i]!.values.smoothing_ms < responsePresets[i - 1]!.values.smoothing_ms)
     }
@@ -53,8 +53,8 @@ describe('presetOf', () => {
   })
 
   it('accepts the float the device stores', () => {
-    assert.equal(presetOf({ smoothing_ms: 100, saturation: Math.fround(1.15) }), 'high')
-    assert.equal(presetOf({ smoothing_ms: 52, saturation: 1.31 }), 'intense')
+    assert.equal(presetOf({ smoothing_ms: 100, saturation: Math.fround(1.15) }), 'music')
+    assert.equal(presetOf({ smoothing_ms: 52, saturation: 1.31 }), 'games')
   })
 
   it('is custom when a value differs', () => {

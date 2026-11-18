@@ -124,8 +124,8 @@ await esp.saveMode({ led_mode: LedMode.dynamic })
   for the answer to the next one; without it the reply has none (older UIs and services).
   `buildSetOutputsRequest` sends only the `ServiceOutputs` keys; the service validates the
   values and answers `ok: false` with the reason if one is invalid.
-- `responsePresets` / `presetOf(config)` — the response presets both UIs offer (*Subtle*,
-  *Moderate* = the defaults, *High*, *Intense*: `smoothing_ms` and `saturation`, sent in one
+- `responsePresets` / `presetOf(config)` — the response presets both UIs offer (*Movies*,
+  *Everyday* = the defaults, *Music*, *Games*: `smoothing_ms` and `saturation`, sent in one
   `saveLeds`) and which one a config matches (`presetTolerance`), or `'custom'` (also for
   firmware without `smoothing_ms`).
 - `parseServiceReply(data)` reads a `status` or `result` reply with a light runtime check —
