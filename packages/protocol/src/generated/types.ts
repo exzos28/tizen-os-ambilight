@@ -312,6 +312,20 @@ export interface Esp32Metrics {
    * @maximum 4294967295
    */
   config_rev: number
+  /**
+   * Why the board last started (esp_reset_reason): poweron after a power cycle, panic / *_wdt
+   * after a crash, sw after a restart by the firmware (e.g. a Wi-Fi link down too long). Missing
+   * on older firmware.
+   */
+  reset_reason?: 'poweron' | 'ext' | 'sw' | 'panic' | 'int_wdt' | 'task_wdt' | 'wdt' | 'deepsleep' | 'brownout' | 'sdio' | 'unknown'
+  /**
+   * Station link state (arduino-esp32 wl_status_t): 3 = connected, 5 = connection lost, 6 =
+   * disconnected. Missing on older firmware.
+   *
+   * @minimum 0
+   * @maximum 255
+   */
+  wifi_status?: number
 }
 
 // ------------------------------------------------------------------------------------------------
