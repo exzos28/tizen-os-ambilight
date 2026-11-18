@@ -2,8 +2,7 @@
 
 The TV service can stream to a [HyperHDR](https://github.com/awawa-dev/HyperHDR) server instead of — or in addition to — this project's ESP32 firmware. HyperHDR then drives whatever LEDs it is set up for (WLED, Hyperk, Adalight, Philips Hue…), with its own smoothing and color calibration.
 
-> [!WARNING]
-> **Untested on a real TV.** The HyperHDR output has been tested only in CI: against a real HyperHDR v22 server (streaming, registration, the server freezing, crashing and restarting), with the TV capture replaced by synthetic frames. It has **not** been run on a Samsung TV yet — please report how it works for you in [#1](https://github.com/exzos28/tizen-os-ambilight/issues/1).
+Tested on a Samsung S95B (2022) with HyperHDR in [#14](https://github.com/exzos28/tizen-os-ambilight/issues/14), and in CI against a real HyperHDR v22 server (streaming, registration, the server freezing, crashing and restarting).
 
 ## How it works
 
@@ -79,10 +78,8 @@ An invalid section is disabled and reported as a `ConfigWarning` event in the se
 
 ## Limitations
 
-- **Untested on a TV** — see the warning above.
 - **TV standby**: what capture returns while the TV is in standby has not been measured. If the service keeps sending black frames, the TV source keeps its priority in HyperHDR until the service stops.
 - **Same samples for every output**: the number of sample points is shared by all outputs; raising it for HyperHDR also lowers the ESP32 frame rate.
-- **No on-TV settings screen yet**: the service supports changing the outputs at run time (`set-outputs`), but the launcher has no screen for it yet, so for now configuration is a file in the package.
 
 ## Third-party code
 
