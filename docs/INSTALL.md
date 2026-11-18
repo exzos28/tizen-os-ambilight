@@ -159,7 +159,7 @@ A regular Samsung account and a **Public** distributor certificate are enough. T
 
 ### 4.3 Build and install
 
-**Outputs.** By default the service streams to ESP32 controllers only. To also (or instead) stream to a HyperHDR server, edit `tv/service/res/ambilight.json` before building — see [HYPERHDR.md](HYPERHDR.md) (untested on a TV).
+**Outputs.** By default the service streams to ESP32 controllers only. To also (or instead) stream to a HyperHDR server, edit `tv/service/res/ambilight.json` before building — see [HYPERHDR.md](HYPERHDR.md).
 
 The projects use the VS Code Tizen extension format (`tizen_web_project.yaml`, `tizen_dotnet_project.yaml`).
 
