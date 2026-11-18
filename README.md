@@ -44,12 +44,16 @@ The TV finds its controllers on its own. [Architecture](docs/ARCHITECTURE.md) ·
 
 ## Supported TVs
 
-| Model | Year | Status |
-|---|---|---|
-| QN90D · QN92D · Q60D | 2024 | ✅ |
-| Q6F | — | ❌ [#2](https://github.com/exzos28/tizen-os-ambilight/issues/2) |
+The app installs on Tizen 5.5 and later (2020+ TVs). Capture also needs the picture-measurement hardware that Samsung opened for Hue Sync, so not every model has it.
 
-Install the app — its home screen tells you whether your TV works. [Report it](docs/CONTRIBUTING.md) either way.
+| Model | Year | Tizen | Status |
+|---|---|---|---|
+| QN90D · QN92D · Q60D | 2024 | 8.0 – 9.0 | ✅ |
+| S90C | 2023 | 7.0 | ✅ [#15](https://github.com/exzos28/tizen-os-ambilight/issues/15) |
+| S95B | 2022 | 6.5 | ✅ [#14](https://github.com/exzos28/tizen-os-ambilight/issues/14) |
+| Q6F | — | — | ⚠️ [#2](https://github.com/exzos28/tizen-os-ambilight/issues/2) |
+
+[Install the app](#install-the-tv-app) — its home screen tells you whether your TV works. [Report it](docs/CONTRIBUTING.md) either way.
 
 ## Get started
 
@@ -61,6 +65,17 @@ flowchart LR
 ```
 
 [Hardware](docs/HARDWARE.md) · [Installation](docs/INSTALL.md) · [Latest release](https://github.com/exzos28/tizen-os-ambilight/releases/latest)
+
+## Install the TV app
+
+The quickest way is [Apps2Samsung](https://github.com/Apps2Samsung/Apps2Samsung): no Tizen Studio, no build.
+
+1. Turn on Developer Mode on the TV: open **Apps**, press **1 2 3 4 5** on the remote, switch *Developer mode* on and enter the IP of the computer or phone running Apps2Samsung as *Host PC IP*. Restart the TV: hold the power button for ~5 s.
+2. Open Apps2Samsung on that computer or phone (same network as the TV) and pick the TV.
+3. Find **Tizen OS Ambilight** in the catalog and press *Install*. The first install asks you to sign in to Samsung once to create a certificate for your TV.
+4. Open **Ambilight** on the TV and press **Start** in the banner. From then on the service starts by itself when the TV boots.
+
+Installed it from VS Code before? Delete it on the TV first: a package signed with another certificate can't be installed over it. A release `.wgt`, TV-Store, building from source: [Installation § TV apps](docs/INSTALL.md#4-tv-apps).
 
 ## More
 

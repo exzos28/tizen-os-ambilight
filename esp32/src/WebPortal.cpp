@@ -8,8 +8,27 @@
 #include "generated/ProtocolLimits.h"
 #include <ArduinoJson.h>
 #include <WiFi.h>
+#include <esp_system.h>
 
 using namespace protocol;
+
+// Why the board last started: "poweron" after a power cycle, "panic"/"task_wdt" after a
+// crash, "sw" after our own restart on a dead link.
+static const char* resetReasonName() {
+    switch (esp_reset_reason()) {
+    case ESP_RST_POWERON:   return "poweron";
+    case ESP_RST_EXT:       return "ext";
+    case ESP_RST_SW:        return "sw";
+    case ESP_RST_PANIC:     return "panic";
+    case ESP_RST_INT_WDT:   return "int_wdt";
+    case ESP_RST_TASK_WDT:  return "task_wdt";
+    case ESP_RST_WDT:       return "wdt";
+    case ESP_RST_DEEPSLEEP: return "deepsleep";
+    case ESP_RST_BROWNOUT:  return "brownout";
+    case ESP_RST_SDIO:      return "sdio";
+    default:                return "unknown";
+    }
+}
 
 static void sendJson(WebServer& server, const JsonDocument& doc) {
     String out;
@@ -232,6 +251,8 @@ void WebPortal::handleMetrics() {
     doc["frames_rx"]     = UDPReceiver::instance().framesReceived();
     doc["last_frame_ms"] = UDPReceiver::instance().lastFrameAgeMs();
     doc["config_rev"]    = Config::instance().revision();
+    doc["reset_reason"]  = resetReasonName();
+    doc["wifi_status"]   = WiFi.status();   // 3 = WL_CONNECTED
     sendJson(_server, doc);
 }
 

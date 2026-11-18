@@ -29,6 +29,17 @@
       "minimum": 0,
       "maximum": 4294967295,
       "description": "Settings revision: changes after every saved settings change (/save/*), starts at a random value at boot; compare for equality only — any difference means re-read GET /config."
+    },
+    "reset_reason": {
+      "type": "string",
+      "enum": ["poweron", "ext", "sw", "panic", "int_wdt", "task_wdt", "wdt", "deepsleep", "brownout", "sdio", "unknown"],
+      "description": "Why the board last started (esp_reset_reason): poweron after a power cycle, panic / *_wdt after a crash, sw after a restart by the firmware (e.g. a Wi-Fi link down too long). Missing on older firmware."
+    },
+    "wifi_status": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 255,
+      "description": "Station link state (arduino-esp32 wl_status_t): 3 = connected, 5 = connection lost, 6 = disconnected. Missing on older firmware."
     }
   }
 }

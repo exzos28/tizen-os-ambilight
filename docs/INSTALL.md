@@ -133,13 +133,13 @@ Two ways to install: with **Apps2Samsung** from a release, without build tools (
 Every release has the package attached as `ambilight-tv-vX.Y.Z.wgt`. It is signed with the Tizen SDK's default certificate — a TV only accepts a certificate bound to its own DUID — so it has to be re-signed for your TV. [Apps2Samsung](https://github.com/Apps2Samsung/Apps2Samsung) does that.
 
 1. Turn on Developer Mode with your PC's IP as *Host PC IP* ([4.1](#41-enable-developer-mode-on-the-tv), steps 1–3).
-2. Download `ambilight-tv-vX.Y.Z.wgt` from the [latest release](https://github.com/exzos28/tizen-os-ambilight/releases/latest) and install it in Apps2Samsung as a custom `.wgt`. On the first install it creates a certificate for your TV (Samsung account sign-in in the browser).
+2. In Apps2Samsung, pick the TV, find **Tizen OS Ambilight** in the catalog and press *Install*. Or download `ambilight-tv-vX.Y.Z.wgt` from the [latest release](https://github.com/exzos28/tizen-os-ambilight/releases/latest) and install it as a custom `.wgt`. On the first install it creates a certificate for your TV (Samsung account sign-in in the browser).
 3. If the app is already installed from VS Code, delete it on the TV first: a package signed with another certificate can't be installed over it.
 4. Continue with [4.4 Start](#44-start).
 
 **TV-Store already on the TV?** Apps2Samsung's TV-Store app installs a file without a PC connection, so *Host PC IP* can stay as it is (e.g. `127.0.0.1` on a rooted TV): open `http://<tv-ip>:8077/upload` on a phone or PC in the same network, send `ambilight-tv-vX.Y.Z.wgt`, then press **Install on this TV** in TV-Store. Tested on a QN92D (2024): capture, the launcher and streaming to the ESP32 work.
 
-Apps2Samsung may pick a Partner certificate because the service starts on boot (`on-boot="true"`). The package is not in the Apps2Samsung catalog yet; the entry is prepared in [packaging/apps2samsung](../packaging/apps2samsung/).
+Apps2Samsung may pick a Partner certificate because the service starts on boot (`on-boot="true"`). The catalog entry is kept in [packaging/apps2samsung](../packaging/apps2samsung/).
 
 ### 4.1 Enable Developer Mode on the TV
 

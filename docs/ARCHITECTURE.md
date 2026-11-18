@@ -449,6 +449,10 @@ driven in `loop()`.
   can't work on the network (outside the subnet, the router's own address, network or
   broadcast address — `StaticIp.h`), the DHCP address is kept and the reason logged.
   Nothing checks whether another device already uses it. `0` keeps the DHCP address.
+  `handle()` supervises the link, since `WiFi.setAutoReconnect()` stops retrying on its own:
+  when it drops, the saved network is re-begun at once and then every 60 s, and after 90 s
+  down the board restarts (`reset_reason` `sw` in `/metrics`). Only a link that was up
+  counts, so a board that never joined doesn't restart in a loop.
 - **AP mode**: opens the open network `ambilight-setup` and a captive-portal DNS that
   resolves every name to 192.168.4.1. If Wi-Fi credentials are saved (the AP is only a
   fallback, e.g. the router was still booting), it runs in `WIFI_AP_STA` mode and retries
