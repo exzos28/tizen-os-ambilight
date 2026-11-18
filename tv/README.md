@@ -83,7 +83,7 @@ service/
   ServiceCommands.cs  Launcher commands: pause, resume, rediscover
   StatusPort.cs       Local message port the launcher polls for status and sends commands to
   Esp32Output.cs      UDP frames to discovered ESP32s
-  HyperHdrOutput.cs   HyperHDR FlatBuffers client (untested on a TV, see docs/HYPERHDR.md)
+  HyperHdrOutput.cs   HyperHDR FlatBuffers client (see docs/HYPERHDR.md)
   HyperHdrProtocol.cs FlatBuffers messages, written by hand against HyperHDR's schema
   EdgeImage.cs        Edge samples → small RGB image for HyperHDR
   OutputConfig.cs     Parses res/ambilight.json

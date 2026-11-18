@@ -6,6 +6,9 @@
 
 ![Ambilight in action](docs/media/demo.gif)
 
+> [!TIP]
+> **Want one behind your TV?** Follow the **[step-by-step build guide →](docs/BUILDING.md)**: parts, wiring, flashing and setup, with pictures. Already have HyperHDR and WLED or Hue? The guide covers that too, with no soldering.
+
 ## How it works
 
 ```mermaid
@@ -64,7 +67,7 @@ flowchart LR
   C --> D["4 · Install the TV app<br/><small>Apps2Samsung, or build it</small>"]
 ```
 
-[Hardware](docs/HARDWARE.md) · [Installation](docs/INSTALL.md) · [Latest release](https://github.com/exzos28/tizen-os-ambilight/releases/latest)
+**[Build guide](docs/BUILDING.md)** · [Hardware](docs/HARDWARE.md) · [Installation](docs/INSTALL.md) · [Latest release](https://github.com/exzos28/tizen-os-ambilight/releases/latest)
 
 ## Install the TV app
 
