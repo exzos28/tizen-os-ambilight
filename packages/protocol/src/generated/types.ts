@@ -188,7 +188,7 @@ export interface Esp32Config {
    * @default 200
    * @unit ms
    */
-  smoothing_ms: number
+  smoothing_ms?: number
   /**
    * White balance, red channel scale (255 = unchanged).
    *

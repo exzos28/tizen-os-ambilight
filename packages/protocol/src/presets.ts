@@ -10,7 +10,7 @@ export interface ResponsePreset {
   label: string
   /** One line: what it suits. */
   description: string
-  values: Pick<Esp32Config, 'smoothing_ms' | 'saturation'>
+  values: Required<Pick<Esp32Config, 'smoothing_ms' | 'saturation'>>
 }
 
 export const responsePresets: readonly ResponsePreset[] = [

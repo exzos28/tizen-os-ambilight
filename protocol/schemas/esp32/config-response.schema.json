@@ -8,7 +8,7 @@
   "required": [
     "wifi_ssid", "ota_host", "ip_octet", "num_leds", "max_leds", "brightness", "color", "led_mode",
     "led_top", "led_right", "led_bottom", "led_left", "start_corner", "clockwise",
-    "gamma", "saturation", "smoothing_ms", "wb_r", "wb_g", "wb_b", "power_limit_w", "pixel_watts", "power"
+    "gamma", "saturation", "wb_r", "wb_g", "wb_b", "power_limit_w", "pixel_watts", "power"
   ],
   "properties": {
     "wifi_ssid": { "$ref": "settings.schema.json#/$defs/wifi_ssid" },
