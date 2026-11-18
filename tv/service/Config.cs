@@ -38,6 +38,10 @@ namespace Service
         // Set to -1 to use HW-reported delay.
         // HW needs exactly 20ms to measure. Confirmed by diagnostics:
         // <20ms returns garbage, 20ms+ returns correct values.
-        public const int CaptureDelayMs = 20;
+        // 35ms: at 20ms a still picture still produced intermittent jumps in single points on
+        // a 2023 Samsung S90C (measured on the ESP32 side: one point read 58 -> 32 -> 0, another
+        // 60 -> 133 -> 72, while four of 14 points stayed within +-0.3 of their value). Longer
+        // settle removes them; the cost is frame rate, about 6.9 -> 4.0 fps on that TV.
+        public const int CaptureDelayMs = 35;
     }
 }
