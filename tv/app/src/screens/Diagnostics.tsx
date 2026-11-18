@@ -1,19 +1,20 @@
 // Diagnostics: whether this TV supports hardware capture and what its video processor reports,
-// what the outputs (controllers, HyperHDR) report, the settings warnings, and a QR code that
-// opens a pre-filled TV compatibility report on GitHub. ▲▼ move between the sections and
+// a live preview of the captured colors with the test patterns, what the outputs (controllers,
+// HyperHDR) report, the settings warnings, and a QR code that opens a pre-filled TV
+// compatibility report on GitHub. ▲▼ move between the sections and
 // scroll a section that is taller than the screen; ◀ goes to the rail.
 //
 // No event log here: the service only POSTs its events to tools/server.py (ARCHITECTURE.md,
 // Event log), the TV keeps none.
 
-import { Card, CheckIcon, ErrorIcon, KeyHint, PulseIcon, StatusLine, StatusList, WarnIcon, type Tone } from '@ambilight/ui';
+import { Button, Card, CheckIcon, ErrorIcon, KeyHint, LivePreview, PulseIcon, StatusLine, StatusList, WarnIcon, type Tone } from '@ambilight/ui';
 import type { CaptureStatus, HwCondition, ServiceStatus } from '@ambilight/protocol';
 import type { ComponentChildren } from 'preact';
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import type { Controller } from '../controllers';
 import type { ServiceLink } from '../data';
 import { qrEncode } from '../qr';
-import { allReadsFail, controllerRow, controllerTitle, fps, hyperHdrRow, stalled } from '../status';
+import { allReadsFail, controllerRow, controllerTitle, fps, hyperHdrRow, live, stalled } from '../status';
 import { Footer } from '../components/Footer';
 import type { ScreenProps } from './types';
 import './diagnostics.css';
@@ -116,24 +117,31 @@ function since(ms: number): string {
 
 // ---------------------------------------------------------------- view
 
-type Section = 'tv' | 'settings' | 'outputs' | 'report';
+export type Section = 'tv' | 'settings' | 'preview' | 'outputs' | 'report';
 /** ▲▼ order: the left column top to bottom, then the right one. */
-const SECTIONS: Section[] = ['tv', 'settings', 'outputs', 'report'];
+const SECTIONS: Section[] = ['tv', 'settings', 'preview', 'outputs', 'report'];
 
-export function Diagnostics(p: ScreenProps) {
+interface Props extends ScreenProps {
+  /** Focus this section on mount (back from the test pattern). */
+  initialSection: Section | null;
+  onTestPattern: () => void;
+}
+
+export function Diagnostics(p: Props) {
   const { link, controllers, backend } = p;
   const status = link.kind === 'up' ? link.status : null;
   const c = status?.capture;
   const hw = c?.hw;
   const model = backend.platform.modelName();
   const app = backend.platform.appVersion();
+  const lead = controllers.find((x) => x.config)?.config;
 
   // The status before this one: controllerRow tells "sending" from a growing framesSent.
   const hist = useRef<{ cur: ServiceStatus | null; prev: ServiceStatus | null }>({ cur: null, prev: null });
   if (hist.current.cur !== status) hist.current = { cur: status, prev: hist.current.cur };
 
   // ---------------------------------------------------------------- remote
-  const [focus, setFocus] = useState<Section>('tv');
+  const [focus, setFocus] = useState<Section>(p.initialSection ?? 'tv');
   const body = useRef<HTMLDivElement>(null);
   const el = (s: Section) => body.current?.querySelector<HTMLElement>(`[data-section="${s}"]`) ?? null;
 
@@ -147,6 +155,7 @@ export function Diagnostics(p: ScreenProps) {
 
   p.bindKeys((key) => {
     if (key === 'left') return 'rail';
+    if (key === 'ok') { if (focus === 'preview') p.onTestPattern(); return true; }
     if (key !== 'up' && key !== 'down') return key === 'back' ? false : true;
     const b = body.current, e = el(focus);
     // A section taller than the visible area scrolls first.
@@ -221,6 +230,18 @@ export function Diagnostics(p: ScreenProps) {
         </div>
 
         <div class="diag-col">
+          <div data-section="preview">
+            <Card label="Live preview" focused={f('preview')} class="diag-preview">
+              <LivePreview rgb={c?.rgb} h={c?.h} v={c?.v} live={!!c && live(c)} config={lead} width={420} />
+              <div class="diag-preview-text">
+                <h2>Live preview</h2>
+                <p class="diag-muted">Inner bands: what the TV samples. Dots: what the {lead ? `${lead.num_leds} ` : ''}LEDs show.</p>
+                <span class="ui-num diag-fps">{c && live(c) ? `${fps(c)} fps` : '—'}</span>
+                <Button tabIndex={-1} focused={f('preview')}>Test pattern</Button>
+              </div>
+            </Card>
+          </div>
+
           <div data-section="outputs">
             <Card title="Outputs" focused={f('outputs')}>
               <Outputs link={link} controllers={controllers} prev={hist.current.prev} />
@@ -244,6 +265,7 @@ export function Diagnostics(p: ScreenProps) {
 
       <Footer>
         <KeyHint k="▲▼">Sections, scroll</KeyHint>
+        {focus === 'preview' && <KeyHint k="OK">Test pattern</KeyHint>}
         <KeyHint k="◀">Menu</KeyHint>
         <KeyHint k="↩">Menu</KeyHint>
         <span class="footer-note">Updates every second · the event log is in tools/server.py</span>

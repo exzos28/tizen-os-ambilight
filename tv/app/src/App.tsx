@@ -8,7 +8,7 @@ import type { ServiceStatus } from '@ambilight/protocol';
 import type { Backend, ServiceLink } from './data';
 import { keyOf } from './focus';
 import { Home, type KeyHandler } from './screens/Home';
-import { Diagnostics } from './screens/Diagnostics';
+import { Diagnostics, type Section as DiagSection } from './screens/Diagnostics';
 import { Layout } from './screens/Layout';
 import { Outputs } from './screens/Outputs';
 import { Picture } from './screens/Picture';
@@ -36,7 +36,7 @@ export function App({ backend }: { backend: Backend }) {
   const [railIndex, setRailIndex] = useState(RAIL.findIndex((r) => r.id === initial));
   const keys = useRef<KeyHandler | null>(null);
   /** Where the focus goes when Home mounts again (after the test pattern). */
-  const [homeFocus, setHomeFocus] = useState<string | null>(null);
+  const [diagSection, setDiagSection] = useState<DiagSection | null>(null);
   /** First-run wizard: decided once, from the first status the service sends. */
   const [setupOpen, setSetupOpen] = useState<boolean | null>(null);
   useEffect(() => {
@@ -76,7 +76,7 @@ export function App({ backend }: { backend: Backend }) {
   const exit = () => backend.platform.exit();
   /** Shows a section without moving the focus (▲ ▼ on the rail). */
   const show = (id: ScreenId) => {
-    setHomeFocus(null);
+    setDiagSection(null);
     setScreen(id);
     keys.current = null; // the new screen registers its own handler when it renders
   };
@@ -106,7 +106,7 @@ export function App({ backend }: { backend: Backend }) {
       e.preventDefault();
       if (testPattern) {
         if (key === 'back' || key === 'ok') {
-          setHomeFocus('test-pattern');
+          setDiagSection('preview');
           setTestPattern(false);
         } else keys.current?.(key);
         return;
@@ -151,10 +151,8 @@ export function App({ backend }: { backend: Backend }) {
           actions={actions}
           problems={problems}
           model={backend.platform.modelName()}
-          initialFocus={homeFocus}
           active={zone === 'content'}
           bindKeys={bindKeys}
-          onTestPattern={() => setTestPattern(true)}
           onControllers={() => open('outputs')}
         />
       ) : screen === 'picture' ? (
@@ -164,7 +162,7 @@ export function App({ backend }: { backend: Backend }) {
       ) : screen === 'outputs' ? (
         <Outputs {...screenProps} />
       ) : (
-        <Diagnostics {...screenProps} />
+        <Diagnostics {...screenProps} initialSection={diagSection} onTestPattern={() => setTestPattern(true)} />
       )}
     </div>
   );

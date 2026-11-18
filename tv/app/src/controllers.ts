@@ -5,7 +5,7 @@
 // controller's web app) or by our own write, which then confirms what we show.
 
 import { useCallback, useEffect, useRef, useState } from 'preact/hooks';
-import { configChanged, type Esp32Config, type Esp32Metrics, type Esp32Status, type LedMode } from '@ambilight/protocol';
+import { configChanged, type Esp32Config, type Esp32Metrics, type Esp32Status, type LedMode, type ResponsePreset } from '@ambilight/protocol';
 import type { Backend } from './data';
 
 export interface Controller {
@@ -34,6 +34,8 @@ export interface ControllerActions {
   setBrightness(value: number): void;
   setMode(mode: LedMode): void;
   setColor(color: string): void;
+  /** A style (response preset): smoothing and saturation in one write. */
+  setResponse(values: ResponsePreset['values']): void;
   /**
    * Any other setting: `apply` patches the shown config of every present controller at once,
    * `send` writes it to one controller; a controller that rejects it is read again.
@@ -141,6 +143,7 @@ export function useControllers(backend: Backend, hosts: string[] | null, active:
     setPower: (on) => write(() => ({ power: on }), (h) => esp32(h).savePower({ power: on ? 1 : 0 })),
     setMode: (mode) => write(() => ({ led_mode: mode }), (h) => esp32(h).saveMode({ led_mode: mode })),
     setColor: (color) => write(() => ({ color }), (h) => esp32(h).saveLeds({ color })),
+    setResponse: (values) => write(() => ({ ...values }), (h) => esp32(h).saveLeds({ ...values })),
     update: write,
     setBrightness(value) {
       // Shown at once; sent once the remote stops repeating.
