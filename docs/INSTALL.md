@@ -75,6 +75,8 @@ pio run -e ota -t upload
 
 `[env:ota]` in `platformio.ini` uploads to `ambilight.local` (the OTA hostname, resolved via mDNS) with the password `123456`. If you changed the hostname or password in the web app (*Device* tab, *Updates over Wi-Fi*), or mDNS doesn't resolve on your network, update `upload_port` (the device IP works too) and `--auth` there.
 
+Without PlatformIO, `esp32/scripts/ota.sh` uploads a firmware CI already built: `--pr <number>` (the PR's latest build), `--run <id>` or `--file ambilight-esp32-app.bin` (e.g. from a release), with `--host` and `--auth` as above. It needs `gh` (signed in) for `--pr` / `--run` and Python. The ESP32 connects back to your computer during the upload, so the firewall must let that Python accept incoming connections; on macOS the script uses the system `/usr/bin/python3`, which usually already may.
+
 ## 2. Connect to Wi-Fi
 
 1. With no saved credentials (or if the saved network can't be reached within 12 s), the ESP32 starts an **open** access point `ambilight-setup`.
