@@ -27,9 +27,11 @@ namespace Service
         public const int TargetCaptureW = 4;
         public const int TargetCaptureH = 3;
 
-        // How many pixels to inset from each screen edge when placing sample points.
-        // 0 = sample right at the edge; 250 = sample 250 px inward from each side.
-        public const int EdgeInsetPx = 250;
+        // How far in from the screen edge the sample points sit, in HW pixels (3840 × 2160 on
+        // 4K). Top and bottom sit deeper: the black bars of a 2.39:1 film are ~277 px high on
+        // a 4K picture, so 330 px still measures the picture. Left and right: 250 px.
+        public const int EdgeInsetSidePx = 250;
+        public const int EdgeInsetTopBottomPx = 330;
 
         // Delay (ms) between set_position and get_pixel.
         // HW reports 20ms. Lower values = faster but may glitch.

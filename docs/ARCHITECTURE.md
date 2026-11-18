@@ -117,7 +117,7 @@ send complete frame via UDP
 The hardware delay is 20 ms minimum; below that, results are garbage (confirmed by
 diagnostics). Frame time ≈ `delay × ceil(totalPoints / slotsPerCycle)`.
 
-**Sample points layout** — clockwise ring, each point inset `EdgeInsetPx` from the edge:
+**Sample points layout** — clockwise ring, inset `EdgeInsetTopBottomPx` from the top and bottom edges and `EdgeInsetSidePx` from the left and right ones:
 
 ```
 top:    hCount points  (left → right)
@@ -238,7 +238,7 @@ while it is shown. The status poll pauses while the test pattern is open. Deskto
 `?screen=test&pattern=<id>`.
 
 The regions are laid out around the sample points ([Capture pipeline](#capture-pipeline-capturecs)):
-on the 1920×1080 stage, 8×8 px blocks 125 px in from each edge, at the middle of each quarter
+on the 1920×1080 stage, 8×8 px blocks 165 px in from the top and bottom and 125 px from the sides, at the middle of each quarter
 (top, bottom) and third (left, right) of the edge. Edge bands are 160 px deep, so every point
 sits inside its own side's band.
 
@@ -595,7 +595,8 @@ The firmware uses the `min_spiffs.csv` partition table: two 1.875 MB OTA app slo
 | `SavedOutputsFile` | `outputs.json` | Output settings saved by `set-outputs`, in the app's data directory; merged over `OutputConfigFile` (wins for the keys `set-outputs` sets) |
 | `TargetCaptureW` | 4 | Sample points per horizontal edge |
 | `TargetCaptureH` | 3 | Sample points per vertical edge |
-| `EdgeInsetPx` | 250 | Distance of sample points from the screen edge, in HW pixels (3840 × 2160 on 4K) |
+| `EdgeInsetTopBottomPx` | 330 | Distance of the top and bottom sample points from the edge, in HW pixels (3840 × 2160 on 4K): below the ~277 px black bars of 2.39:1 films |
+| `EdgeInsetSidePx` | 250 | Distance of the left and right sample points from the edge |
 | `CaptureDelayMs` | 20 | Delay between `set_position` and `get_pixel`; `-1` uses the HW-reported value |
 
 ### TV output settings (`tv/service/res/ambilight.json`)

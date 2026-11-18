@@ -60,7 +60,7 @@ More points give finer spatial detail at a lower frame rate. Since the ESP32 int
 
 ### Tuning
 
-Sample point counts, edge inset and capture delay are compile-time constants in `service/Config.cs`; their defaults and effects are listed in [docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md#tv-service-tvserviceconfigcs--compile-time-constants). A larger `EdgeInsetPx` helps skip letterbox bars (~270 px each for 2.39:1 content on a 4K panel).
+Sample point counts, edge inset and capture delay are compile-time constants in `service/Config.cs`; their defaults and effects are listed in [docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md#tv-service-tvserviceconfigcs--compile-time-constants). The top and bottom points sit 330 px in (`EdgeInsetTopBottomPx`), below the ~277 px letterbox bars of 2.39:1 films on a 4K panel.
 
 ### Measured HW parameters (Samsung 4K TV, Tizen 9.0, SDP)
 
