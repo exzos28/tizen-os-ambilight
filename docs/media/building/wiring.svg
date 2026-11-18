@@ -1,0 +1,87 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="500" viewBox="0 0 900 500" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">
+  <title>Wiring: 12 V supply, capacitor, DC-DC to 5 V for the ESP32, data from GPIO 23 through 330 ohm to the strip</title>
+  <rect width="900" height="500" rx="16" fill="#ffffff"/>
+
+  <!-- wires (drawn first, under the boxes) -->
+  <g fill="none" stroke-width="5" stroke-linecap="round" stroke-linejoin="round">
+    <!-- PSU -> jack -->
+    <path d="M170 82 H240" stroke="#dc2626"/>
+    <path d="M170 116 H240" stroke="#111827"/>
+    <!-- jack -> JST -->
+    <path d="M410 82 H600" stroke="#dc2626"/>
+    <path d="M410 116 H600" stroke="#111827"/>
+    <!-- JST -> strip -->
+    <path d="M720 82 H770" stroke="#dc2626"/>
+    <path d="M720 99 H770" stroke="#16a34a"/>
+    <path d="M720 116 H770" stroke="#111827"/>
+    <!-- jack -> DC-DC -->
+    <path d="M290 140 V270" stroke="#dc2626"/>
+    <path d="M350 140 V270" stroke="#111827"/>
+    <!-- DC-DC -> ESP32 -->
+    <path d="M410 296 H470" stroke="#f59e0b"/>
+    <path d="M410 330 H470" stroke="#111827"/>
+    <!-- ESP32 GPIO23 -> resistor -> JST data -->
+    <path d="M620 313 H660 V140" stroke="#16a34a"/>
+  </g>
+
+  <!-- PSU -->
+  <rect x="20" y="52" width="150" height="94" rx="12" fill="#f3f4f6" stroke="#9ca3af" stroke-width="2"/>
+  <text x="95" y="84" font-size="15" font-weight="700" fill="#111827" text-anchor="middle">Power supply</text>
+  <text x="95" y="104" font-size="13" fill="#4b5563" text-anchor="middle">12 V, ~100 W</text>
+  <text x="95" y="124" font-size="12" fill="#6b7280" text-anchor="middle">from the wall socket</text>
+
+  <!-- jack + cap -->
+  <rect x="240" y="52" width="170" height="94" rx="12" fill="#f3f4f6" stroke="#9ca3af" stroke-width="2"/>
+  <text x="325" y="80" font-size="15" font-weight="700" fill="#111827" text-anchor="middle">Barrel jack</text>
+  <text x="325" y="99" font-size="12" fill="#4b5563" text-anchor="middle">5.5 × 2.1 mm</text>
+  <text x="325" y="118" font-size="13" font-weight="700" fill="#111827" text-anchor="middle">+ 1000 µF 16 V</text>
+  <text x="325" y="134" font-size="12" fill="#4b5563" text-anchor="middle">capacitor across + and −</text>
+
+  <!-- JST -->
+  <rect x="600" y="52" width="120" height="94" rx="12" fill="#f3f4f6" stroke="#9ca3af" stroke-width="2"/>
+  <text x="660" y="84" font-size="15" font-weight="700" fill="#111827" text-anchor="middle">JST-SM</text>
+  <text x="660" y="104" font-size="13" fill="#4b5563" text-anchor="middle">3-pin plug</text>
+  <text x="660" y="124" font-size="12" fill="#6b7280" text-anchor="middle">+12 V · DATA · GND</text>
+
+  <!-- strip -->
+  <rect x="770" y="66" width="114" height="66" rx="8" fill="#f9fafb" stroke="#9ca3af" stroke-width="2"/>
+  <circle cx="792" cy="99" r="7" fill="#fde68a" stroke="#d97706"/><circle cx="816" cy="99" r="7" fill="#fde68a" stroke="#d97706"/>
+  <circle cx="840" cy="99" r="7" fill="#fde68a" stroke="#d97706"/><rect x="856" y="91" width="14" height="16" rx="2" fill="#111827"/>
+  <text x="827" y="160" font-size="14" font-weight="700" fill="#111827" text-anchor="middle">LED strip</text>
+  <text x="827" y="177" font-size="12" fill="#4b5563" text-anchor="middle">12 V WS2811</text>
+
+  <!-- DC-DC -->
+  <rect x="240" y="270" width="170" height="86" rx="12" fill="#fffbeb" stroke="#f59e0b" stroke-width="2"/>
+  <text x="325" y="300" font-size="15" font-weight="700" fill="#111827" text-anchor="middle">DC-DC converter</text>
+  <text x="325" y="319" font-size="13" fill="#4b5563" text-anchor="middle">12 V in → 5 V out</text>
+  <text x="325" y="338" font-size="12" fill="#4b5563" text-anchor="middle">+ 100 µF 10 V on the output</text>
+
+  <!-- ESP32 -->
+  <rect x="470" y="270" width="150" height="86" rx="12" fill="#eff6ff" stroke="#3b82f6" stroke-width="2"/>
+  <text x="545" y="300" font-size="16" font-weight="700" fill="#111827" text-anchor="middle">ESP32</text>
+  <text x="545" y="319" font-size="12" fill="#4b5563" text-anchor="middle">5 V (VIN) · GND</text>
+  <text x="545" y="338" font-size="12" font-weight="700" fill="#15803d" text-anchor="middle">GPIO 23 → data</text>
+
+  <!-- resistor on the data wire -->
+  <rect x="650" y="188" width="20" height="56" rx="4" fill="#fef3c7" stroke="#92400e" stroke-width="2"/>
+  <path d="M650 202 H670 M650 214 H670 M650 226 H670" stroke="#92400e" stroke-width="2"/>
+  <text x="682" y="212" font-size="14" font-weight="700" fill="#111827">330 Ω</text>
+  <text x="682" y="230" font-size="12" fill="#4b5563">resistor, close</text>
+  <text x="682" y="245" font-size="12" fill="#4b5563">to the ESP32</text>
+
+  <!-- wire labels -->
+  <text x="205" y="72" font-size="12" fill="#4b5563" text-anchor="middle">12 V</text>
+  <text x="440" y="300" font-size="12" fill="#4b5563" text-anchor="middle">5 V</text>
+
+  <!-- legend -->
+  <g font-size="13" fill="#111827">
+    <path d="M30 400 H70" stroke="#dc2626" stroke-width="5" stroke-linecap="round"/><text x="80" y="405">+12 V</text>
+    <path d="M150 400 H190" stroke="#111827" stroke-width="5" stroke-linecap="round"/><text x="200" y="405">GND (−), all joined together</text>
+    <path d="M410 400 H450" stroke="#f59e0b" stroke-width="5" stroke-linecap="round"/><text x="460" y="405">+5 V</text>
+    <path d="M530 400 H570" stroke="#16a34a" stroke-width="5" stroke-linecap="round"/><text x="580" y="405">DATA</text>
+  </g>
+
+  <rect x="20" y="424" width="860" height="64" rx="12" fill="#fef2f2" stroke="#fca5a5"/>
+  <text x="40" y="450" font-size="14" fill="#111827"><tspan font-weight="700" fill="#b91c1c">Never</tspan> connect 12 V to the ESP32. If your DC-DC is adjustable, set it to 5.0 V with a multimeter first.</text>
+  <text x="40" y="472" font-size="14" fill="#111827">Check + and − twice before plugging in the power supply.</text>
+</svg>

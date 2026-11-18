@@ -78,7 +78,7 @@ can block capture or another output.
 | Output | Transport | Runs on | Notes |
 |--------|-----------|---------|-------|
 | `Esp32Output` | UDP 9001 to every discovered host | capture thread (UDP never blocks) | [Frame format](NETWORKING.md#color-frame-udp-9001) |
-| `HyperHdrOutput` | TCP to HyperHDR's FlatBuffers server | own sender + reader threads, one-frame mailbox | Renders a small image (`EdgeImage.cs`); reply-based liveness, reconnect backoff 1–5 s. **Untested on a TV** — see [HYPERHDR.md](HYPERHDR.md) |
+| `HyperHdrOutput` | TCP to HyperHDR's FlatBuffers server | own sender + reader threads, one-frame mailbox | Renders a small image (`EdgeImage.cs`); reply-based liveness, reconnect backoff 1–5 s. See [HYPERHDR.md](HYPERHDR.md) |
 
 Which outputs run can change while the service runs ([`set-outputs`](#commands),
 `App.ApplyOutputs`): an output that is turned off is stopped, one that is turned on is

@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="260" viewBox="0 0 900 260" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">
+  <title>On a 12 V WS2811 strip one pixel is one chip with three LEDs; count pixels, cut only at the marks, data arrows point away from the controller</title>
+  <defs>
+    <g id="px">
+      <rect x="24" y="0" width="28" height="28" rx="4" fill="#fef9c3" stroke="#ca8a04" stroke-width="2"/>
+      <rect x="72" y="0" width="28" height="28" rx="4" fill="#fef9c3" stroke="#ca8a04" stroke-width="2"/>
+      <rect x="120" y="0" width="28" height="28" rx="4" fill="#fef9c3" stroke="#ca8a04" stroke-width="2"/>
+      <rect x="168" y="5" width="16" height="18" rx="2" fill="#111827"/>
+      <text x="96" y="52" font-size="16" fill="#6b7280" text-anchor="middle">→</text>
+    </g>
+  </defs>
+  <rect width="900" height="260" rx="16" fill="#ffffff"/>
+
+  <!-- brace over the first pixel -->
+  <path d="M100 52 V42 H300 V52" fill="none" stroke="#2563eb" stroke-width="2"/>
+  <text x="200" y="32" font-size="15" font-weight="700" fill="#1d4ed8" text-anchor="middle">1 pixel = 1 chip + 3 LEDs</text>
+
+  <!-- strip -->
+  <rect x="100" y="66" width="780" height="76" rx="6" fill="#f5f5f4" stroke="#a8a29e" stroke-width="2"/>
+  <use href="#px" x="100" y="82"/>
+  <use href="#px" x="300" y="82"/>
+  <use href="#px" x="500" y="82"/>
+  <use href="#px" x="700" y="82"/>
+
+  <!-- cut marks -->
+  <g stroke="#dc2626" stroke-width="2" stroke-dasharray="5 4">
+    <path d="M300 58 V150"/><path d="M500 58 V150"/><path d="M700 58 V150"/>
+  </g>
+  <text x="500" y="170" font-size="13" fill="#b91c1c" text-anchor="middle">✂ cut only on these marks</text>
+
+  <!-- controller end -->
+  <rect x="20" y="78" width="60" height="52" rx="8" fill="#eff6ff" stroke="#3b82f6" stroke-width="2"/>
+  <text x="50" y="101" font-size="12" font-weight="700" fill="#1d4ed8" text-anchor="middle">from</text>
+  <text x="50" y="117" font-size="12" font-weight="700" fill="#1d4ed8" text-anchor="middle">ESP32</text>
+  <path d="M80 104 H100" stroke="#16a34a" stroke-width="5"/>
+
+  <text x="40" y="206" font-size="15" fill="#111827"><tspan font-weight="700">Count pixels, not LEDs:</tspan> on this piece the app wants 4, not 12.</text>
+  <text x="40" y="232" font-size="15" fill="#111827"><tspan font-weight="700">The arrows on the strip</tspan> must point away from the ESP32. The other end doesn't work as an input.</text>
+</svg>
