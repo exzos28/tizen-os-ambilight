@@ -2,8 +2,6 @@
 
 A step-by-step guide for people who have never done this before. It takes an evening: about an hour of soldering, half an hour of sticking the strip on, and a few minutes of setup.
 
-![Ambilight in action](media/demo.gif)
-
 ## Pick your way
 
 ![Two ways: A, build the kit with an ESP32 and a strip; B, use HyperHDR with lights you already have](media/building/paths.svg)
