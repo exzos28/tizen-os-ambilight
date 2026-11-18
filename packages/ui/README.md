@@ -84,7 +84,7 @@ launcher (`tv/app`, `<html data-density="tv">`, focus from its focus manager thr
 `focused` props) and the phone web app (`esp32/web`, `data-density="phone"`, native focus and
 inputs). The TV density is the launcher's design to the pixel; check a change to the kit with
 screenshots of the launcher's mock (`tv/app`, `?state=ok|lost|none|off|unsupported`) against
-`docs/media/tv-home*.png`, and of `esp32/web`'s `npm run build:mock`.
+`docs/media/tv-home*.png` (`scripts/screenshots.sh` regenerates those), and of `esp32/web`'s `npm run build:mock`.
 
 | Kit | TV launcher (`tv/app`) | Phone (`esp32/web`) |
 |---|---|---|
