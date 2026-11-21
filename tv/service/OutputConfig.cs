@@ -24,8 +24,8 @@ namespace Service
     // Same keys, ranges and defaults in both. The strict form takes no unknown keys and needs
     // every section and key except hyperhdr.priority. It holds only what set-outputs sets
     // (esp32.enabled, hyperhdr.enabled / host / port / priority); everything else, like the
-    // HyperHDR image size, always comes from res/ambilight.json, so a newer package's values
-    // apply even after set-outputs. Saved files from older versions also carry
+    // HyperHDR image size and trusted library fingerprint, comes from res/ambilight.json, so a
+    // newer package's values apply even after set-outputs. Saved files from older versions also carry
     // hyperhdr.imageWidth / imageHeight: those keys are accepted and ignored.
     // Tizen-independent, so it is unit-tested in CI.
     sealed class OutputConfig
@@ -35,10 +35,8 @@ namespace Service
         public List<string> Warnings { get; } = new List<string>();
         public OutputSource Source { get; private set; } = OutputSource.Package;
 
-        // The problems of res/ambilight.json that affect the HyperHDR image size, worded for
-        // LoadEffective's merged result: the image size is taken from the package even when
-        // everything else comes from the saved file.
-        private readonly List<string> _imageSizeWarnings = new List<string>();
+        // Problems with settings that still come from the package when outputs are saved.
+        private readonly List<string> _packageWarnings = new List<string>();
 
         public static OutputConfig Load(string path)
         {
@@ -46,7 +44,7 @@ namespace Service
             {
                 var defaults = new OutputConfig();
                 defaults.Warnings.Add($"{path} not found — using defaults (ESP32 only)");
-                defaults._imageSizeWarnings.Add($"{path} not found — using the default HyperHDR image size");
+                defaults._packageWarnings.Add($"{path} not found — using the default HyperHDR image size");
                 return defaults;
             }
             return Parse(File.ReadAllText(path));
@@ -69,7 +67,7 @@ namespace Service
                 string error = ParseStrict(File.ReadAllText(savedPath), true, package.HyperHdr, out var saved);
                 if (error == null)
                 {
-                    saved.Warnings.AddRange(package._imageSizeWarnings);
+                    saved.Warnings.AddRange(package._packageWarnings);
                     return saved;
                 }
                 problem = $"saved outputs {savedPath} are invalid ({error})";
@@ -93,7 +91,7 @@ namespace Service
             catch (JsonException ex)
             {
                 cfg.Warnings.Add($"config is not valid JSON ({ex.Message}) — using defaults (ESP32 only)");
-                cfg._imageSizeWarnings.Add($"config is not valid JSON ({ex.Message}) — using the default HyperHDR image size");
+                cfg._packageWarnings.Add($"config is not valid JSON ({ex.Message}) — using the default HyperHDR image size");
                 return cfg;
             }
 
@@ -103,7 +101,7 @@ namespace Service
                 if (root.ValueKind != JsonValueKind.Object)
                 {
                     cfg.Warnings.Add("config root must be an object — using defaults (ESP32 only)");
-                    cfg._imageSizeWarnings.Add("config root must be an object — using the default HyperHDR image size");
+                    cfg._packageWarnings.Add("config root must be an object — using the default HyperHDR image size");
                     return cfg;
                 }
 
@@ -116,7 +114,7 @@ namespace Service
                 }
 
                 if (root.TryGetProperty("hyperhdr", out var hyper))
-                    cfg.HyperHdr = HyperHdrSettings.Parse(hyper, cfg.Warnings, cfg._imageSizeWarnings);
+                    cfg.HyperHdr = HyperHdrSettings.Parse(hyper, cfg.Warnings, cfg._packageWarnings);
             }
             return cfg;
         }
@@ -124,15 +122,14 @@ namespace Service
         // The "outputs" value of the set-outputs command (protocol/schemas/service/outputs.schema.json):
         //   {"esp32": {"enabled": bool}, "hyperhdr": {"enabled": bool, "host": string, "port": int, "priority"?: int}}
         // Returns null and the new settings (Source = Saved), or the errors, "; "-separated.
-        // The HyperHDR image size isn't part of the command: it is kept from imageSizeOf (the
-        // settings in effect), or the default without one.
-        public static string ParseCommand(string json, HyperHdrSettings imageSizeOf, out OutputConfig cfg) =>
-            ParseStrict(json, false, imageSizeOf, out cfg);
+        // Package-only image dimensions and library fingerprint stay from the current settings.
+        public static string ParseCommand(string json, HyperHdrSettings packageSettings, out OutputConfig cfg) =>
+            ParseStrict(json, false, packageSettings, out cfg);
 
-        // Strict parse (see the class comment); the image size is taken from imageSizeOf, or the
-        // default without one. savedFile also accepts, and ignores, the image size keys that
+        // Strict parse (see the class comment); package-only settings come from packageSettings,
+        // or their defaults. savedFile also accepts, and ignores, the image size keys that
         // older versions saved.
-        private static string ParseStrict(string json, bool savedFile, HyperHdrSettings imageSizeOf, out OutputConfig cfg)
+        private static string ParseStrict(string json, bool savedFile, HyperHdrSettings packageSettings, out OutputConfig cfg)
         {
             cfg = null;
             JsonDocument doc;
@@ -166,10 +163,11 @@ namespace Service
                     else { s.Host = host.GetString().Trim(); hostOk = true; }
                     s.Port = StrictInt(hyper, "port", null, 1, 65535, errors);
                     s.Priority = StrictInt(hyper, "priority", s.Priority, HyperHdrProtocol.MinPriority, HyperHdrProtocol.MaxPriority, errors);
-                    if (imageSizeOf != null)
+                    if (packageSettings != null)
                     {
-                        s.ImageWidth = imageSizeOf.ImageWidth;
-                        s.ImageHeight = imageSizeOf.ImageHeight;
+                        s.ImageWidth = packageSettings.ImageWidth;
+                        s.ImageHeight = packageSettings.ImageHeight;
+                        s.VideoCaptureLibrarySha256 = packageSettings.VideoCaptureLibrarySha256;
                     }
                     if (enabled && hostOk && s.Host.Length == 0)
                         errors.Add("hyperhdr.host is required when hyperhdr.enabled is true");
@@ -299,22 +297,24 @@ namespace Service
         public int Priority { get; internal set; } = 150;
         public int ImageWidth { get; internal set; } = 64;
         public int ImageHeight { get; internal set; } = 36;
+        public string VideoCaptureLibrarySha256 { get; internal set; } = "";
         public string Origin => "Tizen Ambilight";
 
         // Same target and image: an output running with other's settings can be kept as it is.
         public bool SameAs(HyperHdrSettings other) =>
             other != null && Enabled == other.Enabled && Host == other.Host && Port == other.Port
-            && Priority == other.Priority && ImageWidth == other.ImageWidth && ImageHeight == other.ImageHeight;
+            && Priority == other.Priority && ImageWidth == other.ImageWidth && ImageHeight == other.ImageHeight
+            && VideoCaptureLibrarySha256 == other.VideoCaptureLibrarySha256;
 
         // Lenient parse of res/ambilight.json's hyperhdr section. The problems that affect the
-        // image size also go to imageSizeWarnings (see OutputConfig.LoadEffective).
-        internal static HyperHdrSettings Parse(JsonElement obj, List<string> warnings, List<string> imageSizeWarnings)
+        // package-only settings also go to packageWarnings (see OutputConfig.LoadEffective).
+        internal static HyperHdrSettings Parse(JsonElement obj, List<string> warnings, List<string> packageWarnings)
         {
             var s = new HyperHdrSettings();
             if (obj.ValueKind != JsonValueKind.Object)
             {
                 warnings.Add("hyperhdr must be an object — HyperHDR output disabled");
-                imageSizeWarnings.Add("hyperhdr must be an object — using the default HyperHDR image size");
+                packageWarnings.Add("hyperhdr must be an object — using the default HyperHDR image size");
                 return s;
             }
 
@@ -332,7 +332,19 @@ namespace Service
             s.ImageWidth  = OutputConfig.GetInt(obj, "imageWidth",  s.ImageWidth,  EdgeImage.MinSize, EdgeImage.MaxSize, "hyperhdr", sizeWarnings, ref valid);
             s.ImageHeight = OutputConfig.GetInt(obj, "imageHeight", s.ImageHeight, EdgeImage.MinSize, EdgeImage.MaxSize, "hyperhdr", sizeWarnings, ref valid);
             warnings.AddRange(sizeWarnings);
-            foreach (var w in sizeWarnings) imageSizeWarnings.Add($"{w} — using the default");
+            foreach (var w in sizeWarnings) packageWarnings.Add($"{w} — using the default");
+
+            if (obj.TryGetProperty("videoCaptureLibrarySha256", out var fingerprint))
+            {
+                string value = fingerprint.ValueKind == JsonValueKind.String ? fingerprint.GetString()?.Trim() : null;
+                if (value != "" && !VideoCapture.IsSha256(value))
+                {
+                    const string warning = "hyperhdr.videoCaptureLibrarySha256 must be empty or a 64-digit SHA-256 — full-frame capture disabled";
+                    warnings.Add(warning);
+                    packageWarnings.Add(warning);
+                }
+                else s.VideoCaptureLibrarySha256 = value;
+            }
 
             if (enabled && string.IsNullOrEmpty(s.Host))
             {

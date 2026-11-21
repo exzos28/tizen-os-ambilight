@@ -1,24 +1,26 @@
 using System;
+using System.IO;
 using System.Runtime.InteropServices;
+using System.Security.Cryptography;
 using static System.FormattableString;
 
 namespace Service
 {
-    // Private adapter for Samsung's caller-owned NV12 video-capture API. The ABI is only
-    // enabled on the ARM32 layout that was verified for Tizen 9; unknown runtimes stay on PPI.
-    sealed class VideoCapture : IDisposable
+    interface IVideoCaptureSource : IDisposable
+    {
+        bool TryCapture(out PixelFrame frame, out string error);
+    }
+
+    // The undocumented ABI must be explicitly trusted for this exact library build.
+    sealed class VideoCapture : IVideoCaptureSource
     {
         private const string LibraryName = "/usr/lib/libvideo-capture.so.0.1.0";
         private const string CaptureSymbol = "secvideo_api_capture_video_main";
-        private const int RTLD_NOW = 2;
         // Reserve a generous zeroed tail because newer struct fields after the verified pitches
         // (including a timestamp) may be written by the native API.
         private const int ParamSize = 0x100;
         private const int YCapacity = Nv12FrameConverter.MaxWidth * Nv12FrameConverter.MaxHeight;
         private const int UvCapacity = YCapacity / 2;
-
-        [DllImport("libdl.so.2")] private static extern IntPtr dlopen(string filename, int flags);
-        [DllImport("libdl.so.2")] private static extern IntPtr dlerror();
 
         // ARM32 layout derived from the exported function's native parameter structure.
         // Unassigned bytes are reserved and always zero-initialized before the call.
@@ -45,8 +47,6 @@ namespace Service
         private IntPtr _uvBuffer;
         private readonly byte[] _yPlane = new byte[YCapacity];
         private readonly byte[] _uvPlane = new byte[UvCapacity];
-        private readonly byte[] _zeroY = new byte[YCapacity];
-        private readonly byte[] _zeroUv = new byte[UvCapacity];
         private bool _disposed;
 
         private VideoCapture(IntPtr library, CaptureVideoFunc capture)
@@ -59,8 +59,8 @@ namespace Service
                 _uvBuffer = Marshal.AllocHGlobal(UvCapacity);
                 if (_yBuffer == IntPtr.Zero || _uvBuffer == IntPtr.Zero)
                     throw new OutOfMemoryException("allocating NV12 planes returned a null pointer");
-                Marshal.Copy(_zeroY, 0, _yBuffer, YCapacity);
-                Marshal.Copy(_zeroUv, 0, _uvBuffer, UvCapacity);
+                Clear(_yBuffer, YCapacity);
+                Clear(_uvBuffer, UvCapacity);
             }
             catch
             {
@@ -71,31 +71,20 @@ namespace Service
             }
         }
 
-        public static VideoCapture TryOpen(out string error)
+        public static VideoCapture TryOpen(string trustedLibrarySha256, out string error)
         {
             error = null;
-            if (IntPtr.Size != 4)
+            if (IntPtr.Size != 4 || RuntimeInformation.ProcessArchitecture != Architecture.Arm)
             {
-                error = Invariant($"{CaptureSymbol} requires the verified 32-bit ARM ABI; runtime pointer size is {IntPtr.Size}");
+                error = $"{CaptureSymbol} requires a 32-bit ARM process";
                 return null;
             }
-            if (!HasVerifiedLayout(out error)) return null;
+            if (!VerifyLibrary(LibraryName, trustedLibrarySha256, out error)) return null;
 
-            IntPtr library;
-            try
-            {
-                dlerror();
-                library = dlopen(LibraryName, RTLD_NOW);
-            }
-            catch (Exception ex)
-            {
-                error = Invariant($"loading {LibraryName} failed: {ex.Message}");
-                return null;
-            }
+            IntPtr library = NativeLibraryHelper.Load(LibraryName, out string loadError);
             if (library == IntPtr.Zero)
             {
-                string nativeError = Marshal.PtrToStringAnsi(dlerror());
-                error = Invariant($"loading {LibraryName} failed: {nativeError ?? "no error text"}");
+                error = $"loading {LibraryName} failed: {loadError}";
                 return null;
             }
 
@@ -128,8 +117,8 @@ namespace Service
             {
                 // Clear caller-owned planes so a partial native write can never reuse bytes
                 // from the preceding frame and appear to be a valid complete image.
-                Marshal.Copy(_zeroY, 0, _yBuffer, YCapacity);
-                Marshal.Copy(_zeroUv, 0, _uvBuffer, UvCapacity);
+                Clear(_yBuffer, YCapacity);
+                Clear(_uvBuffer, UvCapacity);
 
                 var param = new CaptureParam
                 {
@@ -161,10 +150,12 @@ namespace Service
 
                 Marshal.Copy(_yBuffer, _yPlane, 0, yBytes);
                 Marshal.Copy(_uvBuffer, _uvPlane, 0, uvBytes);
+                if (!HasFrameData(_yPlane, yBytes, _uvPlane, uvBytes))
+                    return Fail("video capture returned empty planes", out error);
                 if (!Nv12FrameConverter.TryConvert(_yPlane, _uvPlane, width, height, yPitch, uvPitch,
-                    yBytes, uvBytes, out byte[] rgb, out error)) return false;
+                    yBytes, uvBytes, out byte[] rgb, out int outputWidth, out int outputHeight, out error)) return false;
 
-                frame = new PixelFrame(width, height, rgb);
+                frame = new PixelFrame(outputWidth, outputHeight, rgb);
                 return true;
             }
             catch (Exception ex)
@@ -183,27 +174,40 @@ namespace Service
             if (_library != IntPtr.Zero) { NativeLibrary.Free(_library); _library = IntPtr.Zero; }
         }
 
-        private static bool HasVerifiedLayout(out string error)
+        internal static bool IsSha256(string value)
         {
-            error = null;
-            if (Marshal.SizeOf(typeof(CaptureParam)) != ParamSize ||
-                OffsetOf(nameof(CaptureParam.YSize)) != 0 ||
-                OffsetOf(nameof(CaptureParam.UvSize)) != 4 ||
-                OffsetOf(nameof(CaptureParam.Width)) != 8 ||
-                OffsetOf(nameof(CaptureParam.Height)) != 0x0c ||
-                OffsetOf(nameof(CaptureParam.YPointer)) != 0x10 ||
-                OffsetOf(nameof(CaptureParam.UvPointer)) != 0x14 ||
-                OffsetOf(nameof(CaptureParam.Interlaced)) != 0x28 ||
-                OffsetOf(nameof(CaptureParam.YPitch)) != 0x2c ||
-                OffsetOf(nameof(CaptureParam.UvPitch)) != 0x30)
-            {
-                error = "secvideo_capture_param does not match the verified ARM32 layout";
-                return false;
-            }
+            if (value == null || value.Length != 64) return false;
+            foreach (char c in value)
+                if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')))
+                    return false;
             return true;
         }
 
-        private static int OffsetOf(string field) => Marshal.OffsetOf(typeof(CaptureParam), field).ToInt32();
+        internal static bool HasFrameData(byte[] yPlane, int yBytes, byte[] uvPlane, int uvBytes)
+        {
+            for (int i = 0; i < yBytes; i++) if (yPlane[i] != 0) return true;
+            for (int i = 0; i < uvBytes; i++) if (uvPlane[i] != 0) return true;
+            return false;
+        }
+
+        internal static bool VerifyLibrary(string path, string trustedSha256, out string error)
+        {
+            if (!IsSha256(trustedSha256))
+                return Fail("no trusted video-capture library SHA-256 configured; using PPI", out error);
+            try
+            {
+                using var hash = SHA256.Create();
+                using var file = File.OpenRead(path);
+                string actual = BitConverter.ToString(hash.ComputeHash(file)).Replace("-", "");
+                if (!string.Equals(actual, trustedSha256, StringComparison.OrdinalIgnoreCase))
+                    return Fail("video-capture library SHA-256 does not match the trusted build; using PPI", out error);
+            }
+            catch (Exception ex) { return Fail($"cannot verify video-capture library: {ex.Message}", out error); }
+            error = null;
+            return true;
+        }
+
+        private static unsafe void Clear(IntPtr buffer, int size) => new Span<byte>(buffer.ToPointer(), size).Clear();
         private static uint PointerValue(IntPtr pointer) => unchecked((uint)pointer.ToInt32());
 
         private static bool Fail(string message, out string error)

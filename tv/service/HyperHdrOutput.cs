@@ -17,7 +17,7 @@ namespace Service
     // (e.g. the HyperHDR host lost power and TCP would keep "sending" into the kernel buffer
     // for minutes). Reconnects back off 1 s → 2 s → 4 s → 5 s (cap) and reset once a reply
     // arrives. Closing the socket is enough to release our priority in HyperHDR.
-    sealed class HyperHdrOutput : IDisposable
+    sealed class HyperHdrOutput : IDisposable, IHyperHdrFrameTarget
     {
         private const int ConnectTimeoutMs = 3000;
         private const int SendTimeoutMs = 2000;
@@ -56,6 +56,7 @@ namespace Service
 
         public HyperHdrSettings Settings => _settings;
         public string Endpoint => Invariant($"{_settings.Host}:{_settings.Port}");
+        public string VideoCaptureLibrarySha256 => _settings.VideoCaptureLibrarySha256;
 
         // Number of replies received so far (for tests and diagnostics).
         public long RepliesReceived { get { lock (_stateLock) return _replied; } }
@@ -81,13 +82,18 @@ namespace Service
 
         public void Offer(EdgeFrame frame)
         {
-            Interlocked.Exchange(ref _pending, HyperHdrFrame.FromEdge(frame));
-            _wake.Set();
+            Offer(HyperHdrFrame.FromEdge(frame));
         }
 
         public void Offer(PixelFrame frame)
         {
-            Interlocked.Exchange(ref _pending, HyperHdrFrame.FromPixels(frame));
+            Offer(HyperHdrFrame.FromPixels(frame));
+        }
+
+        public void Offer(HyperHdrFrame frame)
+        {
+            if (_cts.IsCancellationRequested) return;
+            Interlocked.Exchange(ref _pending, frame);
             _wake.Set();
         }
 
@@ -175,7 +181,7 @@ namespace Service
         {
             var socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp)
             {
-                NoDelay = true,   // one small message per frame — don't let Nagle hold it back
+                NoDelay = true,   // don't delay time-sensitive image messages
                 SendTimeout = SendTimeoutMs,
             };
             try
@@ -215,13 +221,21 @@ namespace Service
                 if (_sent == _replied) _waitingSinceTicks = Environment.TickCount64;   // first unanswered message starts the clock
                 _sent++;
             }
-            byte[] framed = HyperHdrProtocol.Frame(message);
-            int offset = 0;
-            while (offset < framed.Length)
+            try
             {
-                int sent = socket.Send(framed, offset, framed.Length - offset, SocketFlags.None);
-                if (sent <= 0) throw new SocketException((int)SocketError.ConnectionReset);
-                offset += sent;
+                byte[] framed = HyperHdrProtocol.Frame(message);
+                int offset = 0;
+                while (offset < framed.Length)
+                {
+                    int sent = socket.Send(framed, offset, framed.Length - offset, SocketFlags.None);
+                    if (sent <= 0) throw new SocketException((int)SocketError.ConnectionReset);
+                    offset += sent;
+                }
+            }
+            catch
+            {
+                lock (_stateLock) _sent--;
+                throw;
             }
         }
 

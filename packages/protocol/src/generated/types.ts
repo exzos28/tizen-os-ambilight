@@ -976,7 +976,7 @@ export interface CaptureStatus {
    */
   frames: number
   /**
-   * Duration of the last capture cycle, including optional full-plane capture.
+   * Duration of the last PPI sampling cycle.
    *
    * @minimum 0
    * @unit ms

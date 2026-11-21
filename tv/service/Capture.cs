@@ -9,38 +9,7 @@ namespace Service
     {
         #region Native interop
 
-        // Loaded with dlopen(RTLD_NOW) so unresolved dependencies fail here, at load time,
-        // instead of aborting the process on the first call (NativeLibrary.Load uses
-        // RTLD_LAZY). If it fails, NativeLibrary.Load is used only to get a reliable error
-        // message — dlerror() can come back empty when the runtime touches the loader in
-        // between, which used to turn every failure into "unknown".
-        [DllImport("libdl.so.2")] static extern IntPtr dlopen(string filename, int flags);
-        [DllImport("libdl.so.2")] static extern IntPtr dlerror();
-        const int RTLD_NOW = 2;
         const string LibraryName = "libvideoenhance.so";
-
-        static IntPtr LoadLibrary(out string error)
-        {
-            error = null;
-            // Call dlerror() once first: binding the P/Invoke stub runs dlopen/dlsym on
-            // libdl, which would otherwise reset the error we want to read below.
-            dlerror();
-            IntPtr lib = dlopen(LibraryName, RTLD_NOW);
-            if (lib != IntPtr.Zero) return lib;
-
-            string dlopenError = Marshal.PtrToStringAnsi(dlerror());
-            try
-            {
-                // Lazy load with the runtime's wider search path, only to tell the two
-                // failure kinds apart; the library is not used from this handle.
-                NativeLibrary.Free(NativeLibrary.Load(LibraryName));
-                error = $"dlopen(RTLD_NOW) failed: {dlopenError ?? "no error text"} " +
-                        "(a lazy load from the runtime's search path succeeded, so the library exists — " +
-                        "an unresolved symbol, or found only outside the system library path)";
-            }
-            catch (Exception ex) { error = dlopenError ?? ex.Message; }
-            return IntPtr.Zero;
-        }
 
         // Returns the first export found among the given names (firmware versions differ:
         // ppi_ve_* vs ve_*), or null.
@@ -90,18 +59,17 @@ namespace Service
         static readonly object _runLock = new object();
 
         // Returns true on clean stop (token cancelled — CaptureLoop does that to pause,
-        // re-initialise or exit), false on failure. Delivers PPI edges and optional validated
-        // full-frame pixels on this thread; callbacks must not block. Progress and failures also
-        // go to status, for the launcher's status panel.
-        public static bool Run(Action<EdgeFrame, bool> onFrame, Func<PixelFrame, bool> onFullFrame,
-            Func<bool> fullFrameEnabled, Action<string, string> log, CaptureStatus status, CancellationToken token)
+        // re-initialise or exit), false on failure. PPI samples reach the ESP32 callback on
+        // this thread; HyperHDR's optional video-plane capture runs on a separate worker.
+        public static bool Run(Action<EdgeFrame> onFrame, Func<IHyperHdrFrameTarget> hyperHdrTarget,
+            Action<string, string> log, CaptureStatus status, CancellationToken token)
         {
             lock (_runLock)
             {
                 status.Starting();
                 log("CaptureStart", $"loading {LibraryName}");
 
-                IntPtr lib = LoadLibrary(out string loadError);
+                IntPtr lib = NativeLibraryHelper.Load(LibraryName, out string loadError);
                 if (lib == IntPtr.Zero)
                 {
                     log("CaptureError", $"loading {LibraryName} failed: {loadError}");
@@ -132,7 +100,9 @@ namespace Service
                 status.Hardware(ret, hw.measureBlockCnt, hw.measureBlockWidth, hw.measureBlockHeight,
                     hw.measureFullWidth, hw.measureFullHeight, hw.measureDelay, delay);
 
-                if (ret != 0 || hw.measureBlockCnt < 1 || hw.measureFullWidth < 1)
+                if (ret != 0 || hw.measureBlockCnt < 1 || hw.measureFullWidth < 1 ||
+                    hw.measureFullHeight < 1 || hw.measureBlockWidth < 1 || hw.measureBlockHeight < 1 ||
+                    hw.measureBlockWidth > hw.measureFullWidth || hw.measureBlockHeight > hw.measureFullHeight)
                 {
                     log("CaptureError", "invalid HW condition");
                     status.Failed(CaptureFailure.Hardware, Invariant($"invalid HW condition: ret={ret} blocks={hw.measureBlockCnt} full={hw.measureFullWidth}x{hw.measureFullHeight}"));
@@ -180,6 +150,12 @@ namespace Service
                     positions[idx++] = (Clamp(insetX, 0, fullW - captW), Clamp(y, 0, fullH - captH));
                 }
 
+                var videoPoints = new CapturePoint[totalPoints];
+                for (int i = 0; i < totalPoints; i++)
+                    videoPoints[i] = new CapturePoint(
+                        (positions[i].x + captW / 2.0) / fullW,
+                        (positions[i].y + captH / 2.0) / fullH);
+
                 int numBatches = (totalPoints + blocksPerCycle - 1) / blocksPerCycle;
 
                 log("CaptureReady", Invariant($"points={totalPoints} h={hCount} v={vCount} batches={numBatches} blocksPerCycle={blocksPerCycle} delay={delay}ms"));
@@ -197,11 +173,9 @@ namespace Service
                 }
                 if (delay > 0) Thread.Sleep(delay);
 
-                VideoCapture videoCapture = null;
-                bool videoCaptureUnavailable = false;
-                string videoUnavailableReason = null;
-                string activeBackend = null;
-                string lastBackendDetail = null;
+                var fullFrames = new FullFrameCaptureLoop(hyperHdrTarget, videoPoints, status, log);
+                fullFrames.Start();
+                var fullFrameCancellation = token.Register(fullFrames.RequestStop);
                 try
                 {
                     while (!token.IsCancellationRequested)
@@ -247,35 +221,6 @@ namespace Service
 
                         if (token.IsCancellationRequested) break;
 
-                        long pixelFrameStart = sw.ElapsedMilliseconds;
-                        PixelFrame pixels = null;
-                        string videoError = null;
-                        if (fullFrameEnabled != null && fullFrameEnabled())
-                        {
-                            if (videoCapture == null && !videoCaptureUnavailable)
-                            {
-                                try { videoCapture = VideoCapture.TryOpen(out videoError); }
-                                catch (Exception ex) { videoError = $"opening video capture failed: {ex.Message}"; }
-                                if (videoCapture == null)
-                                {
-                                    videoCaptureUnavailable = true;
-                                    videoUnavailableReason = videoError;
-                                }
-                            }
-                            if (videoCapture != null)
-                            {
-                                try
-                                {
-                                    if (videoCapture.TryCapture(out pixels, out videoError)) videoError = null;
-                                }
-                                catch (Exception ex) { videoError = $"video capture failed: {ex.Message}"; }
-                            }
-                            else if (videoCaptureUnavailable)
-                            {
-                                videoError = videoUnavailableReason;
-                            }
-                        }
-
                         frameCount++;
                         // Outputs and the status may keep the frame they are given, so a frame is never
                         // changed once handed out. A new one is made only when the colors changed;
@@ -285,20 +230,8 @@ namespace Service
                         long actualMs = sw.ElapsedMilliseconds - frameStart;
                         status.Frame(frame, (int)actualMs, totalPoints, badReads, lastBadRet);
 
-                        bool fullFrameOffered = false;
-                        if (pixels != null && onFullFrame != null)
-                        {
-                            try { fullFrameOffered = onFullFrame(pixels); }
-                            catch (Exception ex) { videoError = $"full-frame delivery failed: {ex.Message}"; }
-                        }
-                        string backend = fullFrameOffered ? "secvideo-nv12" : "ppi-edge";
-                        string backendDetail = fullFrameOffered
-                            ? Invariant($"{pixels.Width}x{pixels.Height}")
-                            : videoError;
-                        if (fullFrameOffered) status.FullFrame((int)(sw.ElapsedMilliseconds - pixelFrameStart));
-                        ReportBackend(status, log, backend, backendDetail, fullFrameOffered ? null : videoError,
-                            ref activeBackend, ref lastBackendDetail);
-                        onFrame(frame, fullFrameOffered);
+                        onFrame(frame);
+                        fullFrames.OfferEdge(frame, badReads == 0);
 
                         if (frameCount % 200 == 1)
                         {
@@ -309,23 +242,14 @@ namespace Service
                         }
                     }
                 }
-                finally { videoCapture?.Dispose(); }
+                finally
+                {
+                    fullFrameCancellation.Dispose();
+                    fullFrames.Dispose();
+                }
 
                 return true; // clean stop: token cancelled
             }
-        }
-
-        private static void ReportBackend(CaptureStatus status, Action<string, string> log, string backend,
-            string detail, string error, ref string activeBackend, ref string lastBackendDetail)
-        {
-            status.Backend(backend, error);
-            bool changed = backend != activeBackend;
-            bool newDetail = detail != null && detail != lastBackendDetail;
-            if (changed || newDetail)
-                log("CaptureBackend", $"source={backend}" + (detail != null ? $" detail={detail}" : ""));
-            activeBackend = backend;
-            if (backend == "secvideo-nv12") lastBackendDetail = null;
-            else if (detail != null) lastBackendDetail = detail;
         }
 
         static int Clamp(int val, int min, int max)

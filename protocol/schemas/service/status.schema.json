@@ -96,7 +96,7 @@
         "retryInMs": { "type": "integer", "minimum": 0, "x-unit": "ms", "description": "Time until the next start attempt; only while `failed`." },
         "hw": { "$ref": "#/$defs/HwCondition" },
         "frames": { "type": "integer", "minimum": 0, "description": "Fresh PPI spot-sampling cycles since capture (re)started; not an interpolation or network-render counter." },
-        "frameMs": { "type": "integer", "minimum": 0, "x-unit": "ms", "description": "Duration of the last capture cycle, including optional full-plane capture." },
+        "frameMs": { "type": "integer", "minimum": 0, "x-unit": "ms", "description": "Duration of the last PPI sampling cycle." },
         "pixelFrames": { "type": "integer", "minimum": 0, "description": "Fresh full-plane RGB images offered to HyperHDR since capture (re)started." },
         "pixelFrameMs": { "type": "integer", "minimum": 0, "x-unit": "ms", "description": "Duration of the latest full-plane capture, conversion, and handoff." },
         "lastPixelFrameAgoMs": { "type": "integer", "minimum": 0, "x-unit": "ms", "description": "Time since the latest full-plane image was handed to HyperHDR." },

@@ -3,20 +3,22 @@
 The TV service can stream to a [HyperHDR](https://github.com/awawa-dev/HyperHDR) server instead of — or in addition to — this project's ESP32 firmware. HyperHDR then drives whatever LEDs it is set up for (WLED, Hyperk, Adalight, Philips Hue…), with its own smoothing and color calibration.
 
 > [!WARNING]
-> **Capture backend is inferred from image dimensions, not direct backend telemetry.** On the S95C, HyperHDR received 960×540 images while non-DRM video was playing and 64×36 images after returning to the app. Those sizes match the full-plane path and configured PPI fallback respectively. Protected media has returned DRM `rc=-4`, which falls back to PPI edge samples.
+> **Experimental full-plane capture is disabled by default.** Samsung's private capture ABI is undocumented and may change between firmware builds. An earlier S95C prototype produced 960×540 HyperHDR inputs while non-DRM video played and 64×36 inputs after returning to the app, consistent with the video plane and PPI fallback respectively; direct backend telemetry was unavailable. The current safety gate and downsampling have not been tested on a TV.
 
 The existing sampled output was tested on a Samsung S95B (2022) with HyperHDR in [#14](https://github.com/exzos28/tizen-os-ambilight/issues/14). HyperHDR v22 transport was also tested in CI against registration, streaming, freezing, crashing and restarting.
 
 ## How it works
 
 ```
-TV service ── valid NV12 frame ──► RGB RawImage (up to 960×540) ──┐
+TV service ── valid NV12 frame ──► RGB RawImage (up to 160×90) ──┐
                                                                   ├─► HyperHDR FlatBuffers server (TCP 19400)
 TV service ── PPI edge samples ──► configured edge image ─────────┘
                  └──────────────────────────────────────────────────► ESP32 (unchanged)
 ```
 
-When available, the service converts the TV's full-frame NV12 capture directly to RGB and sends that image to HyperHDR. The existing PPI edge sampler still feeds the ESP32 and remains HyperHDR's fallback: if full-frame capture is unavailable or rejected, the service synthesizes the configured small image from the 14 edge points. The configured image width/height apply to this fallback only.
+When explicitly enabled for a trusted library build, a separate worker captures the full NV12 video plane, averages it down to at most 160×90, converts it to RGB and sends it to HyperHDR. The existing PPI edge sampler continues to feed the ESP32 without waiting for that worker. HyperHDR uses an image synthesized from the 14 PPI points while full-frame capture is unavailable or rejected. Three consecutive usable or rejected captures are required before switching sources; brief failures hold the last video image. A dark plane is rejected when several fresh, corresponding PPI samples are bright. If the video worker stalls, PPI resumes after one second; a replacement worker cannot start a native call until the previous one exits.
+
+The video-plane path only runs in a 32-bit ARM process when `hyperhdr.videoCaptureLibrarySha256` is set in the package defaults to the SHA-256 of a **specific library build whose ABI was independently verified**. The installed `/usr/lib/libvideo-capture.so.0.1.0` must match that fingerprint, otherwise PPI remains active. No build fingerprint is shipped as trusted. **A matching hash only identifies a file; it does not itself prove the private ABI is safe.** Do not configure a fingerprint merely because it was read from an untested TV. Firmware updates can change the library and require a new independent verification.
 
 ## Setup
 
@@ -25,7 +27,7 @@ When available, the service converts the TV's full-frame NV12 capture directly t
 - *Network services* → *Flatbuffers server*: enabled (default), port `19400` (default).
 - *LED layout*: set it up for your strip as for any video source.
 - *Black border detection*: **off**. With only 14 samples, a dark top or bottom edge can look like a letterbox bar and get cropped.
-- *Flatbuffers server* → *HDR tone mapping*: off (the TV already delivers SDR-range colors).
+- *Flatbuffers server* → *HDR tone mapping*: off for the existing PPI path. The video-plane conversion uses an SDR matrix; HDR color accuracy has not been verified.
 - *Smoothing*: consider raising the time from the default to ~250 ms. Frames arrive every ~140 ms, so a longer smoothing window hides the steps.
 - If the TV is in a different subnet than HyperHDR, allow its address in HyperHDR's network settings — otherwise HyperHDR closes the connection right after it opens (the service log then says so).
 
@@ -54,6 +56,7 @@ the package, so changing it means rebuilding and reinstalling — see
     "host": "192.168.1.50",                 // IP of the HyperHDR machine
     "port": 19400,
     "priority": 150,                        // 50–250, lower wins
+    "videoCaptureLibrarySha256": "",        // empty means PPI only
     "imageWidth": 64,
     "imageHeight": 36
   }
@@ -67,7 +70,8 @@ the package, so changing it means rebuilding and reinstalling — see
 | `hyperhdr.host` | — | Required when enabled. An IP address is safest; a host name must be resolvable by the TV |
 | `hyperhdr.port` | `19400` | HyperHDR's Flatbuffers server port |
 | `hyperhdr.priority` | `150` | HyperHDR shows the source with the **lowest** number. Its own USB/system grabbers use 240/245, so 150 overrides them while the TV is streaming |
-| `hyperhdr.imageWidth` / `imageHeight` | `64` / `36` | 8–256. Used for the sampled-edge fallback; full-frame capture sends its validated source dimensions |
+| `hyperhdr.imageWidth` / `imageHeight` | `64` / `36` | 8–256. Used for the sampled-edge fallback; full-frame capture sends the downsampled video-plane dimensions |
+| `hyperhdr.videoCaptureLibrarySha256` | empty | Optional package-only fingerprint for an independently verified native library build. Empty or mismatched means PPI only; see the warning above. |
 
 An invalid section is disabled and reported as a `ConfigWarning` event in the service log (see [tools/server.py](../tools/README.md)). Settings sent with `set-outputs` use the same keys, ranges and defaults (without the image size, which always comes from `res/ambilight.json`), but an invalid value there rejects the whole change instead.
 
@@ -82,7 +86,8 @@ An invalid section is disabled and reported as a `ConfigWarning` event in the se
 
 ## Limitations
 
-- **Direct backend telemetry is unavailable in the current TV logs** — the 960×540 / 64×36 evidence above is based on HyperHDR's received image sizes.
+- **The new gate and 160×90 downsampling are not yet validated on a TV** — the earlier prototype's 960×540 / 64×36 evidence above is based on HyperHDR's received image sizes.
+- **Full-frame availability is opt-in and restricted**: no verified library fingerprint ships with the app, and a matching fingerprint does not prove ABI safety.
 - **TV standby**: what capture returns while the TV is in standby has not been measured. If the service keeps sending black frames, the TV source keeps its priority in HyperHDR until the service stops.
 - **PPI edge samples are shared with ESP32**: changing their count affects the fallback image and ESP32 frame rate; it does not change full-frame resolution.
 

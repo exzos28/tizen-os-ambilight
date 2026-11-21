@@ -14,6 +14,7 @@
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
     <ImplicitUsings>disable</ImplicitUsings>
     <Nullable>disable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
   <ItemGroup>
@@ -24,7 +25,9 @@
     <Compile Include="../../../tv/service/EdgeFrame.cs" />
     <Compile Include="../../../tv/service/EdgeImage.cs" />
     <Compile Include="../../../tv/service/PixelFrame.cs" />
+    <Compile Include="../../../tv/service/NativeLibraryHelper.cs" />
     <Compile Include="../../../tv/service/VideoCapture.cs" />
+    <Compile Include="../../../tv/service/FullFrameCaptureLoop.cs" />
     <Compile Include="../../../tv/service/HyperHdrProtocol.cs" />
     <Compile Include="../../../tv/service/HyperHdrOutput.cs" />
     <Compile Include="../../../tv/service/OutputConfig.cs" />

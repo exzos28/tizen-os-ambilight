@@ -76,8 +76,7 @@ namespace Service
             return b.SizedByteArray();
         }
 
-        // Prepends the 4-byte big-endian length HyperHDR expects. One buffer, so the
-        // message goes out in a single send.
+        // Prepends the 4-byte big-endian length HyperHDR expects. The sender handles partial writes.
         public static byte[] Frame(byte[] message)
         {
             var framed = new byte[4 + message.Length];
