@@ -3,11 +3,13 @@
 //
 //   dotnet run                          unit tests; writes FlatBuffers samples to ./out and the
 //                                       service's status / command JSON to ./out/contract
+//   dotnet run -- -frame-e2e HOST PORT  500 ms synthetic full-frame input at priority 250
 //   dotnet run -- -e2e HOST PORT HTTP   live session against a running HyperHDR
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Net.Http;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Threading;
@@ -21,11 +23,18 @@ namespace Service
 
         static int Main(string[] args)
         {
+            if (args.Length >= 1 && args[0] == "-frame-e2e")
+                return FullFrameEndToEnd(args[1], int.Parse(args[2]));
             if (args.Length >= 1 && args[0] == "-e2e")
                 return EndToEnd(args[1], int.Parse(args[2]), int.Parse(args[3]));
 
             LazyLoadTests();   // first: before anything else touches Google.FlatBuffers
             EdgeImageTests();
+            Nv12FrameTests();
+            HyperHdrFrameTests();
+            FullFrameSelectionTests();
+            FullFrameWorkerTests();
+            VideoLibraryTrustTests();
             ProtocolTests();
             ConfigTests();
             CommandConfigTests();
@@ -147,6 +156,390 @@ namespace Service
                   "one sample per edge fills each edge with that sample");
         }
 
+        // ---------------------------------------------------------------- NV12 capture
+
+        private static void Nv12FrameTests()
+        {
+            // Two rows with four-byte pitches; padding bytes must not be interpreted as pixels.
+            var y = new byte[] { 16, 235, 7, 7, 81, 145, 9, 9 };
+            var uv = new byte[] { 128, 128, 128, 128 };
+            Check(Nv12FrameConverter.TryConvert(y, uv, 2, 2, 4, 4, out var rgb, out var error)
+                  && error == null && rgb.Length == 12
+                  && rgb[0] == 0 && rgb[3] == 255 && rgb[6] == 76 && rgb[9] == 150,
+                "NV12 conversion honors independent row pitches and ignores padding");
+
+            Check(!Nv12FrameConverter.TryConvert(y, uv, 962, 2, 962, 962, out rgb, out _)
+                  && rgb == null, "NV12 dimensions above the allocated capture bounds are rejected");
+            Check(!Nv12FrameConverter.TryConvert(y, uv, 3, 2, 4, 4, out rgb, out _)
+                  && rgb == null, "odd NV12 dimensions are rejected");
+            Check(!Nv12FrameConverter.TryConvert(y, uv, 2, 2, 1, 2, out rgb, out _)
+                  && rgb == null, "NV12 pitches smaller than a complete row are rejected");
+            Check(!Nv12FrameConverter.TryConvert(new byte[3], uv, 2, 2, 2, 2, out rgb, out _)
+                  && rgb == null, "truncated NV12 planes are rejected");
+            Check(!VideoCapture.HasFrameData(new byte[4], 4, new byte[2], 2)
+                  && VideoCapture.HasFrameData(new byte[4], 4, new byte[] { 128, 128 }, 2),
+                "unwritten zero planes are rejected without rejecting neutral black chroma");
+
+            var largeY = new byte[960 * 540];
+            var largeUv = new byte[960 * 270];
+            for (int row = 0; row < 540; row++)
+                for (int col = 0; col < 960; col++) largeY[row * 960 + col] = col < 480 ? (byte)16 : (byte)235;
+            Array.Fill(largeUv, (byte)128);
+            Check(Nv12FrameConverter.TryConvert(largeY, largeUv, 960, 540, 960, 960,
+                  largeY.Length, largeUv.Length, out rgb, out int scaledW, out int scaledH, out error)
+                  && scaledW == 160 && scaledH == 90 && rgb.Length == 160 * 90 * 3
+                  && rgb[0] == 0 && rgb[(159 * 3)] == 255,
+                "960x540 NV12 is downscaled to 160x90 while preserving both sides");
+
+            var mixedY = new byte[320 * 180];
+            var mixedUv = new byte[320 * 90];
+            Array.Fill(mixedY, (byte)16);
+            Array.Fill(mixedUv, (byte)128);
+            mixedY[1] = mixedY[320] = 235;
+            Check(Nv12FrameConverter.TryConvert(mixedY, mixedUv, 320, 180, 320, 320,
+                  mixedY.Length, mixedUv.Length, out rgb, out scaledW, out scaledH, out error)
+                  && scaledW == 160 && scaledH == 90 && rgb[0] >= 125 && rgb[0] <= 130,
+                "downscaling averages source pixels instead of dropping small features");
+        }
+
+        private static void HyperHdrFrameTests()
+        {
+            var rgb = new byte[2 * 2 * 3];
+            for (int i = 0; i < rgb.Length; i++) rgb[i] = (byte)i;
+            var pixels = new PixelFrame(2, 2, rgb);
+            byte[] edgeImage = null;
+            byte[] resolved = HyperHdrOutput.ResolveImage(HyperHdrFrame.FromPixels(pixels), 64, 36,
+                ref edgeImage, out int width, out int height);
+            Check(ReferenceEquals(resolved, rgb) && width == 2 && height == 2 && edgeImage == null,
+                "full-frame HyperHDR input forwards the original RGB and dimensions without edge synthesis");
+
+            resolved = HyperHdrOutput.ResolveImage(HyperHdrFrame.FromEdge(DistinctFrame()), 16, 9,
+                ref edgeImage, out width, out height);
+            Check(width == 16 && height == 9 && ReferenceEquals(resolved, edgeImage)
+                  && resolved.Length == 16 * 9 * 3,
+                "edge fallback still synthesizes the configured HyperHDR image");
+        }
+
+        private static void FullFrameSelectionTests()
+        {
+            var selector = new FullFrameSelector();
+            Check(selector.Update(true) == FrameChoice.Edge && selector.Update(true) == FrameChoice.Edge
+                  && selector.Update(true) == FrameChoice.Video,
+                "full-frame output requires three consecutive usable frames");
+            Check(selector.Update(false) == FrameChoice.Hold && selector.Update(false) == FrameChoice.Hold
+                  && selector.Update(false) == FrameChoice.Edge,
+                "transient video failures hold the last image; three failures switch to PPI");
+            Check(selector.Update(true) == FrameChoice.Edge && selector.Update(true) == FrameChoice.Edge
+                  && selector.Update(true) == FrameChoice.Video,
+                "returning from PPI also requires three usable video frames");
+
+            var points = new CapturePoint[14];
+            for (int i = 0; i < points.Length; i++) points[i] = new CapturePoint((i + 0.5) / points.Length, 0.5);
+            var dark = new PixelFrame(160, 90, new byte[160 * 90 * 3]);
+            var brightValues = new byte[14 * 3];
+            for (int i = 0; i < 3; i++) brightValues[i * 3] = 80;
+            var brightEdge = new EdgeFrame(4, 3, brightValues);
+            Check(FullFrameCaptureLoop.IsDarkMismatch(dark, brightEdge, points, true, 10),
+                "black plane with several bright matching PPI samples is rejected");
+            Check(!FullFrameCaptureLoop.IsDarkMismatch(dark, new EdgeFrame(4, 3, new byte[42]), points, true, 10),
+                "black plane with dark PPI samples remains a valid dark scene");
+            Check(!FullFrameCaptureLoop.IsDarkMismatch(dark, brightEdge, points, false, 10)
+                  && !FullFrameCaptureLoop.IsDarkMismatch(dark, brightEdge, points, true, 1001),
+                "failed or stale PPI samples do not trigger black-plane fallback");
+            var brightVideo = new byte[160 * 90 * 3];
+            int px = (45 * 160 + (int)(points[0].X * 160)) * 3;
+            brightVideo[px] = 100;
+            Check(!FullFrameCaptureLoop.IsDarkMismatch(new PixelFrame(160, 90, brightVideo), brightEdge, points, true, 10),
+                "a lit video-plane sample prevents black-plane fallback");
+            brightValues[3] = brightValues[6] = 0;
+            Check(!FullFrameCaptureLoop.IsDarkMismatch(dark, brightEdge, points, true, 10),
+                "one bright PPI sample alone does not trigger fallback");
+        }
+
+        private sealed class FakeVideoSource : IVideoCaptureSource
+        {
+            public readonly ManualResetEventSlim Entered = new ManualResetEventSlim(false);
+            public readonly ManualResetEventSlim Release = new ManualResetEventSlim(false);
+            public int Disposed;
+            public bool TryCapture(out PixelFrame frame, out string error)
+            {
+                Entered.Set();
+                Release.Wait();
+                frame = new PixelFrame(2, 2, new byte[] { 100, 0, 0, 100, 0, 0, 100, 0, 0, 100, 0, 0 });
+                error = null;
+                return true;
+            }
+            public void Dispose() => Interlocked.Increment(ref Disposed);
+        }
+
+        private sealed class FakeFrameTarget : IHyperHdrFrameTarget
+        {
+            public string VideoCaptureLibrarySha256 => "test";
+            public int Offers;
+            public int VideoOffers;
+            public int EdgeOffers;
+            public int ThrowOnce;
+            public void Offer(HyperHdrFrame frame)
+            {
+                if (Interlocked.Exchange(ref ThrowOnce, 0) != 0) throw new InvalidOperationException("test target failure");
+                Interlocked.Increment(ref Offers);
+                if (frame.Pixels != null) Interlocked.Increment(ref VideoOffers);
+                else Interlocked.Increment(ref EdgeOffers);
+            }
+        }
+
+        private sealed class ReadyVideoSource : IVideoCaptureSource
+        {
+            public PixelFrame Frame = new PixelFrame(2, 2,
+                new byte[] { 100, 0, 0, 100, 0, 0, 100, 0, 0, 100, 0, 0 });
+            public bool TryCapture(out PixelFrame frame, out string error)
+            {
+                frame = Volatile.Read(ref Frame);
+                error = null;
+                return true;
+            }
+            public void Dispose() { }
+        }
+
+        private static void FullFrameWorkerTests()
+        {
+            var source = new FakeVideoSource();
+            IHyperHdrFrameTarget current = new FakeFrameTarget();
+            var old = (FakeFrameTarget)current;
+            int attempts = 0;
+            long firstOpen = 0, secondOpen = 0;
+            IVideoCaptureSource Open(string fingerprint, out string error)
+            {
+                if (Interlocked.Increment(ref attempts) == 1)
+                {
+                    Interlocked.Exchange(ref firstOpen, Environment.TickCount64);
+                    error = "not ready";
+                    return null;
+                }
+                Interlocked.Exchange(ref secondOpen, Environment.TickCount64);
+                error = null;
+                return source;
+            }
+            var points = new CapturePoint[14];
+            using (var worker = new FullFrameCaptureLoop(() => Volatile.Read(ref current), points,
+                   new CaptureStatus(), (eventName, detail) => { }, Open, openRetryMs: 50))
+            {
+                worker.Start();
+                worker.OfferEdge(DistinctFrame(), true);
+                try
+                {
+                    Check(source.Entered.Wait(3000) && Volatile.Read(ref attempts) >= 2
+                          && Interlocked.Read(ref secondOpen) - Interlocked.Read(ref firstOpen) >= 50,
+                        "failed native open is retried after backoff");
+                    var edgeOffered = new ManualResetEventSlim(false);
+                    new Thread(() => { worker.OfferEdge(DistinctFrame(), true); edgeOffered.Set(); }).Start();
+                    Check(edgeOffered.Wait(1000), "PPI handoff does not wait for a blocked video capture");
+                    int beforeDisable = Volatile.Read(ref old.Offers);
+                    Interlocked.Exchange(ref current, null);
+                    source.Release.Set();
+                    Check(WaitFor(() => Volatile.Read(ref source.Disposed) == 1),
+                        "disabling HyperHDR disposes the video capture source");
+                    Check(Volatile.Read(ref old.Offers) == beforeDisable,
+                        "a video result in flight is not delivered to a removed output");
+                }
+                finally { source.Release.Set(); }
+            }
+
+            var pausedSource = new FakeVideoSource();
+            var pausedTarget = new FakeFrameTarget();
+            IVideoCaptureSource OpenPaused(string fingerprint, out string error)
+            {
+                error = null;
+                return pausedSource;
+            }
+            using (var worker = new FullFrameCaptureLoop(() => pausedTarget, points,
+                   new CaptureStatus(), (eventName, detail) => { }, OpenPaused))
+            {
+                worker.Start();
+                try
+                {
+                    Check(pausedSource.Entered.Wait(3000), "video capture starts on its worker");
+                    worker.RequestStop();
+                    pausedSource.Release.Set();
+                    Check(WaitFor(() => Volatile.Read(ref pausedSource.Disposed) == 1)
+                          && Volatile.Read(ref pausedTarget.Offers) == 0,
+                        "cancellation discards an in-flight video result and closes the source");
+                }
+                finally { pausedSource.Release.Set(); }
+            }
+
+            var stalledSource = new FakeVideoSource();
+            var stalledTarget = new FakeFrameTarget { ThrowOnce = 1 };
+            var stalledStatus = new CaptureStatus();
+            IVideoCaptureSource OpenStalled(string fingerprint, out string error)
+            {
+                error = null;
+                return stalledSource;
+            }
+            using (var worker = new FullFrameCaptureLoop(() => stalledTarget, points,
+                   stalledStatus, (eventName, detail) => { }, OpenStalled))
+            {
+                worker.Start();
+                try
+                {
+                    Check(stalledSource.Entered.Wait(3000), "video capture can remain blocked independently");
+                    Check(WaitFor(() =>
+                    {
+                        worker.OfferEdge(DistinctFrame(), true);
+                        return Volatile.Read(ref stalledTarget.EdgeOffers) > 0;
+                    }, 2500), "a stalled worker delivers PPI fallback even after a target error");
+                    var j = JsonDocument.Parse(StatusJson.Build(stalledStatus.WriteJson)).RootElement;
+                    Check(j.GetProperty("backend").GetString() == "ppi-edge"
+                          && j.GetProperty("backendError").GetString().Contains("stalled"),
+                        "a stalled video worker is reported in capture status");
+                }
+                finally { stalledSource.Release.Set(); }
+            }
+
+            var oldSource = new FakeVideoSource();
+            var replacementSource = new ReadyVideoSource();
+            var replacementTarget = new FakeFrameTarget();
+            int replacementOpens = 0;
+            IVideoCaptureSource OpenOld(string fingerprint, out string error) { error = null; return oldSource; }
+            IVideoCaptureSource OpenReplacement(string fingerprint, out string error)
+            {
+                Interlocked.Increment(ref replacementOpens);
+                error = null;
+                return replacementSource;
+            }
+            var oldWorker = new FullFrameCaptureLoop(() => new FakeFrameTarget(), points,
+                new CaptureStatus(), (eventName, detail) => { }, OpenOld);
+            oldWorker.Start();
+            try
+            {
+                Check(oldSource.Entered.Wait(3000), "old video worker entered the native call");
+                long beforeStop = Environment.TickCount64;
+                oldWorker.Dispose();
+                Check(Environment.TickCount64 - beforeStop < 2500,
+                    "stopping a blocked video worker does not indefinitely block PPI restart");
+                using (var replacement = new FullFrameCaptureLoop(() => replacementTarget, points,
+                       new CaptureStatus(), (eventName, detail) => { }, OpenReplacement, openRetryMs: 50))
+                {
+                    replacement.Start();
+                    replacement.OfferEdge(DistinctFrame(), true);
+                    Check(WaitFor(() => Volatile.Read(ref replacementTarget.EdgeOffers) > 0)
+                          && Volatile.Read(ref replacementOpens) == 0,
+                        "a replacement worker uses PPI while the old native call is in flight");
+                    oldSource.Release.Set();
+                    Check(WaitFor(() => Volatile.Read(ref oldSource.Disposed) == 1)
+                          && WaitFor(() => Volatile.Read(ref replacementTarget.VideoOffers) > 0),
+                        "the replacement opens video after the old worker releases it");
+                }
+            }
+            finally { oldSource.Release.Set(); oldWorker.Dispose(); }
+
+            var readyTarget = new FakeFrameTarget();
+            var readySource = new ReadyVideoSource();
+            var status = new CaptureStatus();
+            int videoLogs = 0;
+            IVideoCaptureSource OpenReady(string fingerprint, out string error)
+            {
+                error = null;
+                return readySource;
+            }
+            using (var worker = new FullFrameCaptureLoop(() => readyTarget, points, status,
+                   (eventName, detail) =>
+                   {
+                       if (eventName == "CaptureBackend" && detail.Contains("secvideo-nv12"))
+                           Interlocked.Increment(ref videoLogs);
+                   }, OpenReady))
+            {
+                worker.Start();
+                worker.OfferEdge(DistinctFrame(), true);
+                Check(WaitFor(() => Volatile.Read(ref readyTarget.VideoOffers) >= 3),
+                    "the independent worker sends consecutive full-frame images");
+                Thread.Sleep(200);
+                Check(Volatile.Read(ref videoLogs) == 1,
+                    "the unchanged full-frame backend is logged only once");
+                int previousEdges = Volatile.Read(ref readyTarget.EdgeOffers);
+                Volatile.Write(ref readySource.Frame, new PixelFrame(2, 2, new byte[12]));
+                Check(WaitFor(() =>
+                {
+                    worker.OfferEdge(DistinctFrame(), true);
+                    var j = JsonDocument.Parse(StatusJson.Build(status.WriteJson)).RootElement;
+                    return Volatile.Read(ref readyTarget.EdgeOffers) > previousEdges &&
+                        j.GetProperty("backend").GetString() == "ppi-edge" &&
+                        (j.GetProperty("backendError").GetString()?.Contains("dark while PPI") ?? false);
+                }), "a persistent dark plane switches the worker to PPI with a diagnostic");
+                int previousVideo = Volatile.Read(ref readyTarget.VideoOffers);
+                Volatile.Write(ref readySource.Frame, new PixelFrame(2, 2,
+                    new byte[] { 100, 0, 0, 100, 0, 0, 100, 0, 0, 100, 0, 0 }));
+                Check(WaitFor(() => Volatile.Read(ref readyTarget.VideoOffers) > previousVideo),
+                    "usable video resumes after the recovery streak");
+            }
+
+            var recoveringTarget = new FakeFrameTarget { ThrowOnce = 1 };
+            var recoveringSource = new ReadyVideoSource();
+            int workerErrors = 0;
+            IVideoCaptureSource OpenRecovering(string fingerprint, out string error)
+            {
+                error = null;
+                return recoveringSource;
+            }
+            using (var worker = new FullFrameCaptureLoop(() => recoveringTarget, points, new CaptureStatus(),
+                   (eventName, detail) =>
+                   {
+                       if (detail.Contains("video worker failed")) Interlocked.Increment(ref workerErrors);
+                   }, OpenRecovering, openRetryMs: 50))
+            {
+                worker.Start();
+                worker.OfferEdge(DistinctFrame(), true);
+                Check(WaitFor(() => Volatile.Read(ref recoveringTarget.VideoOffers) > 0)
+                      && Volatile.Read(ref workerErrors) == 1,
+                    "an unexpected worker failure is reported and capture retries");
+            }
+
+            var unavailableTarget = new FakeFrameTarget();
+            int unavailableOpens = 0, unavailableLogs = 0;
+            IVideoCaptureSource OpenUnavailable(string fingerprint, out string error)
+            {
+                Interlocked.Increment(ref unavailableOpens);
+                error = "not ready";
+                return null;
+            }
+            using (var worker = new FullFrameCaptureLoop(() => unavailableTarget, points, new CaptureStatus(),
+                   (eventName, detail) =>
+                   {
+                       if (detail.Contains("not ready")) Interlocked.Increment(ref unavailableLogs);
+                   }, OpenUnavailable, openRetryMs: 50))
+            {
+                worker.Start();
+                worker.OfferEdge(DistinctFrame(), true);
+                Check(WaitFor(() => Volatile.Read(ref unavailableOpens) >= 3)
+                      && Volatile.Read(ref unavailableTarget.EdgeOffers) > 0
+                      && Volatile.Read(ref unavailableLogs) == 1,
+                    "repeated identical open failures keep PPI active without flooding the log");
+            }
+        }
+
+        private static void VideoLibraryTrustTests()
+        {
+            var missingLibrary = NativeLibraryHelper.Load("lib-ambilight-nonexistent-test.so", out var loadError);
+            Check(missingLibrary == IntPtr.Zero && !string.IsNullOrWhiteSpace(loadError),
+                "native loader reports a useful error when a library is missing");
+            string path = Path.GetTempFileName();
+            try
+            {
+                File.WriteAllText(path, "test library");
+                using var sha = SHA256.Create();
+                string hash = BitConverter.ToString(sha.ComputeHash(File.ReadAllBytes(path))).Replace("-", "");
+                Check(!VideoCapture.VerifyLibrary(path, "", out var error) && error.Contains("no trusted"),
+                    "missing trusted library fingerprint fails closed");
+                Check(!VideoCapture.VerifyLibrary(path, new string('0', 64), out error) && error.Contains("does not match"),
+                    "a different library build fails closed");
+                Check(VideoCapture.VerifyLibrary(path, hash.ToLowerInvariant(), out error) && error == null,
+                    "an explicitly trusted exact library fingerprint matches case-insensitively");
+                File.AppendAllText(path, " changed");
+                Check(!VideoCapture.VerifyLibrary(path, hash, out error), "a changed library no longer matches");
+            }
+            finally { File.Delete(path); }
+        }
+
         // ---------------------------------------------------------------- Protocol
 
         // Reads a Request with a hand-written table walk (separate from flatc, which CI also runs).
@@ -207,6 +600,15 @@ namespace Service
 
             var ok = OutputConfig.Parse(@"{ ""hyperhdr"": { ""enabled"": true, ""host"": "" 192.168.1.50 "", ""priority"": 100 } }");
             Check(ok.HyperHdr.Enabled && ok.HyperHdr.Host == "192.168.1.50" && ok.HyperHdr.Priority == 100 && ok.HyperHdr.Port == 19400, "valid HyperHDR section is enabled, host trimmed, defaults kept");
+            Check(ok.HyperHdr.VideoCaptureLibrarySha256 == "", "full-frame library is not trusted by default");
+            string fingerprint = new string('a', 64);
+            var trusted = OutputConfig.Parse($@"{{ ""hyperhdr"": {{ ""videoCaptureLibrarySha256"": ""{fingerprint}"" }} }}");
+            Check(trusted.HyperHdr.VideoCaptureLibrarySha256 == fingerprint && trusted.Warnings.Count == 0,
+                "package can specify an explicitly trusted library fingerprint");
+            var badFingerprint = OutputConfig.Parse(@"{ ""hyperhdr"": { ""enabled"": true, ""host"": ""h"", ""videoCaptureLibrarySha256"": ""bad"" } }");
+            Check(badFingerprint.HyperHdr.Enabled && badFingerprint.HyperHdr.VideoCaptureLibrarySha256 == ""
+                  && badFingerprint.Warnings.Exists(w => w.Contains("full-frame capture disabled")),
+                "invalid library fingerprint disables full-frame only, preserving PPI output");
 
             var noHost = OutputConfig.Parse(@"{ ""hyperhdr"": { ""enabled"": true } }");
             Check(!noHost.HyperHdr.Enabled && noHost.Warnings.Count > 0, "enabled without host → disabled with a warning");
@@ -249,6 +651,11 @@ namespace Service
             var custom = OutputConfig.Parse(@"{ ""hyperhdr"": { ""imageWidth"": 32, ""imageHeight"": 18 } }").HyperHdr;
             OutputConfig.ParseCommand(OutputsBoth, custom, out cfg);
             Check(cfg.HyperHdr.ImageWidth == 32 && cfg.HyperHdr.ImageHeight == 18, "set-outputs keeps the image size in effect");
+            string fingerprint = new string('b', 64);
+            custom = OutputConfig.Parse($@"{{ ""hyperhdr"": {{ ""videoCaptureLibrarySha256"": ""{fingerprint}"" }} }}").HyperHdr;
+            OutputConfig.ParseCommand(OutputsBoth, custom, out cfg);
+            Check(cfg.HyperHdr.VideoCaptureLibrarySha256 == fingerprint,
+                "set-outputs preserves the package's trusted library fingerprint");
 
             var rejected = new (string json, string expect, string what)[]
             {
@@ -333,6 +740,13 @@ namespace Service
             Check(cfg.Source == OutputSource.Saved && cfg.HyperHdr.Enabled && cfg.HyperHdr.Host == "192.168.1.50"
                   && cfg.HyperHdr.ImageWidth == 48 && cfg.HyperHdr.ImageHeight == 27 && cfg.Warnings.Count == 0,
                 "a newer package's image size applies over saved outputs; the saved target is kept");
+            string fingerprint = new string('c', 64);
+            File.WriteAllText(newer, $@"{{ ""hyperhdr"": {{ ""videoCaptureLibrarySha256"": ""{fingerprint}"" }} }}");
+            cfg = OutputConfig.LoadEffective(newer, saved);
+            Check(cfg.Source == OutputSource.Saved && cfg.HyperHdr.Enabled
+                  && cfg.HyperHdr.VideoCaptureLibrarySha256 == fingerprint,
+                "the package's trusted library fingerprint applies over saved outputs");
+            File.WriteAllText(newer, @"{ ""hyperhdr"": { ""enabled"": false, ""imageWidth"": 48, ""imageHeight"": 27 } }");
 
             // A saved file from an older version, with the image size in it: loads, the size ignored.
             string old = Path.Combine(dir, "outputs.old.json");
@@ -388,8 +802,9 @@ namespace Service
             JsonElement Json() => JsonDocument.Parse(StatusJson.Build(status.WriteJson)).RootElement;
 
             var j = Json();
-            Check(j.GetProperty("state").GetString() == "waiting" && j.GetProperty("failure").ValueKind == JsonValueKind.Null,
-                "status before capture starts: waiting, no failure");
+            Check(j.GetProperty("state").GetString() == "waiting" && j.GetProperty("failure").ValueKind == JsonValueKind.Null
+                  && j.GetProperty("backend").ValueKind == JsonValueKind.Null,
+                "status before capture starts: waiting, no failure or active backend");
 
             status.Starting();
             status.Failed(CaptureFailure.Library, "libvideoenhance.so: \"not found\"");
@@ -406,6 +821,19 @@ namespace Service
             Check(j.GetProperty("state").GetString() == "starting" && j.GetProperty("failure").ValueKind == JsonValueKind.Null
                   && !j.TryGetProperty("retryInMs", out _), "restart clears the previous failure");
             Check(j.GetProperty("hw").GetProperty("fullW").GetInt32() == 3840 && j.GetProperty("hw").GetProperty("blocks").GetInt32() == 2, "hw condition is reported");
+            status.Backend("secvideo-nv12", null);
+            status.FullFrame(80);
+            var backend = Json();
+            Check(backend.GetProperty("backend").GetString() == "secvideo-nv12"
+                  && backend.GetProperty("pixelFrames").GetInt64() == 1
+                  && backend.GetProperty("pixelFrameMs").GetInt32() == 80
+                  && backend.GetProperty("backendError").ValueKind == JsonValueKind.Null,
+                "full-plane backend and fresh pixel rate metrics are exposed separately from PPI samples");
+            status.Backend("ppi-edge", "secvideo_api_capture_video_main returned rc=-4");
+            backend = Json();
+            Check(backend.GetProperty("backend").GetString() == "ppi-edge"
+                  && backend.GetProperty("backendError").GetString().Contains("rc=-4"),
+                "PPI fallback exposes the full-plane capture error");
 
             var frame = DistinctFrame();
             status.Frame(frame, 140, 14, 3, -1);
@@ -765,6 +1193,50 @@ namespace Service
             Write("command-reply.id-too-long.json", ReplyBundle(ServiceCommands.Handle(new string('x', ServiceCommands.MaxIdLength + 1), "resume", null, target)));
 
             Console.WriteLine($"wrote {written.Count} contract samples to {dir}: {string.Join(", ", written)}");
+        }
+
+        // ---------------------------------------------------------------- Full-frame wire check
+
+        private static int FullFrameEndToEnd(string host, int port)
+        {
+            var settings = OutputConfig.Parse($@"{{ ""esp32"": {{ ""enabled"": false }}, ""hyperhdr"": {{ ""enabled"": true, ""host"": ""{host}"", ""port"": {port}, ""priority"": 250 }} }}").HyperHdr;
+            var log = new List<string>();
+            var output = new HyperHdrOutput(settings, (e, d) =>
+            {
+                lock (log) log.Add($"{e}: {d}");
+                Console.WriteLine($"[log] {e}: {d}");
+            });
+            output.Start();
+
+            const int width = 320, height = 180;
+            var rgb = new byte[width * height * 3];
+            for (int y = 0; y < height; y++)
+            for (int x = 0; x < width; x++)
+            {
+                int i = (y * width + x) * 3;
+                bool red = x < width / 2;
+                rgb[i] = red ? (byte)255 : (byte)0;
+                rgb[i + 1] = (byte)(y * 255 / (height - 1));
+                rgb[i + 2] = red ? (byte)0 : (byte)255;
+            }
+            var frame = new PixelFrame(width, height, rgb);
+            long until = Environment.TickCount64 + 500;
+            while (Environment.TickCount64 < until)
+            {
+                output.Offer(frame);
+                Thread.Sleep(100);
+            }
+
+            bool connected = output.IsConnected;
+            long replies = output.RepliesReceived;
+            lock (log) Check(!log.Exists(l => l.StartsWith("HyperHdrReplyError")), "full-frame input receives no HyperHDR error replies");
+            output.Dispose(); // closes the socket and releases priority 250
+            Check(connected, "full-frame input connected to HyperHDR");
+            Check(replies >= 2, $"HyperHDR acknowledged the Register and full-frame RawImages (replies={replies})");
+            Check(!output.IsConnected, "the temporary HyperHDR client socket is closed on cleanup");
+
+            Console.WriteLine(_failures == 0 ? "FULL-FRAME E2E PASSED" : $"FULL-FRAME E2E: {_failures} FAILURE(S)");
+            return _failures == 0 ? 0 : 1;
         }
 
         // ---------------------------------------------------------------- End to end

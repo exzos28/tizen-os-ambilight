@@ -13,6 +13,7 @@
     "host": "",            // IP address of the HyperHDR machine, e.g. "192.168.1.50"
     "port": 19400,         // HyperHDR → Network services → Flatbuffers server port
     "priority": 150,       // 50–250; lower wins. HyperHDR's own grabbers use 240/245
+    "videoCaptureLibrarySha256": "", // Only for an independently verified native library build
     "imageWidth": 64,      // size of the image synthesised from the edge samples
     "imageHeight": 36
   }

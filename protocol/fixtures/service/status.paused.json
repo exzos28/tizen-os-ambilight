@@ -2,6 +2,8 @@
   "version": "1.1.0",
   "capture": {
     "state": "paused",
+    "backend": "ppi-edge",
+    "backendError": "secvideo_api_capture_video_main returned rc=-4",
     "failure": null,
     "error": null,
     "failedAttempts": 0,
@@ -17,6 +19,7 @@
     },
     "frames": 1200,
     "frameMs": 140,
+    "pixelFrames": 0,
     "lastFrameAgoMs": 15230,
     "reads": 14,
     "badReads": 1,
